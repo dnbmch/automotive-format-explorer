@@ -24,6 +24,7 @@ jobs:
             mingw-w64-x86_64-protobuf
             mingw-w64-x86_64-qt6-base
             mingw-w64-x86_64-qt6-declarative
+            p7zip
 
       - uses: actions/checkout@v4
 
@@ -42,11 +43,21 @@ jobs:
           cp build/explorer-dbc-backend.dll dist/
           cp build/explorer-ldf-backend.dll dist/
 
-          # Copy msys2 runtime DLLs (deployed by CMake post-build step)
+          # Copy runtime DLLs that CMake post-build may have deployed.
           cp build/lib*.dll dist/ 2>/dev/null || true
           cp build/zlib1.dll dist/ 2>/dev/null || true
 
-          # Run windeployqt for Qt DLLs and QML plugins
+          # Also copy directly from msys2 in case DeployMsys2Deps
+          # didn't find them (CI installs to a different path).
+          MSYS2_BIN="$(cygpath -u "$MINGW_PREFIX")/bin"
+          for dll in libprotobuf.dll libutf8_validity.dll libutf8_range.dll \
+                     zlib1.dll libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+            cp "${MSYS2_BIN}/${dll}" dist/ 2>/dev/null || true
+          done
+          # Abseil DLLs (versioned filenames).
+          cp ${MSYS2_BIN}/libabsl_*.dll dist/ 2>/dev/null || true
+
+          # Qt DLLs and QML plugins.
           windeployqt6 dist/automotive-format-explorer.exe \
             --qmldir qml \
             --no-translations \
