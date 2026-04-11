@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  windows-mingw:
+    name: Windows MinGW
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-protobuf
+            mingw-w64-x86_64-qt6-base
+            mingw-w64-x86_64-qt6-declarative
+
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp build/automotive-format-explorer.exe dist/
+          cp build/explorer-core.dll dist/
+          cp build/explorer-a2l-backend.dll dist/
+          cp build/explorer-dbc-backend.dll dist/
+          cp build/explorer-ldf-backend.dll dist/
+
+          # Copy msys2 runtime DLLs (deployed by CMake post-build step)
+          cp build/lib*.dll dist/ 2>/dev/null || true
+          cp build/zlib1.dll dist/ 2>/dev/null || true
+
+          # Run windeployqt for Qt DLLs and QML plugins
+          windeployqt6 dist/automotive-format-explorer.exe \
+            --qmldir qml \
+            --no-translations \
+            --no-opengl-sw
+
+      - name: Create archive
+        run: |
+          VERSION=${GITHUB_REF_NAME}
+          cd dist
+          7z a -tzip "../automotive-format-explorer-${VERSION}-windows-x64.zip" .
+
+      - name: Upload release artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          files: automotive-format-explorer-*.zip
+          generate_release_notes: true
