@@ -203,18 +203,21 @@ private:
                               ? QStringLiteral("big-endian") : QStringLiteral("little-endian")));
             if (sig.factor() != 1.0 || sig.offset() != 0.0) {
                 addField(sigFields, QStringLiteral("Scaling"),
-                         QStringLiteral("factor=%1  offset=%2").arg(numberText(sig.factor()), numberText(sig.offset())));
+                         QStringLiteral("factor=%1  offset=%2")
+                             .arg(QString::number(sig.factor()), QString::number(sig.offset())));
             }
             if (sig.min() != 0.0 || sig.max() != 0.0) {
                 addField(sigFields, QStringLiteral("Range"),
-                         QStringLiteral("[%1 .. %2]").arg(numberText(sig.min()), numberText(sig.max())));
+                         QStringLiteral("[%1 .. %2]")
+                             .arg(QString::number(sig.min()), QString::number(sig.max())));
             }
             addField(sigFields, QStringLiteral("Unit"), text(sig.unit()));
             addField(sigFields, QStringLiteral("Receivers"), joinStrings(sig.receivers()));
             if (sig.value_descriptions_size() > 0) {
                 QStringList vds;
                 for (const auto& vd : sig.value_descriptions()) {
-                    vds.push_back(QStringLiteral("%1=%2").arg(numberText(vd.value()), text(vd.description())));
+                    vds.push_back(QStringLiteral("%1=%2")
+                        .arg(QString::number(static_cast<qlonglong>(vd.value())), text(vd.description())));
                 }
                 addField(sigFields, QStringLiteral("Values"), vds.join(QStringLiteral(", ")));
             }
