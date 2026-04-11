@@ -194,6 +194,25 @@ int MemoryMapModel::rowForAddress(quint64 address) const {
     return static_cast<int>((address - start) / static_cast<uint64_t>(bytesPerRow_));
 }
 
+int MemoryMapModel::objectIndexForNodeKey(quint64 nodeKey) const {
+    if (nodeKey == 0) {
+        return -1;
+    }
+    for (size_t i = 0; i < filteredObjects_.size(); ++i) {
+        if (filteredObjects_[i]->nodeKey == nodeKey) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
+}
+
+quint64 MemoryMapModel::objectAddress(int objectIndex) const {
+    if (objectIndex < 0 || static_cast<size_t>(objectIndex) >= filteredObjects_.size()) {
+        return 0;
+    }
+    return filteredObjects_[static_cast<size_t>(objectIndex)]->address;
+}
+
 void MemoryMapModel::addSegment(MemorySegmentInfo seg) {
     segments_.push_back(std::move(seg));
 }

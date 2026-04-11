@@ -134,6 +134,8 @@ ApplicationWindow {
             }
             onNodeSelected: function(nodeKey) {
                 AppController.selectCurrentNode(nodeKey)
+                if (centerPanelLoader.item && centerPanelLoader.item.scrollToNodeKey)
+                    centerPanelLoader.item.scrollToNodeKey(nodeKey)
             }
             onCollapseRequested: root.leftPaneVisible = false
         }

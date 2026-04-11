@@ -11,6 +11,17 @@ MemoryGridItem::MemoryGridItem(QQuickItem* parent)
     setAcceptHoverEvents(true);
     setAcceptedMouseButtons(Qt::LeftButton);
     setRenderTarget(QQuickPaintedItem::FramebufferObject);
+
+    highlightTimer_.setInterval(30);
+    connect(&highlightTimer_, &QTimer::timeout, this, [this]() {
+        highlightOpacity_ -= 0.04;
+        if (highlightOpacity_ <= 0.0) {
+            highlightOpacity_ = 0.0;
+            highlightObj_ = -1;
+            highlightTimer_.stop();
+        }
+        update();
+    });
 }
 
 void MemoryGridItem::paint(QPainter* painter) {
@@ -71,6 +82,15 @@ void MemoryGridItem::paint(QPainter* painter) {
                 }
             } else {
                 painter->fillRect(QRectF(x, y, cs, cs), unoccupiedColor_);
+            }
+
+            // Highlight flash overlay.
+            if (highlightObj_ >= 0 && highlightOpacity_ > 0.0 &&
+                mapIdx < objectMap_.size() && objectMap_[mapIdx] == highlightObj_) {
+                QColor hl(255, 255, 255, static_cast<int>(highlightOpacity_ * 160));
+                painter->setPen(QPen(hl, 2));
+                painter->drawRect(QRectF(x, y, cs, cs));
+                painter->setPen(Qt::NoPen);
             }
         }
     }
@@ -198,6 +218,13 @@ int MemoryGridItem::rowForAddress(quint64 address) const {
         return 0;
     }
     return model_->rowForAddress(address);
+}
+
+void MemoryGridItem::highlightObject(int objectIndex) {
+    highlightObj_ = objectIndex;
+    highlightOpacity_ = 1.0;
+    highlightTimer_.start();
+    update();
 }
 
 void MemoryGridItem::hoverMoveEvent(QHoverEvent* event) {

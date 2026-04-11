@@ -98,6 +98,12 @@ public:
     // Scroll target: returns the row index that contains `address`.
     Q_INVOKABLE int rowForAddress(quint64 address) const;
 
+    // Lookup object by tree nodeKey. Returns model row index or -1.
+    Q_INVOKABLE int objectIndexForNodeKey(quint64 nodeKey) const;
+
+    // Address of an object by model row index. Returns 0 if invalid.
+    Q_INVOKABLE quint64 objectAddress(int objectIndex) const;
+
     // Building — called by A2lDocumentSession during construction.
     void addSegment(MemorySegmentInfo seg);
     void addObject(MemoryObject obj);

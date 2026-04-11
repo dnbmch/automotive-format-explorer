@@ -5,6 +5,7 @@
 #include <QQuickPaintedItem>
 #include <QColor>
 #include <QPointF>
+#include <QTimer>
 
 #include <vector>
 
@@ -50,6 +51,7 @@ public:
 
     Q_INVOKABLE void setColors(const QVariantList& colors, const QColor& unoccupied);
     Q_INVOKABLE int rowForAddress(quint64 address) const;
+    Q_INVOKABLE void highlightObject(int objectIndex);
 
 signals:
     void modelChanged();
@@ -96,4 +98,9 @@ private:
 
     std::vector<QColor> palette_;
     QColor unoccupiedColor_{0x33, 0x33, 0x33};
+
+    // Highlight flash state.
+    int highlightObj_ = -1;
+    qreal highlightOpacity_ = 0.0;
+    QTimer highlightTimer_;
 };

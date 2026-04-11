@@ -19,6 +19,19 @@ Item {
 
     readonly property int bpr: mapModel ? mapModel.bytesPerRow : 16
 
+    function scrollToNodeKey(nodeKey) {
+        if (!mapModel) return
+        let objIdx = mapModel.objectIndexForNodeKey(nodeKey)
+        if (objIdx < 0) return
+        let addr = mapModel.objectAddress(objIdx)
+        if (addr === 0) return
+        let row = gridItem.rowForAddress(addr)
+        let rh = gridItem.cellSize + gridItem.cellGap
+        // Center the object vertically.
+        gridItem.scrollY = Math.max(0, row * rh - gridItem.height / 2)
+        gridItem.highlightObject(objIdx)
+    }
+
     readonly property var legendLabels: [
         "VALUE", "CURVE", "MAP", "CUBOID+", "ASCII", "VAL_BLK", "MEASUREMENT", "AXIS_PTS"
     ]

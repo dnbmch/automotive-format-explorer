@@ -2,9 +2,16 @@
 
 Qt/QML desktop explorer for automotive file formats, built against the precompiled `-lib` parser packages.
 
+![Automotive Format Explorer](docs/screenshot.png)
+
+## Features
+
+
+## Releases
+
 ## Current State
 
-The first implementation slice currently wires `dbc-parser-lib` into the explorer. `a2l-parser-lib` and `ldf-parser-lib` are planned next on the same session/model pattern.
+IT wires  `dbc-parser-lib`, `a2l-parser-lib` and `ldf-parser-lib`.
 
 ## Configure Prerequisites
 
