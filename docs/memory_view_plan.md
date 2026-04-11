@@ -177,39 +177,35 @@ This avoids the cascading visual error problem: an incorrect size for one object
 
 For Measurements with `bit_mask`, the footprint is the byte(s) containing the masked bits. Display as a partially-filled cell. Multiple measurements sharing the same byte(s) via different bit_masks are shown as subdivided cells.
 
-## Implementation Phases
+## Implementation Status
 
-### Phase 1 — Static grid with colored blocks
+Phases 1 and 2 are implemented. Phase 3 is backlog.
 
-- **Renderer**: QQuickPaintedItem (sufficient for typical 64KB–256KB calibration segments; upgrade path to QSGNode if profiling shows need)
-- **Generic center panel slot**: Add `centerPanelSource` property to DocumentSession, Loader in Main.qml
-- Parse MemorySegment list, build segment selector (with synthetic segment fallback)
-- Filter objects: include Characteristics + AxisPts always, Measurements only if `ecu_address` is present
-- **Address index**: build sorted vector of `(address, address+size, object_ref)` intervals for O(log n) hit-testing per visible row (binary search on start address). This is the core data structure — avoid flat scans.
-- Compute byte footprint: Tier 1 + Tier 2 sizes (see Size Calculation above)
-- Render colored cells, address gutter, hover tooltips
-- Wire tree selection → memory scroll
-- Status bar: segment info + count of excluded addressless measurements
-- **Jump to address**: text input field in the segment selector bar — type a hex address, grid scrolls to it
+### Implemented
 
-### Phase 2 — Bidirectional selection + navigation
-
+- QQuickPaintedItem renderer (MemoryGridItem) with virtualized scrolling (only visible rows painted)
+- Generic center panel slot: `centerPanelSource` / `centerPanelModel` on DocumentSession, Loader in Main.qml
+- MemorySegment list with segment selector (dropdown when multiple segments), synthetic segment fallback
+- Object filtering: Characteristics + AxisPts always included, Measurements only with `ecu_address`
+- Sorted interval-based color/object maps for O(1) byte-level hit testing
+- Tier 1 + Tier 2 size computation (VALUE, MEASUREMENT, CURVE, MAP, AXIS_PTS)
+- Colored cells, address gutter, hover tooltips (name, type, address, size)
+- Jump-to-address text field
 - Click cell → select in tree + update detail
-- Click-drag range selection
-- Disambiguation popup for overlapping objects
-- Status bar with selection info
-- **Keyboard navigation**: arrow keys move between cells, Page Up/Down scroll, Home/End jump to segment start/end
-- **Bytes-per-row toggle**: toolbar button to switch between 8, 16, 32 bytes/row
-- **Color legend**: small collapsible legend panel at the bottom of the memory view
+- Click tree node → scroll memory view + highlight flash
+- Bytes-per-row toggle (8, 16, 32)
+- Color legend with 8 object type categories
+- Status bar: address range, object count, excluded measurement count
+- Shade alternation for adjacent same-color objects
 
-### Phase 3 — Layout analysis + Tier 3 sizes
+### Backlog
 
-- Full RecordLayout interpretation (alignment, index modes, deposit modes)
-- Replace dashed-border approximate sizes with exact sizes
+- Full RecordLayout interpretation (alignment, index modes, deposit modes) — Tier 3 sizes
 - Gap detection (unassigned bytes between objects)
 - Overlap detection (two objects claiming same bytes)
 - Segment utilization percentage in header
 - Export: segment map as CSV or HTML report
+- Keyboard navigation within the grid
 
 ## Technical Notes
 

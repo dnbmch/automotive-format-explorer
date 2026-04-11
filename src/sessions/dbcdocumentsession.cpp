@@ -1,9 +1,13 @@
 #include "sessions/dbcdocumentsession.h"
+#include "models/signalmapmodel.h"
 
 #include <QStringList>
+#include <algorithm>
 #include <type_traits>
 
 #undef signals
+
+#include <google/protobuf/json/json.h>
 
 namespace {
 
@@ -87,6 +91,42 @@ public:
         return {};
     }
 
+    QString buildRawJson(const NodeBinding& binding) const override {
+        if (!std::holds_alternative<DbcPath>(binding.payload)) {
+            return {};
+        }
+
+        const DbcPath path = std::get<DbcPath>(binding.payload);
+        const google::protobuf::Message* msg = nullptr;
+        int i = path.primaryIndex;
+        int j = path.secondaryIndex;
+
+        switch (path.kind) {
+        case DbcEntityKind::Node:                if (i >= 0 && i < document_.nodes_size()) msg = &document_.nodes(i); break;
+        case DbcEntityKind::Message:             if (i >= 0 && i < document_.messages_size()) msg = &document_.messages(i); break;
+        case DbcEntityKind::Signal:              if (i >= 0 && i < document_.messages_size() && j >= 0 && j < document_.messages(i).signals_size()) msg = &document_.messages(i).signals(j); break;
+        case DbcEntityKind::ValueTable:          if (i >= 0 && i < document_.value_tables_size()) msg = &document_.value_tables(i); break;
+        case DbcEntityKind::AttributeDefinition: if (i >= 0 && i < document_.attribute_definitions_size()) msg = &document_.attribute_definitions(i); break;
+        case DbcEntityKind::AttributeDefault:    if (i >= 0 && i < document_.attribute_defaults_size()) msg = &document_.attribute_defaults(i); break;
+        case DbcEntityKind::AttributeValue:      if (i >= 0 && i < document_.attribute_values_size()) msg = &document_.attribute_values(i); break;
+        case DbcEntityKind::EnvironmentVariable: if (i >= 0 && i < document_.environment_variables_size()) msg = &document_.environment_variables(i); break;
+        case DbcEntityKind::SignalGroup:         if (i >= 0 && i < document_.signal_groups_size()) msg = &document_.signal_groups(i); break;
+        }
+
+        if (!msg) {
+            return {};
+        }
+
+        google::protobuf::json::PrintOptions opts;
+        opts.add_whitespace = true;
+        std::string json;
+        auto status = google::protobuf::json::MessageToJsonString(*msg, &json, opts);
+        if (!status.ok()) {
+            return {};
+        }
+        return text(json);
+    }
+
 private:
     QList<DetailSection> nodeDetails(const DbcPath& path) const {
         QList<DetailSection> sections;
@@ -113,6 +153,8 @@ private:
                      text(attribute.value()));
         }
         pushSection(sections, QStringLiteral("Attributes"), std::move(attributes));
+
+        appendNodeCrossReferences(sections, node.name());
         return sections;
     }
 
@@ -216,6 +258,20 @@ private:
                      text(entry.description()));
         }
         pushSection(sections, QStringLiteral("Value Descriptions"), std::move(values));
+
+        if (signal.extended_mux_values_size() > 0) {
+            QList<DetailField> extMux;
+            for (const auto& emv : signal.extended_mux_values()) {
+                QStringList ranges;
+                for (const auto& r : emv.ranges()) {
+                    ranges << QStringLiteral("%1-%2").arg(r.from()).arg(r.to());
+                }
+                addField(extMux,
+                         text(emv.mux_signal_name()),
+                         ranges.join(QStringLiteral(", ")));
+            }
+            pushSection(sections, QStringLiteral("Extended Multiplexing"), std::move(extMux));
+        }
 
         QList<DetailField> attributes;
         for (const auto& attribute : signal.attributes()) {
@@ -362,6 +418,41 @@ private:
         return sections;
     }
 
+    void appendNodeCrossReferences(QList<DetailSection>& sections, const std::string& nodeName) const {
+        QStringList sentMessages;
+        QStringList receivedSignals;
+
+        for (int i = 0; i < document_.messages_size(); ++i) {
+            const auto& msg = document_.messages(i);
+            if (msg.sender() == nodeName) {
+                sentMessages.push_back(text(msg.name()));
+            }
+            for (int j = 0; j < msg.signals_size(); ++j) {
+                const auto& sig = msg.signals(j);
+                for (const auto& rx : sig.receivers()) {
+                    if (rx == nodeName) {
+                        receivedSignals.push_back(
+                            QStringLiteral("%1.%2").arg(text(msg.name()), text(sig.name())));
+                        break;
+                    }
+                }
+            }
+        }
+
+        QList<DetailField> fields;
+        if (!sentMessages.isEmpty()) {
+            addField(fields,
+                     QStringLiteral("Sends (%1)").arg(sentMessages.size()),
+                     sentMessages.join(QStringLiteral(", ")));
+        }
+        if (!receivedSignals.isEmpty()) {
+            addField(fields,
+                     QStringLiteral("Receives (%1)").arg(receivedSignals.size()),
+                     receivedSignals.join(QStringLiteral(", ")));
+        }
+        pushSection(sections, QStringLiteral("Referenced By"), std::move(fields));
+    }
+
     const dbc::DbcFile& document_;
 };
 
@@ -379,6 +470,26 @@ DbcDocumentSession::DbcDocumentSession(QString displayName,
       document_(std::move(document)) {
     setDetailPresenter(std::make_unique<DbcDetailPresenter>(document_));
     buildTree();
+    buildSignalMap();
+}
+
+DbcDocumentSession::~DbcDocumentSession() = default;
+
+QUrl DbcDocumentSession::centerPanelSource() const {
+    if (signalMapModel_ && signalMapModel_->messageCount() > 0) {
+        return QUrl(QStringLiteral("qrc:/qt/qml/ExplorerApp/qml/components/SignalMapView.qml"));
+    }
+    return {};
+}
+
+QAbstractListModel* DbcDocumentSession::centerPanelModel() {
+    return signalMapModel_.get();
+}
+
+void DbcDocumentSession::moveModelsToThread(QThread* thread) {
+    AdapterSessionBase::moveModelsToThread(thread);
+    if (signalMapModel_)
+        signalMapModel_->moveToThread(thread);
 }
 
 void DbcDocumentSession::buildTree() {
@@ -409,15 +520,17 @@ void DbcDocumentSession::buildTree() {
                                                QStringLiteral("message"),
                                                SemanticKind::Entity,
                                                NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::Message, i, -1, -1}, true});
+            treeNodeKeys_[{static_cast<int>(DbcEntityKind::Message), i, -1}] = messageItem->nodeKey;
 
             for (int j = 0; j < message.signals_size(); ++j) {
                 const auto& signal = message.signals(j);
-                appendNode(messageItem,
+                TreeItem* sigItem = appendNode(messageItem,
                            text(signal.name()),
                            QStringLiteral("[%1|%2]").arg(signal.start_bit()).arg(signal.bit_length()),
                            QStringLiteral("signal"),
                            SemanticKind::Entity,
                            NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::Signal, i, j, -1}, true});
+                treeNodeKeys_[{static_cast<int>(DbcEntityKind::Signal), i, j}] = sigItem->nodeKey;
             }
         }
     }
@@ -505,4 +618,67 @@ void DbcDocumentSession::buildTree() {
     }
 
     setRootItem(std::move(root));
+}
+
+void DbcDocumentSession::buildSignalMap() {
+    signalMapModel_ = std::make_unique<SignalMapModel>();
+
+    for (int i = 0; i < document_.messages_size(); ++i) {
+        const auto& message = document_.messages(i);
+
+        MessageEntry entry;
+        entry.name = text(message.name());
+        entry.id = message.id();
+        entry.dlc = static_cast<int>(message.dlc());
+        entry.isExtendedId = message.is_extended_id();
+        entry.sender = text(message.sender());
+
+        auto keyIt = treeNodeKeys_.find({static_cast<int>(DbcEntityKind::Message), i, -1});
+        if (keyIt != treeNodeKeys_.end()) entry.nodeKey = keyIt->second;
+
+        for (int j = 0; j < message.signals_size(); ++j) {
+            const auto& signal = message.signals(j);
+
+            SignalEntry sig;
+            sig.name = text(signal.name());
+            sig.startBit = static_cast<int>(signal.start_bit());
+            sig.bitLength = std::max(1, static_cast<int>(signal.bit_length()));
+            sig.bigEndian = (signal.byte_order() == dbc::BYTE_ORDER_BIG_ENDIAN);
+            sig.isSigned = signal.is_signed();
+            sig.factor = signal.factor();
+            sig.offset = signal.offset();
+            sig.minimum = signal.min();
+            sig.maximum = signal.max();
+            sig.unit = text(signal.unit());
+            sig.colorIndex = j % 8;
+            sig.multiplexType = static_cast<int>(signal.multiplex_type());
+            sig.multiplexValue = static_cast<int>(signal.multiplex_value());
+
+            for (const auto& r : signal.receivers()) {
+                sig.receivers.push_back(text(r));
+            }
+
+            auto sigKeyIt = treeNodeKeys_.find({static_cast<int>(DbcEntityKind::Signal), i, j});
+            if (sigKeyIt != treeNodeKeys_.end()) sig.nodeKey = sigKeyIt->second;
+
+            entry.signalEntries.push_back(std::move(sig));
+        }
+
+        // Derive DLC from signals when unspecified (DLC=0).
+        // Uses SignalMapModel::bitPositions() to avoid duplicating BE walk logic.
+        if (entry.dlc == 0 && !entry.signalEntries.empty()) {
+            int maxByteUsed = -1;
+            for (const auto& sig : entry.signalEntries) {
+                auto positions = SignalMapModel::bitPositions(sig);
+                for (int pos : positions) {
+                    maxByteUsed = std::max(maxByteUsed, pos / 8);
+                }
+            }
+            if (maxByteUsed >= 0) entry.dlc = maxByteUsed + 1;
+        }
+
+        signalMapModel_->addMessage(std::move(entry));
+    }
+
+    signalMapModel_->finalize();
 }

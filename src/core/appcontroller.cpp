@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QLibrary>
+#include <QtConcurrent/QtConcurrentRun>
 
 namespace {
 
@@ -47,6 +48,8 @@ const BackendSpec* backendSpecForPath(const QString& path) {
 
 AppController::AppController(QObject* parent)
     : QObject(parent) {
+    connect(&loadWatcher_, &QFutureWatcher<std::shared_ptr<LoadResult>>::finished,
+            this, &AppController::onLoadFinished);
 }
 
 TabModel* AppController::tabModel() {
@@ -98,6 +101,11 @@ QString AppController::lastError() const {
 void AppController::openFile(const QUrl& fileUrl) {
     clearLastError();
 
+    if (fileLoading_) {
+        setLastError(QStringLiteral("Another file is already loading."));
+        return;
+    }
+
     const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
     if (path.isEmpty()) {
         setLastError(QStringLiteral("No file was selected."));
@@ -112,20 +120,45 @@ void AppController::openFile(const QUrl& fileUrl) {
         return;
     }
 
-    LoadResult result = adapter->load(path);
-    if (!result.session) {
-        if (!result.diagnostics.isEmpty()) {
-            setLastError(result.diagnostics.first().detail);
+    setFileLoading(true);
+
+    QThread* mainThread = thread();
+    auto future = QtConcurrent::run([adapter, path, mainThread]() -> std::shared_ptr<LoadResult> {
+        auto r = std::make_shared<LoadResult>(adapter->load(path));
+        if (r->session)
+            r->session->moveModelsToThread(mainThread);
+        return r;
+    });
+    loadWatcher_.setFuture(future);
+}
+
+void AppController::onLoadFinished() {
+    setFileLoading(false);
+
+    auto result = loadWatcher_.result();
+    if (!result || !result->session) {
+        if (result && !result->diagnostics.isEmpty()) {
+            setLastError(result->diagnostics.first().detail);
         } else {
-            setLastError(QStringLiteral("Failed to load %1").arg(path));
+            setLastError(QStringLiteral("Failed to load file."));
         }
         return;
     }
 
-    const QString name = result.session->displayName();
-    const int newIndex = tabModel_.addSession(std::move(result.session));
+    const QString name = result->session->displayName();
+    const int newIndex = tabModel_.addSession(std::move(result->session));
     setCurrentTabIndex(newIndex);
     emit fileLoaded(name);
+}
+
+bool AppController::fileLoading() const {
+    return fileLoading_;
+}
+
+void AppController::setFileLoading(bool loading) {
+    if (fileLoading_ == loading) return;
+    fileLoading_ = loading;
+    emit fileLoadingChanged();
 }
 
 void AppController::closeTab(int index) {

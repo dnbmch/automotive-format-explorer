@@ -49,16 +49,24 @@ bool AdapterSessionBase::hasWarnings() const {
 void AdapterSessionBase::selectNode(quint64 key) {
     if (!detailPresenter_) {
         detailModel_.setSections({});
+        detailModel_.setRawJsonText({});
         return;
     }
 
     const NodeBinding* binding = registry_.resolve(NodeRef{formatId_, key});
     if (!binding || !binding->selectable) {
         detailModel_.setSections({});
+        detailModel_.setRawJsonText({});
         return;
     }
 
     detailModel_.setSections(detailPresenter_->buildDetails(*binding));
+    detailModel_.setRawJsonText(detailPresenter_->buildRawJson(*binding));
+}
+
+void AdapterSessionBase::moveModelsToThread(QThread* thread) {
+    treeModel_.moveToThread(thread);
+    detailModel_.moveToThread(thread);
 }
 
 void AdapterSessionBase::setRootItem(std::unique_ptr<TreeItem> root) {

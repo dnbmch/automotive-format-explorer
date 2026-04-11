@@ -7,8 +7,54 @@ Rectangle {
     id: navPanel
     color: Theme.bgPanel
 
-    property alias treeModel: treeView.model
+    property var treeModel: null
     property bool hasContent: treeView.rows > 0
+
+    // Per-model expand state: maps TreeModel pointer (as string) -> [nodeKey, ...]
+    // Keyed by model object identity so tab close/reorder doesn't invalidate entries.
+    property var _expandState: ({})
+    property var _prevModel: null
+    readonly property int _nodeKeyRole: 261  // Qt::UserRole + 5 (TreeModel::NodeKeyRole)
+
+    onTreeModelChanged: {
+        _saveExpandState(_prevModel)
+        treeView.model = treeModel
+        Qt.callLater(_restoreExpandState, treeModel)
+        _prevModel = treeModel
+    }
+
+    function _modelKey(model) {
+        // Use the object itself as a JS property key (toString gives unique ptr).
+        return model ? model.toString() : ""
+    }
+
+    function _saveExpandState(model) {
+        if (!model) return
+        let keys = []
+        for (let r = 0; r < treeView.rows; ++r) {
+            if (treeView.isExpanded(r)) {
+                let idx = treeView.index(r, 0)
+                let key = treeView.model.data(idx, _nodeKeyRole)
+                if (key !== undefined) keys.push(key)
+            }
+        }
+        _expandState[_modelKey(model)] = keys
+    }
+
+    function _restoreExpandState(model) {
+        if (!model) return
+        let keys = _expandState[_modelKey(model)]
+        if (!keys || keys.length === 0) return
+        for (let i = 0; i < keys.length; ++i) {
+            let idx = model.indexForNodeKey(keys[i])
+            if (idx.valid) {
+                let row = treeView.rowAtIndex(idx)
+                if (row >= 0 && !treeView.isExpanded(row))
+                    treeView.expand(row)
+            }
+        }
+        treeView.forceLayout()
+    }
 
     signal nodeSelected(var nodeKey)
     signal collapseRequested()
@@ -442,6 +488,31 @@ Rectangle {
                 Label { text: "Previous tab";        font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
                 Label { text: "Ctrl+Alt+B";          font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
                 Label { text: "Toggle sidebar";      font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+            }
+
+            Label {
+                text: "Signal Map (DBC/LDF)"
+                font.pixelSize: Theme.fontSizeM
+                font.bold: true
+                color: Theme.accent
+            }
+
+            GridLayout {
+                columns: 2
+                columnSpacing: 16
+                rowSpacing: 4
+                Layout.fillWidth: true
+
+                Label { text: "\u2190 \u2191";            font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "Previous signal";   font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+                Label { text: "\u2192 \u2193";            font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "Next signal";       font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+                Label { text: "PgUp / PgDn";       font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "Prev / next message"; font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+                Label { text: "Home / End";         font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "First / last message"; font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+                Label { text: "Enter / Space";      font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "Select signal in tree"; font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
             }
 
             Label {

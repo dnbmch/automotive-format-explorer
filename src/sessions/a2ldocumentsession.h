@@ -22,6 +22,7 @@ public:
 
     QUrl centerPanelSource() const override;
     QAbstractListModel* centerPanelModel() override;
+    void moveModelsToThread(QThread* thread) override;
 
 private:
     void buildTree();

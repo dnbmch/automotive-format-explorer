@@ -1,21 +1,27 @@
 # Automotive Format Explorer
 
-A desktop tool for inspecting A2L, DBC, and LDF automotive files. Built with Qt/QML and C++17.
-
-![Automotive Format Explorer](docs/screenshot.png)
+A desktop tool for inspecting A2L, DBC, and LDF automotive files. Built with Qt/QML and C++17. Showcases the usage of our libraries.
 
 ## Features
 
 - **Tree navigation** for all parsed entities (measurements, characteristics, axis points, compu methods, record layouts, units, functions, groups, typedefs, instances, variant coding, XCP/CCP protocol summaries)
 - **Detail panel** with structured property cards for every entity type
-- **Memory view** (A2L) -- hex grid visualization of ECU memory segments with color-coded object types, hover tooltips, and jump-to-address
-- **Bidirectional selection** -- click a tree node to scroll the memory view; click a memory cell to select in tree and show details
+- **Raw JSON view** toggle showing the underlying protobuf data
+- **Memory view** (A2L) — hex grid visualization of ECU memory segments with color-coded object types, hover tooltips, segment selector, jump-to-address, and bytes-per-row toggle
+- **Signal map** (DBC/LDF) — bit-level visualization of CAN/LIN message payloads with color-coded signals, big-endian/little-endian rendering, multiplexor group filtering, overlap detection, hover tooltips with scaling info, and keyboard navigation
+- **Bidirectional selection** — click a tree node to highlight in the center view; click a cell to select in tree and show details
 - **Multi-tab** support for opening multiple files simultaneously
-- **DBC/LDF** full tree and detail support (messages, signals, nodes, frames, schedules, etc.)
 
-## Screenshot
+## Screenshots
 
-> Replace `docs/screenshot.png` with an actual capture of the app. Recommended: ~1200px wide, showing all three panels with an A2L file loaded.
+### A2L — ECU Memory Map
+![A2L Memory View](docs/screenshot_a2l.png)
+
+### DBC — CAN Signal Map
+![DBC Signal Map](docs/screenshot_dbc.png)
+
+### LDF — LIN Signal Map
+![LDF Signal Map](docs/screenshot_lin.png)
 
 ## License
 

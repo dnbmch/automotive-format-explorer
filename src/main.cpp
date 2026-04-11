@@ -1,5 +1,6 @@
 #include "core/appcontroller.h"
 #include "ui/memorygriditem.h"
+#include "ui/signalgriditem.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -27,6 +28,7 @@ int main(int argc, char* argv[]) {
     QQuickStyle::setStyle("Fusion");
 
     qmlRegisterType<MemoryGridItem>("ExplorerApp", 1, 0, "MemoryGridItem");
+    qmlRegisterType<SignalGridItem>("ExplorerApp", 1, 0, "SignalGridItem");
 
     AppController controller;
     qmlRegisterSingletonInstance("ExplorerApp", 1, 0, "AppController", &controller);

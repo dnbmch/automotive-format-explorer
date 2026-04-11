@@ -52,3 +52,15 @@ void DetailModel::setSections(QList<DetailSection> sections) {
     sections_ = std::move(sections);
     endResetModel();
 }
+
+QString DetailModel::rawJsonText() const {
+    return rawJsonText_;
+}
+
+void DetailModel::setRawJsonText(const QString& json) {
+    if (rawJsonText_ == json) {
+        return;
+    }
+    rawJsonText_ = json;
+    emit rawJsonTextChanged();
+}

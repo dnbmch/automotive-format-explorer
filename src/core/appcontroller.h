@@ -6,6 +6,7 @@
 #include "models/treemodel.h"
 
 #include <QAbstractListModel>
+#include <QFutureWatcher>
 #include <QObject>
 #include <QLibrary>
 #include <memory>
@@ -20,6 +21,7 @@ class AppController : public QObject {
     Q_PROPERTY(QAbstractListModel* centerPanelModel READ centerPanelModel NOTIFY currentSessionChanged)
     Q_PROPERTY(int currentTabIndex READ currentTabIndex WRITE setCurrentTabIndex NOTIFY currentTabIndexChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    Q_PROPERTY(bool fileLoading READ fileLoading NOTIFY fileLoadingChanged)
     Q_PROPERTY(bool startupLoading READ startupLoading WRITE setStartupLoading NOTIFY startupLoadingChanged)
     Q_PROPERTY(QString startupStatusText READ startupStatusText WRITE setStartupStatusText NOTIFY startupStatusTextChanged)
 
@@ -37,6 +39,8 @@ public:
 
     QString lastError() const;
 
+    bool fileLoading() const;
+
     bool startupLoading() const;
     void setStartupLoading(bool loading);
 
@@ -52,6 +56,7 @@ signals:
     void currentSessionChanged();
     void currentTabIndexChanged();
     void lastErrorChanged();
+    void fileLoadingChanged();
     void startupLoadingChanged();
     void startupStatusTextChanged();
     void fileLoaded(const QString& displayName);
@@ -61,6 +66,8 @@ private:
     bool loadBackendForPath(const QString& path);
     bool loadBackend(FormatId formatId, const QString& libraryBaseName, const char* createSymbol);
     void setLastError(const QString& errorText);
+    void onLoadFinished();
+    void setFileLoading(bool loading);
 
     FormatRegistry formatRegistry_;
     TabModel tabModel_;
@@ -69,6 +76,8 @@ private:
     std::vector<std::unique_ptr<QLibrary>> loadedBackends_;
     int currentTabIndex_ = -1;
     QString lastError_;
+    bool fileLoading_ = false;
+    QFutureWatcher<std::shared_ptr<LoadResult>> loadWatcher_;
     bool startupLoading_ = true;
     QString startupStatusText_ = QStringLiteral("Loading\u2026");
 };

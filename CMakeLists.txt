@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 QuickDialogs2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Gui Qml Quick QuickControls2 QuickDialogs2)
 find_package(Protobuf CONFIG QUIET)
 if(NOT TARGET protobuf::libprotobuf)
     find_package(Protobuf REQUIRED)
@@ -47,6 +47,7 @@ qt_add_library(explorer-core SHARED
     src/core/noderegistry.cpp
     src/models/detailmodel.cpp
     src/models/memorymapmodel.cpp
+    src/models/signalmapmodel.cpp
     src/models/tabmodel.cpp
     src/models/treemodel.cpp
     src/sessions/adaptersessionbase.cpp
@@ -71,6 +72,7 @@ qt_add_executable(automotive-format-explorer
     src/main.cpp
     src/core/appcontroller.cpp
     src/ui/memorygriditem.cpp
+    src/ui/signalgriditem.cpp
     $<$<PLATFORM_ID:Windows>:resources/explorer.rc>
 )
 
@@ -125,6 +127,7 @@ target_link_libraries(explorer-ldf-backend
 
 target_link_libraries(automotive-format-explorer PRIVATE
     Qt6::Core
+    Qt6::Concurrent
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
@@ -157,6 +160,7 @@ qt_add_qml_module(automotive-format-explorer
         qml/components/NavPanel.qml
         qml/components/Toast.qml
         qml/components/MemoryView.qml
+        qml/components/SignalMapView.qml
 )
 
 qt_add_resources(automotive-format-explorer "icons"

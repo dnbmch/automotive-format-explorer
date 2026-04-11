@@ -5,6 +5,7 @@
 
 #include <QString>
 #include <QList>
+#include <QThread>
 #include <QUrl>
 
 class TreeModel;
@@ -27,4 +28,6 @@ public:
 
     virtual QUrl centerPanelSource() const { return {}; }
     virtual QAbstractListModel* centerPanelModel() { return nullptr; }
+
+    virtual void moveModelsToThread(QThread* thread) = 0;
 };

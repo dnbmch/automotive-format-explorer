@@ -27,6 +27,7 @@ public:
     QList<DiagnosticMessage> diagnostics() const override;
     bool hasWarnings() const override;
     void selectNode(quint64 key) override;
+    void moveModelsToThread(QThread* thread) override;
 
 protected:
     void setRootItem(std::unique_ptr<TreeItem> root);

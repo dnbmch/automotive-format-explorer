@@ -13,6 +13,8 @@
 #include <unordered_map>
 #include <variant>
 
+#include <google/protobuf/json/json.h>
+
 namespace {
 
 constexpr int kTypedefCharacteristicCategory = 0;
@@ -362,6 +364,62 @@ public:
         return sections;
     }
 
+    QString buildRawJson(const NodeBinding& binding) const override {
+        if (!std::holds_alternative<A2lPath>(binding.payload)) {
+            return {};
+        }
+
+        const A2lPath path = std::get<A2lPath>(binding.payload);
+        const auto* module = moduleAt(path.primaryIndex);
+        if (!module) {
+            return {};
+        }
+
+        const google::protobuf::Message* msg = nullptr;
+        int i = path.secondaryIndex;
+
+        switch (path.kind) {
+        case A2lEntityKind::Module:         msg = module; break;
+        case A2lEntityKind::Measurement:    if (i >= 0 && i < module->measurements_size()) msg = &module->measurements(i); break;
+        case A2lEntityKind::Characteristic: if (i >= 0 && i < module->characteristics_size()) msg = &module->characteristics(i); break;
+        case A2lEntityKind::AxisPts:        if (i >= 0 && i < module->axis_points_size()) msg = &module->axis_points(i); break;
+        case A2lEntityKind::CompuMethod:    if (i >= 0 && i < module->compu_methods_size()) msg = &module->compu_methods(i); break;
+        case A2lEntityKind::RecordLayout:   if (i >= 0 && i < module->record_layouts_size()) msg = &module->record_layouts(i); break;
+        case A2lEntityKind::Unit:           if (i >= 0 && i < module->units_size()) msg = &module->units(i); break;
+        case A2lEntityKind::Function:       if (i >= 0 && i < module->functions_size()) msg = &module->functions(i); break;
+        case A2lEntityKind::Group:          if (i >= 0 && i < module->groups_size()) msg = &module->groups(i); break;
+        case A2lEntityKind::Instance:       if (i >= 0 && i < module->instances_size()) msg = &module->instances(i); break;
+        case A2lEntityKind::TypedefItem:
+            if (path.tertiaryIndex == kTypedefCharacteristicCategory && i >= 0 && i < module->typedef_characteristics_size())
+                msg = &module->typedef_characteristics(i);
+            else if (path.tertiaryIndex == kTypedefStructureCategory && i >= 0 && i < module->typedef_structures_size())
+                msg = &module->typedef_structures(i);
+            else if (path.tertiaryIndex == kTypedefAxisCategory && i >= 0 && i < module->typedef_axes_size())
+                msg = &module->typedef_axes(i);
+            break;
+        case A2lEntityKind::VariantCoding:
+            if (module->has_variant_coding()) msg = &module->variant_coding();
+            break;
+        case A2lEntityKind::XcpSummary:
+        case A2lEntityKind::CcpSummary:
+            break;
+        }
+
+        if (!msg) {
+            return {};
+        }
+
+        google::protobuf::json::PrintOptions opts;
+        opts.add_whitespace = true;
+        opts.always_print_fields_with_no_presence = false;
+        std::string json;
+        auto status = google::protobuf::json::MessageToJsonString(*msg, &json, opts);
+        if (!status.ok()) {
+            return {};
+        }
+        return text(json);
+    }
+
 private:
     const a2l::Module* moduleAt(int index) const {
         if (index < 0 || index >= document_.modules_size()) {
@@ -660,6 +718,15 @@ private:
 
         QList<DetailField> layout;
         addOptionalNumber(layout, QStringLiteral("Bit Mask"), measurement.has_bit_mask(), measurement.bit_mask());
+        if (measurement.has_bit_operation()) {
+            const auto& bitOp = measurement.bit_operation();
+            QStringList ops;
+            if (bitOp.has_left_shift())  ops << QStringLiteral("left_shift=%1").arg(bitOp.left_shift());
+            if (bitOp.has_right_shift()) ops << QStringLiteral("right_shift=%1").arg(bitOp.right_shift());
+            if (bitOp.has_sign_extend()) ops << QStringLiteral("sign_extend");
+            addField(layout, QStringLiteral("Bit Operation"), ops.join(QStringLiteral(", ")));
+        }
+        addOptionalNumber(layout, QStringLiteral("Error Mask"), measurement.has_error_mask(), measurement.error_mask());
         addOptionalNumber(layout, QStringLiteral("Array Size"), measurement.has_array_size(), measurement.array_size());
         addField(layout, QStringLiteral("Matrix Dim"), joinNumbers(measurement.matrix_dim()));
         addField(layout,
@@ -769,6 +836,40 @@ private:
         addOptionalBool(axisFields, QStringLiteral("Guard Rails"), axis.has_guard_rails(), axis.guard_rails());
         addOptionalBool(axisFields, QStringLiteral("Read Only"), axis.has_read_only(), axis.read_only());
         addOptionalNumber(axisFields, QStringLiteral("Step Size"), axis.has_step_size(), axis.step_size());
+        addField(axisFields,
+                 QStringLiteral("Monotony"),
+                 axis.has_monotony()
+                     ? text(a2l::Monotony_Name(axis.monotony()))
+                     : QString());
+        addOptionalNumber(axisFields, QStringLiteral("ECU Address Extension"),
+                          axis.has_ecu_address_extension(), axis.ecu_address_extension());
+        if (axis.has_extended_limits()) {
+            addField(axisFields,
+                     QStringLiteral("Extended Limits"),
+                     QStringLiteral("%1 .. %2")
+                         .arg(numberText(axis.extended_limits().lower_limit()))
+                         .arg(numberText(axis.extended_limits().upper_limit())));
+        }
+        addOptionalString(axisFields, QStringLiteral("Ref Memory Segment"),
+                          axis.has_ref_memory_segment(), axis.ref_memory_segment());
+        addOptionalString(axisFields, QStringLiteral("Display Identifier"),
+                          axis.has_display_identifier(), axis.display_identifier());
+        if (axis.has_symbol_link()) {
+            addField(axisFields,
+                     QStringLiteral("Symbol Link"),
+                     QStringLiteral("%1 (offset %2)")
+                         .arg(text(axis.symbol_link().symbol_name()))
+                         .arg(axis.symbol_link().bit_offset()));
+        }
+        addOptionalString(axisFields, QStringLiteral("Model Link"),
+                          axis.has_model_link(), axis.model_link());
+        if (axis.has_max_refresh()) {
+            addField(axisFields,
+                     QStringLiteral("Max Refresh"),
+                     QStringLiteral("unit=%1 rate=%2")
+                         .arg(axis.max_refresh().scaling_unit())
+                         .arg(axis.max_refresh().rate()));
+        }
         addIfDataCounts(axisFields, axis.if_datas());
         pushSection(sections, QStringLiteral("Axis"), std::move(axisFields));
         return sections;
@@ -1488,6 +1589,12 @@ QUrl A2lDocumentSession::centerPanelSource() const {
 
 QAbstractListModel* A2lDocumentSession::centerPanelModel() {
     return memoryMapModel_.get();
+}
+
+void A2lDocumentSession::moveModelsToThread(QThread* thread) {
+    AdapterSessionBase::moveModelsToThread(thread);
+    if (memoryMapModel_)
+        memoryMapModel_->moveToThread(thread);
 }
 
 namespace {

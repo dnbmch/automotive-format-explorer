@@ -385,92 +385,215 @@ ApplicationWindow {
 
                     // --- Detail panel (right) ---
                     Rectangle {
+                        id: detailPanel
                         SplitView.fillWidth: true
                         SplitView.minimumWidth: 250
                         color: Theme.bg
 
-                        ScrollView {
-                            anchors.fill: parent
-                            anchors.margins: Theme.sp8
+                        property bool showRawJson: false
 
-                            ScrollBar.vertical.background: Rectangle { color: "transparent" }
-                            ScrollBar.vertical.contentItem: Rectangle {
-                                implicitWidth: 6
-                                radius: 3
-                                color: parent.pressed ? Theme.bgButtonPrs
-                                     : parent.hovered ? Theme.bgButtonHov : Theme.borderHover
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 0
+
+                            // Detail header with toggle
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Theme.headerHeight
+                                color: Theme.bgHeader
+                                visible: detailList.count > 0
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 6
+                                    spacing: 4
+
+                                    Label {
+                                        text: "DETAILS"
+                                        font.pixelSize: Theme.fontSizeXS
+                                        font.bold: true
+                                        font.letterSpacing: 1.2
+                                        color: Theme.textSecondary
+                                        Layout.fillWidth: true
+                                    }
+
+                                    // Raw JSON toggle
+                                    Rectangle {
+                                        width: rawToggleRow.implicitWidth + 12
+                                        height: 22
+                                        radius: Theme.radius
+                                        color: rawToggleMa.containsMouse
+                                               ? Theme.bgButtonHov
+                                               : (detailPanel.showRawJson ? Theme.bgActive : Theme.bgButton)
+                                        visible: AppController.currentDetailModel
+                                                 && AppController.currentDetailModel.rawJsonText.length > 0
+                                        ToolTip.text: detailPanel.showRawJson ? "Show formatted view" : "Show raw proto JSON"
+                                        ToolTip.visible: rawToggleMa.containsMouse
+                                        ToolTip.delay: 300
+
+                                        Row {
+                                            id: rawToggleRow
+                                            anchors.centerIn: parent
+                                            spacing: 4
+
+                                            Label {
+                                                text: "{ }"
+                                                font.family: Theme.fontMono
+                                                font.pixelSize: Theme.fontSizeS
+                                                font.bold: true
+                                                color: detailPanel.showRawJson ? Theme.textWhite : Theme.textSecondary
+                                            }
+                                            Label {
+                                                text: detailPanel.showRawJson ? "Cards" : "Proto"
+                                                font.pixelSize: Theme.fontSizeXS
+                                                color: detailPanel.showRawJson ? Theme.textWhite : Theme.textSecondary
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: rawToggleMa
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: detailPanel.showRawJson = !detailPanel.showRawJson
+                                        }
+                                    }
+                                }
                             }
 
-                            ListView {
-                                id: detailList
-                                spacing: Theme.sp12
-                                clip: true
-                                model: AppController.currentDetailModel
+                            // Thin accent strip
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 2
+                                color: Theme.accent
+                                opacity: 0.3
+                                visible: detailList.count > 0
+                            }
 
-                                delegate: Rectangle {
-                                    width: ListView.view.width
-                                    implicitHeight: cardLayout.implicitHeight + Theme.sp16 * 2
-                                    radius: Theme.radius
-                                    color: Theme.bgCard
-                                    border.color: Theme.border
-                                    border.width: 1
+                            // Card view
+                            ScrollView {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Layout.margins: Theme.sp8
+                                visible: !detailPanel.showRawJson
 
-                                    ColumnLayout {
-                                        id: cardLayout
-                                        anchors.fill: parent
-                                        anchors.margins: Theme.sp16
-                                        spacing: Theme.sp8
+                                ScrollBar.vertical.background: Rectangle { color: "transparent" }
+                                ScrollBar.vertical.contentItem: Rectangle {
+                                    implicitWidth: 6
+                                    radius: 3
+                                    color: parent.pressed ? Theme.bgButtonPrs
+                                         : parent.hovered ? Theme.bgButtonHov : Theme.borderHover
+                                }
 
-                                        Label {
-                                            Layout.fillWidth: true
-                                            font.bold: true
-                                            font.pixelSize: Theme.fontSizeL
-                                            color: Theme.textBright
-                                            text: model.title
-                                        }
+                                ListView {
+                                    id: detailList
+                                    spacing: Theme.sp12
+                                    clip: true
+                                    model: AppController.currentDetailModel
 
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            height: 1
-                                            color: Theme.border
-                                        }
+                                    delegate: Rectangle {
+                                        width: ListView.view.width
+                                        implicitHeight: cardLayout.implicitHeight + Theme.sp16 * 2
+                                        radius: Theme.radius
+                                        color: Theme.bgCard
+                                        border.color: Theme.border
+                                        border.width: 1
 
-                                        Repeater {
-                                            model: fields
+                                        ColumnLayout {
+                                            id: cardLayout
+                                            anchors.fill: parent
+                                            anchors.margins: Theme.sp16
+                                            spacing: Theme.sp8
 
-                                            delegate: RowLayout {
+                                            Label {
                                                 Layout.fillWidth: true
-                                                spacing: Theme.sp12
+                                                font.bold: true
+                                                font.pixelSize: Theme.fontSizeL
+                                                color: Theme.textBright
+                                                text: model.title
+                                            }
 
-                                                Label {
-                                                    Layout.preferredWidth: 180
-                                                    font.bold: true
-                                                    font.pixelSize: Theme.fontSizeM
-                                                    color: Theme.textSecondary
-                                                    text: modelData.key + ":"
-                                                }
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                height: 1
+                                                color: Theme.border
+                                            }
 
-                                                Label {
+                                            Repeater {
+                                                model: fields
+
+                                                delegate: RowLayout {
                                                     Layout.fillWidth: true
-                                                    wrapMode: Text.WrapAnywhere
-                                                    font.pixelSize: Theme.fontSizeM
-                                                    color: Theme.textPrimary
-                                                    text: modelData.value
+                                                    spacing: Theme.sp12
+
+                                                    Label {
+                                                        Layout.preferredWidth: 180
+                                                        font.bold: true
+                                                        font.pixelSize: Theme.fontSizeM
+                                                        color: Theme.textSecondary
+                                                        text: modelData.key + ":"
+                                                    }
+
+                                                    Label {
+                                                        Layout.fillWidth: true
+                                                        wrapMode: Text.WrapAnywhere
+                                                        font.pixelSize: Theme.fontSizeM
+                                                        color: Theme.textPrimary
+                                                        text: modelData.value
+                                                    }
                                                 }
                                             }
                                         }
                                     }
+
+                                    // Empty state
+                                    Label {
+                                        anchors.centerIn: parent
+                                        font.pixelSize: Theme.fontSizeL
+                                        color: Theme.textMuted
+                                        text: tabs.count === 0
+                                              ? "Open a file to inspect its structure."
+                                              : "Select a tree node to view details."
+                                        visible: detailList.count === 0
+                                    }
+                                }
+                            }
+
+                            // Raw JSON view
+                            ScrollView {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Layout.margins: Theme.sp8
+                                visible: detailPanel.showRawJson
+
+                                ScrollBar.vertical.background: Rectangle { color: "transparent" }
+                                ScrollBar.vertical.contentItem: Rectangle {
+                                    implicitWidth: 6
+                                    radius: 3
+                                    color: parent.pressed ? Theme.bgButtonPrs
+                                         : parent.hovered ? Theme.bgButtonHov : Theme.borderHover
                                 }
 
-                                // Empty state
-                                Label {
-                                    anchors.centerIn: parent
-                                    font.pixelSize: Theme.fontSizeL
-                                    color: Theme.textMuted
-                                    text: tabs.count === 0
-                                          ? "Open a file to inspect its structure."
-                                          : "Select a tree node to view details."
-                                    visible: detailList.count === 0
+                                TextArea {
+                                    id: rawJsonArea
+                                    readOnly: true
+                                    selectByMouse: true
+                                    wrapMode: TextArea.WrapAnywhere
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: Theme.fontSizeS
+                                    color: Theme.textPrimary
+                                    selectionColor: Theme.bgSelection
+                                    selectedTextColor: Theme.textWhite
+                                    text: AppController.currentDetailModel
+                                          ? AppController.currentDetailModel.rawJsonText
+                                          : ""
+
+                                    background: Rectangle {
+                                        color: Theme.bgCard
+                                        radius: Theme.radius
+                                        border.color: Theme.border
+                                        border.width: 1
+                                    }
                                 }
                             }
                         }
@@ -520,6 +643,36 @@ ApplicationWindow {
         }
         function onFileLoaded(displayName) {
             toast.show("Loaded " + displayName)
+        }
+    }
+
+    // --- File loading overlay ---
+    Rectangle {
+        anchors.fill: parent
+        color: "#80000000"
+        visible: AppController.fileLoading
+        z: 10
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 12
+
+            BusyIndicator {
+                anchors.horizontalCenter: parent.horizontalCenter
+                running: AppController.fileLoading
+                palette.dark: Theme.accent
+            }
+
+            Label {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Loading file\u2026"
+                font.pixelSize: Theme.fontSizeL
+                color: Theme.textWhite
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
         }
     }
 

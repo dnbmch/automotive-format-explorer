@@ -54,6 +54,18 @@ QtObject {
     readonly property color memoryUnoccupied: "#333"
     readonly property color memoryHighlight: "#fff"
 
+    // --- Signal map colors (indexed 0-7, for DBC/LDF signal visualization) ---
+    readonly property var signalColors: [
+        "#5b9bd5",  // 0 - blue
+        "#26a69a",  // 1 - teal
+        "#8888cc",  // 2 - purple
+        "#ff9800",  // 3 - orange
+        "#4caf50",  // 4 - green
+        "#00bcd4",  // 5 - cyan
+        "#e0c060",  // 6 - yellow/gold
+        "#5c6bc0"   // 7 - indigo
+    ]
+
     // --- Fonts ---
     readonly property string fontMono: "Consolas"
     readonly property int fontSizeS:  10

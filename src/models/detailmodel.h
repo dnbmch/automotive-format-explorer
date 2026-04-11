@@ -6,6 +6,7 @@
 
 class DetailModel : public QAbstractListModel {
     Q_OBJECT
+    Q_PROPERTY(QString rawJsonText READ rawJsonText NOTIFY rawJsonTextChanged)
 
 public:
     enum Roles {
@@ -21,6 +22,13 @@ public:
 
     void setSections(QList<DetailSection> sections);
 
+    QString rawJsonText() const;
+    void setRawJsonText(const QString& json);
+
+signals:
+    void rawJsonTextChanged();
+
 private:
     QList<DetailSection> sections_;
+    QString rawJsonText_;
 };
