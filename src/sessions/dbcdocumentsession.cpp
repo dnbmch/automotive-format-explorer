@@ -191,6 +191,35 @@ private:
                      text(attribute.value()));
         }
         pushSection(sections, QStringLiteral("Attributes"), std::move(attributes));
+
+        for (int s = 0; s < message.signals_size(); ++s) {
+            const auto& sig = message.signals(s);
+            QList<DetailField> sigFields;
+            addField(sigFields, QStringLiteral("Layout"),
+                     QStringLiteral("bit %1, %2 bits, %3")
+                         .arg(sig.start_bit())
+                         .arg(sig.bit_length())
+                         .arg(sig.byte_order() == dbc::BYTE_ORDER_BIG_ENDIAN
+                              ? QStringLiteral("big-endian") : QStringLiteral("little-endian")));
+            if (sig.factor() != 1.0 || sig.offset() != 0.0) {
+                addField(sigFields, QStringLiteral("Scaling"),
+                         QStringLiteral("factor=%1  offset=%2").arg(numberText(sig.factor()), numberText(sig.offset())));
+            }
+            if (sig.min() != 0.0 || sig.max() != 0.0) {
+                addField(sigFields, QStringLiteral("Range"),
+                         QStringLiteral("[%1 .. %2]").arg(numberText(sig.min()), numberText(sig.max())));
+            }
+            addField(sigFields, QStringLiteral("Unit"), text(sig.unit()));
+            addField(sigFields, QStringLiteral("Receivers"), joinStrings(sig.receivers()));
+            if (sig.value_descriptions_size() > 0) {
+                QStringList vds;
+                for (const auto& vd : sig.value_descriptions()) {
+                    vds.push_back(QStringLiteral("%1=%2").arg(numberText(vd.value()), text(vd.description())));
+                }
+                addField(sigFields, QStringLiteral("Values"), vds.join(QStringLiteral(", ")));
+            }
+            pushSection(sections, text(sig.name()), std::move(sigFields));
+        }
         return sections;
     }
 

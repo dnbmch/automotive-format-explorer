@@ -264,11 +264,30 @@ private:
                         DetailField{QStringLiteral("Signals"), numberText(frame.signals_size())},
                     });
 
-        QList<DetailField> signals;
-        for (const auto& signal : frame.signals()) {
-            addField(signals, text(signal.signal_name()), QStringLiteral("Start bit %1").arg(signal.start_bit()));
+        for (int s = 0; s < frame.signals_size(); ++s) {
+            const auto& fs = frame.signals(s);
+            QList<DetailField> sigFields;
+            addNumberField(sigFields, QStringLiteral("Start Bit"), fs.start_bit());
+
+            if (const ldf::Signal* sig = findSignal(fs.signal_name())) {
+                addNumberField(sigFields, QStringLiteral("Bit Length"), sig->bit_length());
+                addNumberField(sigFields, QStringLiteral("Init Value"), sig->init_value());
+                addField(sigFields, QStringLiteral("Publisher"), text(sig->publisher()));
+                if (sig->has_encoding()) {
+                    addField(sigFields, QStringLiteral("Encoding"), text(sig->encoding().encoding_name()));
+                    for (const auto& pv : sig->encoding().physical_values()) {
+                        QString range = QStringLiteral("[%1..%2]").arg(pv.min_raw()).arg(pv.max_raw());
+                        QString desc = QStringLiteral("f=%1  o=%2").arg(numberText(pv.factor()), numberText(pv.offset()));
+                        if (!pv.unit().empty()) desc += QStringLiteral("  %1").arg(text(pv.unit()));
+                        addField(sigFields, range, desc);
+                    }
+                    for (const auto& lv : sig->encoding().logical_values()) {
+                        addField(sigFields, numberText(lv.value()), text(lv.description()));
+                    }
+                }
+            }
+            pushSection(sections, text(fs.signal_name()), std::move(sigFields));
         }
-        pushSection(sections, QStringLiteral("Signals"), std::move(signals));
         return sections;
     }
 
@@ -301,6 +320,10 @@ private:
                 addField(signalFields, QStringLiteral("Encoding"), text(signal->encoding().encoding_name()));
             }
             pushSection(sections, QStringLiteral("Signal"), std::move(signalFields));
+
+            if (signal->has_encoding()) {
+                appendEncodingValues(sections, signal->encoding());
+            }
         }
 
         return sections;
