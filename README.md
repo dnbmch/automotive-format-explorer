@@ -1,17 +1,29 @@
 # Automotive Format Explorer
 
-Qt/QML desktop explorer for automotive file formats, built against the precompiled `-lib` parser packages.
+A desktop tool for inspecting A2L, DBC, and LDF automotive files. Built with Qt/QML and C++17.
 
 ![Automotive Format Explorer](docs/screenshot.png)
 
 ## Features
 
+- **Tree navigation** for all parsed entities (measurements, characteristics, axis points, compu methods, record layouts, units, functions, groups, typedefs, instances, variant coding, XCP/CCP protocol summaries)
+- **Detail panel** with structured property cards for every entity type
+- **Memory view** (A2L) -- hex grid visualization of ECU memory segments with color-coded object types, hover tooltips, and jump-to-address
+- **Bidirectional selection** -- click a tree node to scroll the memory view; click a memory cell to select in tree and show details
+- **Multi-tab** support for opening multiple files simultaneously
+- **DBC/LDF** full tree and detail support (messages, signals, nodes, frames, schedules, etc.)
 
-## Releases
+## Screenshot
+
+> Replace `docs/screenshot.png` with an actual capture of the app. Recommended: ~1200px wide, showing all three panels with an A2L file loaded.
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
 
 ## Current State
 
-IT wires  `dbc-parser-lib`, `a2l-parser-lib` and `ldf-parser-lib`.
+Built against [`a2l-parser-lib`](https://github.com/dnbmch/a2l-parser-lib), [`dbc-parser-lib`](https://github.com/dnbmch/dbc-parser-lib), and [`ldf-parser-lib`](https://github.com/dnbmch/ldf-parser-lib).
 
 ## Configure Prerequisites
 
