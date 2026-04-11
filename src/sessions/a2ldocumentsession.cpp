@@ -411,7 +411,6 @@ public:
 
         google::protobuf::util::JsonPrintOptions opts;
         opts.add_whitespace = true;
-        opts.always_print_fields_with_no_presence = false;
         std::string json;
         auto status = google::protobuf::util::MessageToJsonString(*msg, &json, opts);
         if (!status.ok()) {
