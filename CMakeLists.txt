@@ -53,17 +53,23 @@ qt_add_library(explorer-core SHARED
     src/sessions/adaptersessionbase.cpp
 )
 
-qt_add_library(explorer-a2l-backend SHARED
+if(WIN32)
+    set(_backend_lib_type SHARED)
+else()
+    set(_backend_lib_type STATIC)
+endif()
+
+qt_add_library(explorer-a2l-backend ${_backend_lib_type}
     src/adapters/a2ladapter.cpp
     src/sessions/a2ldocumentsession.cpp
 )
 
-qt_add_library(explorer-dbc-backend SHARED
+qt_add_library(explorer-dbc-backend ${_backend_lib_type}
     src/adapters/dbcadapter.cpp
     src/sessions/dbcdocumentsession.cpp
 )
 
-qt_add_library(explorer-ldf-backend SHARED
+qt_add_library(explorer-ldf-backend ${_backend_lib_type}
     src/adapters/ldfadapter.cpp
     src/sessions/ldfdocumentsession.cpp
 )
@@ -138,13 +144,21 @@ target_link_libraries(automotive-format-explorer PRIVATE
 
 if(WIN32)
     target_link_libraries(automotive-format-explorer PRIVATE dwmapi)
+    # On Windows, backends are shared libraries loaded at runtime via QLibrary.
+    add_dependencies(automotive-format-explorer
+        explorer-a2l-backend
+        explorer-dbc-backend
+        explorer-ldf-backend
+    )
+else()
+    # On Linux, backends are static — link directly and register at startup.
+    target_link_libraries(automotive-format-explorer PRIVATE
+        explorer-a2l-backend
+        explorer-dbc-backend
+        explorer-ldf-backend
+    )
+    target_compile_definitions(automotive-format-explorer PRIVATE BACKENDS_STATIC)
 endif()
-
-add_dependencies(automotive-format-explorer
-    explorer-a2l-backend
-    explorer-dbc-backend
-    explorer-ldf-backend
-)
 
 set_source_files_properties(qml/components/Theme.qml
     PROPERTIES QT_QML_SINGLETON_TYPE TRUE

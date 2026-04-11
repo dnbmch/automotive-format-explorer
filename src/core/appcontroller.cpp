@@ -6,6 +6,12 @@
 #include <QLibrary>
 #include <QtConcurrent/QtConcurrentRun>
 
+#ifdef BACKENDS_STATIC
+extern "C" FormatAdapter* createA2lAdapterPlugin();
+extern "C" FormatAdapter* createDbcAdapterPlugin();
+extern "C" FormatAdapter* createLdfAdapterPlugin();
+#endif
+
 namespace {
 
 using CreateAdapterFn = FormatAdapter* (*)();
@@ -50,6 +56,12 @@ AppController::AppController(QObject* parent)
     : QObject(parent) {
     connect(&loadWatcher_, &QFutureWatcher<std::shared_ptr<LoadResult>>::finished,
             this, &AppController::onLoadFinished);
+
+#ifdef BACKENDS_STATIC
+    formatRegistry_.registerAdapter(std::unique_ptr<FormatAdapter>(createA2lAdapterPlugin()));
+    formatRegistry_.registerAdapter(std::unique_ptr<FormatAdapter>(createDbcAdapterPlugin()));
+    formatRegistry_.registerAdapter(std::unique_ptr<FormatAdapter>(createLdfAdapterPlugin()));
+#endif
 }
 
 TabModel* AppController::tabModel() {
