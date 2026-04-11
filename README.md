@@ -1,77 +1,122 @@
 # Automotive Format Explorer
 
+[![CI](https://github.com/dnbmch/automotive-format-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/dnbmch/automotive-format-explorer/actions/workflows/ci.yml)
+
 A desktop tool for inspecting **A2L**, **DBC**, and **LDF** automotive files. Built with Qt/QML and C++17 by [Danube Mechatronics](https://danube-mechatronics.com).
 
-> **[Download the latest release](https://github.com/dnbmch/automotive-format-explorer/releases)** — prebuilt binaries for Windows.
+> **[Download latest release](https://github.com/dnbmch/automotive-format-explorer/releases/latest)** (Windows)
+>
+> No installation required -- extract and run.
+
+---
 
 ## Screenshots
 
-### A2L — ECU Memory Map
+### A2L -- ECU Memory Map
 ![A2L Memory View](docs/screenshot_a2l.png)
 
-### DBC — CAN Signal Map
+### DBC -- CAN Signal Map
 ![DBC Signal Map](docs/screenshot_dbc.png)
 
-### LDF — LIN Signal Map
+### LDF -- LIN Signal Map
 ![LDF Signal Map](docs/screenshot_lin.png)
+
+---
 
 ## Features
 
+### Supported Formats
+
+| Format | Standard | Typical Use |
+|--------|----------|-------------|
+| **A2L** | ASAM MCD-2MC (ASAP2) | ECU calibration and measurement definitions |
+| **DBC** | Vector CANdb | CAN bus message and signal databases |
+| **LDF** | LIN Consortium | LIN bus network description |
+
 ### Tree Navigation
-Browse every parsed entity in a structured tree: measurements, characteristics, axis points, compu methods, record layouts, units, functions, groups, typedefs, instances, variant coding, and XCP/CCP protocol summaries.
+
+Browse every parsed entity in a structured tree with expand/collapse, keyboard shortcuts, and search-by-click. Supported entity types include:
+
+- **A2L**: Modules, Measurements, Characteristics, Axis Points, Compu Methods, Record Layouts, Units, Functions, Groups, Typedef Characteristics/Structures/Axes, Instances, Variant Coding, XCP and CCP protocol summaries
+- **DBC**: Messages, Signals, Nodes, Value Tables, Attribute Definitions, Environment Variables, Signal Groups
+- **LDF**: Frames, Signals, Nodes (Master/Slave), Schedule Tables, Signal Encoding Types, Signal Representations
 
 ### Detail Panel
-Structured property cards for every entity type. Click any tree node to see all its fields, references, and metadata. Toggle raw JSON view to see the underlying protobuf data.
+
+Structured property cards for every entity type. All fields, references, and metadata at a glance. Toggle **raw JSON** view to inspect the underlying protobuf data directly.
 
 ### Memory View (A2L)
-Visual hex grid of ECU memory segments. Each byte is color-coded by the object that occupies it — characteristics (VALUE, CURVE, MAP, CUBOID, ASCII, VAL_BLK), measurements, and axis points. Features include:
-- Segment selector with synthetic fallback when no segments are defined
-- Hover tooltips with object name, type, address, and size
-- Jump-to-address field
-- Configurable bytes-per-row (8, 16, 32)
+
+Visual hex grid of ECU memory segments. Each byte is color-coded by the object that occupies it:
+
+| Color | Object Type |
+|-------|-------------|
+| Blue | VALUE (scalar calibration) |
+| Teal | CURVE (1D lookup) |
+| Purple | MAP (2D lookup) |
+| Indigo | CUBOID+ (multi-dimensional) |
+| Orange | ASCII (string parameter) |
+| Cyan | VAL_BLK (value array) |
+| Green | MEASUREMENT (runtime signal) |
+| Gold | AXIS_PTS (standalone axis) |
+
+- Segment selector with automatic fallback when no segments are defined
+- Hover tooltips with name, type, address, and computed size
+- Jump-to-address input field
+- Configurable bytes-per-row (8 / 16 / 32)
 - Alternating shades to distinguish adjacent same-type objects
-- Tiered size calculation (exact for VALUE/CURVE/MAP, approximate for complex layouts)
+- Tiered size calculation (exact for VALUE/CURVE/MAP, approximate for complex record layouts)
 
 ### Signal Map (DBC / LDF)
-Bit-level visualization of CAN and LIN message payloads. Each signal is rendered at its exact bit position with correct big-endian or little-endian layout. Features include:
-- Color-coded signals with alternating shades for adjacent signals
+
+Bit-level visualization of CAN and LIN message payloads. Each signal is rendered at its exact bit position with correct big-endian or little-endian layout.
+
+- Color-coded signals with alternating shades
 - Multiplexor group filtering
 - Overlap detection
 - Hover tooltips with factor, offset, range, and unit
 - Keyboard navigation
 
 ### Bidirectional Selection
-Click a tree node and the center view scrolls to it with a highlight flash. Click a cell in the memory or signal view and the tree scrolls to that entity, with the detail panel updating simultaneously.
+
+Click a tree node and the center view scrolls to it with a highlight flash. Click a cell in the memory or signal view and the tree scrolls to that entity with the detail panel updating simultaneously.
 
 ### Multi-Tab
-Open multiple files side by side. Async file loading keeps the UI responsive.
+
+Open multiple files side by side. Async file loading keeps the UI responsive for large files.
+
+---
 
 ## Parser Libraries
 
-The explorer is built on top of three open-source parser libraries:
+The explorer is built on top of three parser libraries published by [Danube Mechatronics](https://danube-mechatronics.com):
 
-| Format | Parser Library | Description |
-|--------|---------------|-------------|
-| A2L | [a2l-parser-lib](https://github.com/dnbmch/a2l-parser-lib) | ASAP2 / ASAM MCD-2MC calibration files |
-| DBC | [dbc-parser-lib](https://github.com/dnbmch/dbc-parser-lib) | Vector CAN database files |
-| LDF | [ldf-parser-lib](https://github.com/dnbmch/ldf-parser-lib) | LIN Description Files |
+| Format | Library | Releases |
+|--------|---------|----------|
+| A2L | [a2l-parser-lib](https://github.com/dnbmch/a2l-parser-lib) | [Releases](https://github.com/dnbmch/a2l-parser-lib/releases) |
+| DBC | [dbc-parser-lib](https://github.com/dnbmch/dbc-parser-lib) | [Releases](https://github.com/dnbmch/dbc-parser-lib/releases) |
+| LDF | [ldf-parser-lib](https://github.com/dnbmch/ldf-parser-lib) | [Releases](https://github.com/dnbmch/ldf-parser-lib/releases) |
 
-All three parse their respective formats into Protocol Buffer messages. The explorer fetches prebuilt release artifacts automatically at CMake configure time.
+Each library parses its respective format into Protocol Buffer messages. The explorer downloads prebuilt release artifacts automatically at CMake configure time -- no manual setup required.
+
+The parser libraries are **dual-licensed** (GPL / Commercial). See their repositories for details, or contact [Danube Mechatronics](https://danube-mechatronics.com) for commercial licensing.
+
+---
 
 ## License
 
 This project is licensed under the [GNU General Public License v3.0](LICENSE).
 
-The parser libraries are dual-licensed (GPL / Commercial). See their respective repositories for details, or contact [Danube Mechatronics](https://danube-mechatronics.com) for commercial licensing.
+---
 
 ## Building from Source
 
 ### Prerequisites
 
-- Qt 6.5 or newer (`Core`, `Concurrent`, `Gui`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`)
+- Qt 6.5+ (`Core`, `Concurrent`, `Gui`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`)
 - CMake 3.21+
-- Protobuf development package
-- Internet access at configure time (parser libraries are downloaded automatically)
+- Protobuf development package (visible to CMake via CONFIG or MODULE mode)
+- Internet access at configure time (parser libraries are fetched from GitHub releases)
 
 ### Build
 
@@ -80,10 +125,13 @@ cmake -B build -G Ninja
 cmake --build build
 ```
 
-### Pinning Parser Versions
+Parser library versions are pinned in `CMakeLists.txt`. To override:
 
-```cmake
+```bash
 cmake -B build -DA2L_PARSER_VERSION=v0.2.0 -DDBC_PARSER_VERSION=v0.2.0 -DLDF_PARSER_VERSION=v0.3.0
 ```
 
-To upgrade, change the version and delete `build/_parser_deps/<target>-<old-version>/`.
+### Platform Notes
+
+- **Windows (MinGW)**: Primary development platform. Backends are shared libraries loaded at runtime.
+- **Linux**: Backends are linked statically into the executable. Tested on Ubuntu 24.04 with system protobuf.
