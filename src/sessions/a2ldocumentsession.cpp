@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include <variant>
 
-#include "core/proto_json_compat.h"
+#include <google/protobuf/util/json_util.h>
 
 namespace {
 
@@ -409,11 +409,11 @@ public:
             return {};
         }
 
-        proto_json::PrintOptions opts;
+        google::protobuf::util::JsonPrintOptions opts;
         opts.add_whitespace = true;
         opts.always_print_fields_with_no_presence = false;
         std::string json;
-        auto status = proto_json::MessageToJsonString(*msg, &json, opts);
+        auto status = google::protobuf::util::MessageToJsonString(*msg, &json, opts);
         if (!status.ok()) {
             return {};
         }
