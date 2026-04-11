@@ -7,7 +7,7 @@
 
 #undef signals
 
-#include <google/protobuf/json/json.h>
+#include "core/proto_json_compat.h"
 
 namespace {
 
@@ -156,10 +156,10 @@ public:
             return {};
         }
 
-        google::protobuf::json::PrintOptions opts;
+        proto_json::PrintOptions opts;
         opts.add_whitespace = true;
         std::string json;
-        auto status = google::protobuf::json::MessageToJsonString(*msg, &json, opts);
+        auto status = proto_json::MessageToJsonString(*msg, &json, opts);
         if (!status.ok()) {
             return {};
         }

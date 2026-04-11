@@ -1,16 +1,8 @@
 # Automotive Format Explorer
 
-A desktop tool for inspecting A2L, DBC, and LDF automotive files. Built with Qt/QML and C++17. Showcases the usage of our libraries.
+A desktop tool for inspecting **A2L**, **DBC**, and **LDF** automotive files. Built with Qt/QML and C++17 by [Danube Mechatronics](https://danube-mechatronics.com).
 
-## Features
-
-- **Tree navigation** for all parsed entities (measurements, characteristics, axis points, compu methods, record layouts, units, functions, groups, typedefs, instances, variant coding, XCP/CCP protocol summaries)
-- **Detail panel** with structured property cards for every entity type
-- **Raw JSON view** toggle showing the underlying protobuf data
-- **Memory view** (A2L) — hex grid visualization of ECU memory segments with color-coded object types, hover tooltips, segment selector, jump-to-address, and bytes-per-row toggle
-- **Signal map** (DBC/LDF) — bit-level visualization of CAN/LIN message payloads with color-coded signals, big-endian/little-endian rendering, multiplexor group filtering, overlap detection, hover tooltips with scaling info, and keyboard navigation
-- **Bidirectional selection** — click a tree node to highlight in the center view; click a cell to select in tree and show details
-- **Multi-tab** support for opening multiple files simultaneously
+> **[Download the latest release](https://github.com/dnbmch/automotive-format-explorer/releases)** — prebuilt binaries for Windows.
 
 ## Screenshots
 
@@ -23,37 +15,75 @@ A desktop tool for inspecting A2L, DBC, and LDF automotive files. Built with Qt/
 ### LDF — LIN Signal Map
 ![LDF Signal Map](docs/screenshot_lin.png)
 
+## Features
+
+### Tree Navigation
+Browse every parsed entity in a structured tree: measurements, characteristics, axis points, compu methods, record layouts, units, functions, groups, typedefs, instances, variant coding, and XCP/CCP protocol summaries.
+
+### Detail Panel
+Structured property cards for every entity type. Click any tree node to see all its fields, references, and metadata. Toggle raw JSON view to see the underlying protobuf data.
+
+### Memory View (A2L)
+Visual hex grid of ECU memory segments. Each byte is color-coded by the object that occupies it — characteristics (VALUE, CURVE, MAP, CUBOID, ASCII, VAL_BLK), measurements, and axis points. Features include:
+- Segment selector with synthetic fallback when no segments are defined
+- Hover tooltips with object name, type, address, and size
+- Jump-to-address field
+- Configurable bytes-per-row (8, 16, 32)
+- Alternating shades to distinguish adjacent same-type objects
+- Tiered size calculation (exact for VALUE/CURVE/MAP, approximate for complex layouts)
+
+### Signal Map (DBC / LDF)
+Bit-level visualization of CAN and LIN message payloads. Each signal is rendered at its exact bit position with correct big-endian or little-endian layout. Features include:
+- Color-coded signals with alternating shades for adjacent signals
+- Multiplexor group filtering
+- Overlap detection
+- Hover tooltips with factor, offset, range, and unit
+- Keyboard navigation
+
+### Bidirectional Selection
+Click a tree node and the center view scrolls to it with a highlight flash. Click a cell in the memory or signal view and the tree scrolls to that entity, with the detail panel updating simultaneously.
+
+### Multi-Tab
+Open multiple files side by side. Async file loading keeps the UI responsive.
+
+## Parser Libraries
+
+The explorer is built on top of three open-source parser libraries:
+
+| Format | Parser Library | Description |
+|--------|---------------|-------------|
+| A2L | [a2l-parser-lib](https://github.com/dnbmch/a2l-parser-lib) | ASAP2 / ASAM MCD-2MC calibration files |
+| DBC | [dbc-parser-lib](https://github.com/dnbmch/dbc-parser-lib) | Vector CAN database files |
+| LDF | [ldf-parser-lib](https://github.com/dnbmch/ldf-parser-lib) | LIN Description Files |
+
+All three parse their respective formats into Protocol Buffer messages. The explorer fetches prebuilt release artifacts automatically at CMake configure time.
+
 ## License
 
 This project is licensed under the [GNU General Public License v3.0](LICENSE).
 
-## Current State
+The parser libraries are dual-licensed (GPL / Commercial). See their respective repositories for details, or contact [Danube Mechatronics](https://danube-mechatronics.com) for commercial licensing.
 
-Built against [`a2l-parser-lib`](https://github.com/dnbmch/a2l-parser-lib), [`dbc-parser-lib`](https://github.com/dnbmch/dbc-parser-lib), and [`ldf-parser-lib`](https://github.com/dnbmch/ldf-parser-lib).
+## Building from Source
 
-## Configure Prerequisites
+### Prerequisites
 
-- Qt 6.5 or newer with `Core`, `Gui`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`
-- CMake 3.21 or newer
-- Protobuf development package visible to CMake
-- Internet access at configure time (to download parser library releases from GitHub)
+- Qt 6.5 or newer (`Core`, `Concurrent`, `Gui`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`)
+- CMake 3.21+
+- Protobuf development package
+- Internet access at configure time (parser libraries are downloaded automatically)
 
-No manual download or extraction of parser libraries is required. CMake automatically fetches the correct release artifacts at configure time.
+### Build
 
-## How It Works
-
-`cmake/FetchParserLib.cmake` downloads headers and the platform-specific static library from the public GitHub releases of each `-lib` repository. Downloaded artifacts are cached under `build/_parser_deps/` so subsequent configures are instant.
-
-## Pinning Versions
-
-Parser library versions are set via CMake cache variables:
-
-```cmake
--DDBC_PARSER_VERSION=v0.1.0
+```bash
+cmake -B build -G Ninja
+cmake --build build
 ```
 
-To upgrade, change the version string and delete `build/_parser_deps/<target>-<old-version>/`.
+### Pinning Parser Versions
 
-## Qt Creator
+```cmake
+cmake -B build -DA2L_PARSER_VERSION=v0.2.0 -DDBC_PARSER_VERSION=v0.2.0 -DLDF_PARSER_VERSION=v0.3.0
+```
 
-Configure should work out of the box. If it fails at the download step, check that your machine can reach `github.com` (some corporate proxies block raw GitHub downloads).
+To upgrade, change the version and delete `build/_parser_deps/<target>-<old-version>/`.
