@@ -787,9 +787,61 @@ private:
                           QStringLiteral("ECU Address Extension"),
                           characteristic.has_ecu_address_extension(),
                           characteristic.ecu_address_extension());
-        addNumberField(calibration, QStringLiteral("Axis Descriptions"), characteristic.axis_descrs_size());
         addIfDataCounts(calibration, characteristic.if_datas());
         pushSection(sections, QStringLiteral("Calibration"), std::move(calibration));
+
+        for (int a = 0; a < characteristic.axis_descrs_size(); ++a) {
+            const auto& axis = characteristic.axis_descrs(a);
+            QString axisLabel = (a == 0) ? QStringLiteral("X") : (a == 1) ? QStringLiteral("Y") : QStringLiteral("Z");
+            QList<DetailField> axisFields;
+            addField(axisFields,
+                     QStringLiteral("Attribute"),
+                     text(a2l::AxisAttribute_Name(axis.attribute())));
+            addField(axisFields, QStringLiteral("Input Quantity"), text(axis.input_quantity()));
+            addField(axisFields, QStringLiteral("Conversion"), text(axis.conversion()));
+            addNumberField(axisFields, QStringLiteral("Max Axis Points"), axis.max_axis_points());
+            addNumberField(axisFields, QStringLiteral("Lower Limit"), axis.lower_limit());
+            addNumberField(axisFields, QStringLiteral("Upper Limit"), axis.upper_limit());
+            addOptionalString(axisFields, QStringLiteral("Axis Pts Ref"), axis.has_axis_pts_ref(), axis.axis_pts_ref());
+            addOptionalString(axisFields, QStringLiteral("Curve Axis Ref"), axis.has_curve_axis_ref(), axis.curve_axis_ref());
+            addField(axisFields,
+                     QStringLiteral("Byte Order"),
+                     axis.has_byte_order()
+                         ? text(a2l::ByteOrder_Name(axis.byte_order()))
+                         : QString());
+            addField(axisFields,
+                     QStringLiteral("Monotony"),
+                     axis.has_monotony()
+                         ? text(a2l::Monotony_Name(axis.monotony()))
+                         : QString());
+            addOptionalString(axisFields, QStringLiteral("Format"), axis.has_format(), axis.format());
+            addOptionalString(axisFields, QStringLiteral("Physical Unit"), axis.has_phys_unit(), axis.phys_unit());
+            addOptionalBool(axisFields, QStringLiteral("Read Only"), axis.has_read_only(), axis.read_only());
+            addOptionalNumber(axisFields, QStringLiteral("Step Size"), axis.has_step_size(), axis.step_size());
+            addOptionalNumber(axisFields, QStringLiteral("Max Grad"), axis.has_max_grad(), axis.max_grad());
+            if (axis.has_fix_axis_par()) {
+                addField(axisFields, QStringLiteral("Fix Axis Par"),
+                         QStringLiteral("offset=%1  shift=%2  n=%3")
+                             .arg(axis.fix_axis_par().offset())
+                             .arg(axis.fix_axis_par().shift())
+                             .arg(axis.fix_axis_par().numberapo()));
+            }
+            if (axis.has_fix_axis_par_dist()) {
+                addField(axisFields, QStringLiteral("Fix Axis Par Dist"),
+                         QStringLiteral("offset=%1  distance=%2  n=%3")
+                             .arg(axis.fix_axis_par_dist().offset())
+                             .arg(axis.fix_axis_par_dist().distance())
+                             .arg(axis.fix_axis_par_dist().numberapo()));
+            }
+            if (axis.fix_axis_par_list_size() > 0) {
+                QStringList vals;
+                for (double v : axis.fix_axis_par_list()) {
+                    vals.push_back(QString::number(v));
+                }
+                addField(axisFields, QStringLiteral("Fix Axis Par List"), vals.join(QStringLiteral(", ")));
+            }
+            pushSection(sections, QStringLiteral("Axis %1").arg(axisLabel), std::move(axisFields));
+        }
         return sections;
     }
 

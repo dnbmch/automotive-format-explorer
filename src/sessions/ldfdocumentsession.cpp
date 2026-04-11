@@ -331,10 +331,12 @@ private:
         }
         if (signal.has_encoding()) {
             addField(mapping, QStringLiteral("Encoding"), text(signal.encoding().encoding_name()));
-            addNumberField(mapping, QStringLiteral("Physical Values"), signal.encoding().physical_values_size());
-            addNumberField(mapping, QStringLiteral("Logical Values"), signal.encoding().logical_values_size());
         }
         pushSection(sections, QStringLiteral("Mapping"), std::move(mapping));
+
+        if (signal.has_encoding()) {
+            appendEncodingValues(sections, signal.encoding());
+        }
         return sections;
     }
 
@@ -349,9 +351,18 @@ private:
                     QStringLiteral("Encoding"),
                     {
                         DetailField{QStringLiteral("Name"), text(encoding.name())},
-                        DetailField{QStringLiteral("Physical Values"), numberText(encoding.physical_values_size())},
-                        DetailField{QStringLiteral("Logical Values"), numberText(encoding.logical_values_size())},
                     });
+
+        // Reuse the shared helper for physical/logical values.
+        ldf::SignalEncoding asEncoding;
+        asEncoding.set_encoding_name(encoding.name());
+        for (const auto& pv : encoding.physical_values()) {
+            *asEncoding.add_physical_values() = pv;
+        }
+        for (const auto& lv : encoding.logical_values()) {
+            *asEncoding.add_logical_values() = lv;
+        }
+        appendEncodingValues(sections, asEncoding);
 
         appendEncodingCrossReferences(sections, encoding.name());
         return sections;
@@ -462,6 +473,33 @@ private:
                         DetailField{QStringLiteral("Signals"), numberText(frame.signals_size())},
                     });
         return sections;
+    }
+
+    void appendEncodingValues(QList<DetailSection>& sections, const ldf::SignalEncoding& enc) const {
+        if (enc.physical_values_size() > 0) {
+            QList<DetailField> fields;
+            for (const auto& pv : enc.physical_values()) {
+                QString range = QStringLiteral("[%1 .. %2]").arg(pv.min_raw()).arg(pv.max_raw());
+                QString desc = QStringLiteral("factor=%1  offset=%2")
+                    .arg(numberText(pv.factor()), numberText(pv.offset()));
+                if (!pv.unit().empty()) {
+                    desc += QStringLiteral("  unit=%1").arg(text(pv.unit()));
+                }
+                fields.push_back(DetailField{range, desc});
+            }
+            pushSection(sections, QStringLiteral("Physical Values"), std::move(fields));
+        }
+
+        if (enc.logical_values_size() > 0) {
+            QList<DetailField> fields;
+            for (const auto& lv : enc.logical_values()) {
+                fields.push_back(DetailField{
+                    numberText(lv.value()),
+                    text(lv.description()),
+                });
+            }
+            pushSection(sections, QStringLiteral("Logical Values"), std::move(fields));
+        }
     }
 
     void appendEncodingCrossReferences(QList<DetailSection>& sections, const std::string& encodingName) const {
