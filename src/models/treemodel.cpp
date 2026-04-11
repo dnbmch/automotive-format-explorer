@@ -103,6 +103,35 @@ const TreeItem* TreeModel::rootItem() const {
     return root_.get();
 }
 
+QModelIndex TreeModel::indexForNodeKey(qulonglong nodeKey) const {
+    if (nodeKey == 0 || !root_) {
+        return {};
+    }
+
+    // BFS to find the node with matching key.
+    struct Frame { TreeItem* item; QModelIndex parentIdx; };
+    std::vector<Frame> stack;
+    stack.push_back({root_.get(), {}});
+
+    while (!stack.empty()) {
+        auto [item, parentIdx] = stack.back();
+        stack.pop_back();
+
+        for (int i = 0; i < static_cast<int>(item->children.size()); ++i) {
+            TreeItem* child = item->children[static_cast<size_t>(i)].get();
+            QModelIndex childIdx = index(i, 0, parentIdx);
+            if (child->nodeKey == nodeKey) {
+                return childIdx;
+            }
+            if (!child->children.empty()) {
+                stack.push_back({child, childIdx});
+            }
+        }
+    }
+
+    return {};
+}
+
 TreeItem* TreeModel::itemForIndex(const QModelIndex& index) const {
     if (!index.isValid()) {
         return root_.get();

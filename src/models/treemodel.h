@@ -32,6 +32,8 @@ public:
     TreeItem* rootItem();
     const TreeItem* rootItem() const;
 
+    Q_INVOKABLE QModelIndex indexForNodeKey(qulonglong nodeKey) const;
+
 private:
     TreeItem* itemForIndex(const QModelIndex& index) const;
     int rowForItem(const TreeItem* item) const;

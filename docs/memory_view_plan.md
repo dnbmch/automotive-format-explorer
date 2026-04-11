@@ -32,10 +32,26 @@ Three-column split. Tree and detail panel are always visible. The memory view oc
 
 All three panels coexist. The vertical split handles between tree|memory and memory|detail are draggable, so the user can allocate space to taste.
 
-The center panel is format-specific visualization:
-- **A2L with memory segments**: Memory view (hex grid)
-- **A2L without memory segments / DBC / LDF**: Empty or future format-specific visualization
-- The center panel concept is extensible — DBC could show a CAN matrix view, LDF could show a schedule timeline
+### Generic center panel slot
+
+The center panel is **not** A2L-specific infrastructure — it's a generic session-provided slot. Each `DocumentSession` subclass exposes a `centerPanelSource` property:
+
+```cpp
+Q_PROPERTY(QUrl centerPanelSource READ centerPanelSource CONSTANT)
+```
+
+- `A2lDocumentSession` returns `qrc:/components/MemoryView.qml`
+- `DbcDocumentSession` returns empty (future: CAN matrix view)
+- `LdfDocumentSession` returns empty (future: schedule timeline)
+
+Main.qml uses a `Loader` in the center SplitView pane, bound to the active session's `centerPanelSource`. When empty, the center pane collapses and the layout falls back to the current two-column tree + detail.
+
+The MemoryView component itself is fully A2L-specific. The generic part is just the slot plumbing (~20 lines in Main.qml + one property per session).
+
+### Format-specific center content
+- **A2L**: Memory view (hex grid) — always available (see segment fallback below)
+- **DBC**: Empty for now (future: CAN matrix view)
+- **LDF**: Empty for now (future: schedule timeline)
 
 ## Data Sources (from A2L protobuf)
 
@@ -43,10 +59,18 @@ The center panel is format-specific visualization:
 |---|---|
 | `MemorySegment` | Named memory regions with base address, size, type (FLASH/RAM/ROM), prg_type (CAL/CODE/DATA) |
 | `Characteristic` | Calibration parameter: address, record_layout_ref, type (VALUE/CURVE/MAP/...), byte_order |
-| `Measurement` | Runtime signal: ecu_address, datatype, bit_mask |
+| `Measurement` | Runtime signal: ecu_address (optional!), datatype, bit_mask |
 | `AxisPts` | Standalone axis: address, record_layout_ref |
 | `RecordLayout` | Byte-level structure: field positions, data types, axis layout, alignment |
 | `ModCommon` | Default byte_order, alignment, deposit_mode |
+
+### Filtering: objects without addresses
+
+Not all objects can be placed on the memory grid:
+- **Measurements** often lack `ecu_address` — their address lives only in XCP/CCP `IF_DATA` blocks, which we don't parse into a usable address. These measurements are **excluded** from the grid.
+- **Characteristics and AxisPts** always have an `address` field (required in the spec), so they are always included.
+
+The status bar shows a count of excluded objects: `"12 measurements without ECU address (not shown)"`.
 
 ## Rendering
 
@@ -90,6 +114,17 @@ CAL_FLASH  [0x80000 .. 0x8FFFF]  FLASH / CALIBRATION_VARIABLES
 
 Selecting a segment scrolls the grid to that region and only colors objects within it.
 
+#### Fallback when no segments are defined
+
+Many production A2L files have no `MemorySegment` entries at all — segments are optional in the spec. When no segments exist, the memory view derives a **synthetic range** from the objects themselves:
+
+1. Collect all addresses from Characteristics, AxisPts, and address-bearing Measurements
+2. Compute `min(all addresses)` and `max(all addresses + object size)`
+3. Align start down and end up to the nearest 256-byte boundary
+4. Present this as a single synthetic segment: `"[derived]  [0x80000 .. 0x8FFFF]"`
+
+The segment selector dropdown is hidden when there is only one segment (real or synthetic). The grid is always available if there is at least one addressable object.
+
 ## Bidirectional Selection
 
 ### Tree/detail → memory
@@ -106,37 +141,71 @@ Click-drag to select a byte range. Status bar shows: `Selected: 0x80100 — 0x80
 
 ## Size Calculation
 
-For each Characteristic/AxisPts, compute byte footprint from its RecordLayout:
+Size calculation is the hardest part of this feature. The ASAP2 spec has complex layout rules with alignment padding, index modes, deposit modes, and axis interleaving. We use a **tiered approach**: handle common cases correctly, mark complex cases as approximate.
 
-1. Look up the RecordLayout by `record_layout_ref`
-2. Walk the ordered `components` list
-3. For each component, compute byte size from its `DataType` and position
-4. The last component's `position + sizeof(datatype)` gives the total
-5. For CURVE/MAP types, multiply by axis dimensions from AxisDescr `max_axis_points`
-6. Apply alignment from RecordLayout alignment components and ModCommon defaults
+### Tier 1 — Trivially correct (Phase 1)
 
-For Measurements, size = `sizeof(DataType)` from the measurement's `datatype` field. Apply `bit_mask` for sub-byte precision.
+These cases have straightforward size computation:
+
+- **VALUE**: Look up RecordLayout, find `function_values` component → `sizeof(datatype)`. If no RecordLayout match, fall back to the Characteristic's conversion method to infer type.
+- **Measurement**: `sizeof(datatype)` from the measurement's `datatype` field. For array measurements, multiply by `array_size` or product of `matrix_dim`.
+- **AxisPts (simple)**: `max_axis_points * sizeof(axis datatype)` + header fields from RecordLayout.
+
+### Tier 2 — Common but non-trivial (Phase 1, best-effort)
+
+- **CURVE** with `ROW_DIR` index mode: axis values block + function values block, laid out sequentially. Size = `(max_axis_points * sizeof(axis_type)) + (max_axis_points * sizeof(value_type))` + any `NO_AXIS_PTS_X` header field.
+- **MAP** with `ROW_DIR`: similar, but two axis dimensions. Size = axis_x block + axis_y block + (x_count * y_count * sizeof(value_type)).
+
+### Tier 3 — Complex (Phase 3)
+
+These require full RecordLayout interpretation and are deferred:
+
+- **`ALTERNATE_CURVES` / `ALTERNATE_WITH_X`** index modes — axis and value bytes are interleaved, not blocked
+- **Alignment padding** between RecordLayout components (`ALIGNMENT_BYTE`, `ALIGNMENT_WORD`, `ALIGNMENT_LONG`, `ALIGNMENT_FLOAT32_IEEE`, `ALIGNMENT_FLOAT64_IEEE`) — must be applied between fields, not just at the end
+- **`DEPOSIT_MODE`** (ABSOLUTE vs DIFFERENCE) — affects axis memory interpretation
+- **`FIX_NO_AXIS_PTS_X/Y`** vs dynamic `NO_AXIS_PTS_X/Y`** — static vs dynamic axis count stored in memory
+- **CUBOID, CUBOID4, CUBOID5** — multi-dimensional with 3-5 axes
+- **VAL_BLK with matrix_dim** — multi-dimensional value arrays
+
+### Visual treatment of approximate sizes
+
+Objects with Tier 1/2 sizes render with solid color blocks. Objects with Tier 3 layouts (where we can't compute exact size) render with a **dashed border** and use a best-guess size estimate (sum of component sizes without alignment). Tooltip shows `"Size: ~48 bytes (approximate — complex layout)"`.
+
+This avoids the cascading visual error problem: an incorrect size for one object doesn't shift subsequent blocks because each object is placed at its own known address. Gaps and overlaps between objects are real (or indicate our size estimate is wrong, which the dashed border communicates).
+
+### Measurement sub-byte precision
+
+For Measurements with `bit_mask`, the footprint is the byte(s) containing the masked bits. Display as a partially-filled cell. Multiple measurements sharing the same byte(s) via different bit_masks are shown as subdivided cells.
 
 ## Implementation Phases
 
 ### Phase 1 — Static grid with colored blocks
 
-- Custom QQuickPaintedItem or QQuickItem with Canvas for the hex grid
-- Parse MemorySegment list, build segment selector
-- For selected segment, collect all Characteristic/Measurement/AxisPts whose address falls within range
-- Compute byte footprint per object using RecordLayout
+- **Renderer**: QQuickPaintedItem (sufficient for typical 64KB–256KB calibration segments; upgrade path to QSGNode if profiling shows need)
+- **Generic center panel slot**: Add `centerPanelSource` property to DocumentSession, Loader in Main.qml
+- Parse MemorySegment list, build segment selector (with synthetic segment fallback)
+- Filter objects: include Characteristics + AxisPts always, Measurements only if `ecu_address` is present
+- **Address index**: build sorted vector of `(address, address+size, object_ref)` intervals for O(log n) hit-testing per visible row (binary search on start address). This is the core data structure — avoid flat scans.
+- Compute byte footprint: Tier 1 + Tier 2 sizes (see Size Calculation above)
 - Render colored cells, address gutter, hover tooltips
 - Wire tree selection → memory scroll
+- Status bar: segment info + count of excluded addressless measurements
+- **Jump to address**: text input field in the segment selector bar — type a hex address, grid scrolls to it
 
-### Phase 2 — Bidirectional selection
+### Phase 2 — Bidirectional selection + navigation
 
 - Click cell → select in tree + update detail
 - Click-drag range selection
 - Disambiguation popup for overlapping objects
 - Status bar with selection info
+- **Keyboard navigation**: arrow keys move between cells, Page Up/Down scroll, Home/End jump to segment start/end
+- **Bytes-per-row toggle**: toolbar button to switch between 8, 16, 32 bytes/row
+- **Color legend**: small collapsible legend panel at the bottom of the memory view
 
-### Phase 3 — Layout analysis
+### Phase 3 — Layout analysis + Tier 3 sizes
 
+- Full RecordLayout interpretation (alignment, index modes, deposit modes)
+- Replace dashed-border approximate sizes with exact sizes
 - Gap detection (unassigned bytes between objects)
 - Overlap detection (two objects claiming same bytes)
 - Segment utilization percentage in header
@@ -146,6 +215,8 @@ For Measurements, size = `sizeof(DataType)` from the measurement's `datatype` fi
 
 - The memory view is read-only visualization — no hex editing
 - All data comes from the already-parsed protobuf, no file re-reading
-- RecordLayout size computation is the hard part — the ASAP2 spec has complex layout rules with alignment padding, index modes, and axis interleaving. Phase 1 can use a simplified calculation (sum of component sizes + padding estimate), refined in Phase 3
-- Performance: a typical CALIBRATION_VARIABLES segment is 64KB–2MB. At 16 bytes/row, that's 4K–128K rows. Use virtualized scrolling (only render visible rows)
+- RecordLayout size computation is tiered — see Size Calculation section. Each object is placed at its own known address, so approximate sizes cause visual fuzziness at one object's boundary, not cascading errors
+- **Performance**: typical CALIBRATION_VARIABLES segment is 64KB–256KB (4K–16K rows at 16 bytes/row) — well within QQuickPaintedItem's comfort zone. For outlier 2MB segments (128K rows), virtualized scrolling (only render visible rows + small buffer) is essential. The sorted interval vector for address lookup keeps hit-testing O(log n)
+- **Renderer upgrade path**: if QQuickPaintedItem becomes a bottleneck (full repaint on scroll), swap to QQuickItem + QSGNode for incremental scene graph updates. The data model and QML interface stay the same — only the paint implementation changes
 - Color scheme should respect the app's existing Theme.qml dark palette
+- **AxisPts ownership**: when a Characteristic's AxisDescr has `AXIS_PTS_REF` pointing to a standalone AxisPts, the AxisPts is rendered as its own separate block (it occupies its own address range). This is not an overlap — do not show hatched pattern for this case

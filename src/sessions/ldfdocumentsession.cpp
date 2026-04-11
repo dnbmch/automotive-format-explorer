@@ -6,6 +6,14 @@
 
 namespace {
 
+QString text(const std::string& value) {
+    auto utf8 = QString::fromUtf8(value.data(), static_cast<int>(value.size()));
+    if (utf8.contains(QChar::ReplacementCharacter)) {
+        return QString::fromLatin1(value.data(), static_cast<int>(value.size()));
+    }
+    return utf8;
+}
+
 QString boolText(bool value) {
     return value ? QStringLiteral("Yes") : QStringLiteral("No");
 }
@@ -30,7 +38,7 @@ QString hexAndDecimal(quint32 value) {
 QString joinStrings(const google::protobuf::RepeatedPtrField<std::string>& values) {
     QStringList items;
     for (const std::string& value : values) {
-        items.push_back(QString::fromStdString(value));
+        items.push_back(text(value));
     }
     return items.join(QStringLiteral(", "));
 }
@@ -129,18 +137,18 @@ private:
         pushSection(sections,
                     QStringLiteral("Header"),
                     {
-                        DetailField{QStringLiteral("LIN Protocol"), QString::fromStdString(document_.lin_protocol_version())},
-                        DetailField{QStringLiteral("Language Version"), QString::fromStdString(document_.lin_language_version())},
+                        DetailField{QStringLiteral("LIN Protocol"), text(document_.lin_protocol_version())},
+                        DetailField{QStringLiteral("Language Version"), text(document_.lin_language_version())},
                         DetailField{QStringLiteral("Speed (kbps)"), numberText(document_.lin_speed_kbps())},
-                        DetailField{QStringLiteral("Channel"), QString::fromStdString(document_.channel_name())},
-                        DetailField{QStringLiteral("LDF Revision"), QString::fromStdString(document_.ldf_file_revision())},
+                        DetailField{QStringLiteral("Channel"), text(document_.channel_name())},
+                        DetailField{QStringLiteral("LDF Revision"), text(document_.ldf_file_revision())},
                         DetailField{QStringLiteral("Big Endian Signals"), boolText(document_.big_endian_signals())},
                     });
 
         pushSection(sections,
                     QStringLiteral("Contents"),
                     {
-                        DetailField{QStringLiteral("Master Node"), document_.has_master() ? QString::fromStdString(document_.master().name()) : QStringLiteral("Not defined")},
+                        DetailField{QStringLiteral("Master Node"), document_.has_master() ? text(document_.master().name()) : QStringLiteral("Not defined")},
                         DetailField{QStringLiteral("Slave Nodes"), numberText(document_.slaves_size())},
                         DetailField{QStringLiteral("Signals"), numberText(document_.signals_size())},
                         DetailField{QStringLiteral("Frames"), numberText(document_.frames_size())},
@@ -158,8 +166,8 @@ private:
     QList<DetailSection> nodeDetails(const ldf::Node& node, bool isMaster) const {
         QList<DetailSection> sections;
         QList<DetailField> identity;
-        addField(identity, QStringLiteral("Name"), QString::fromStdString(node.name()));
-        addField(identity, QStringLiteral("Role"), QString::fromStdString(ldf::NodeRole_Name(node.role())));
+        addField(identity, QStringLiteral("Name"), text(node.name()));
+        addField(identity, QStringLiteral("Role"), text(ldf::NodeRole_Name(node.role())));
         pushSection(sections, QStringLiteral("Identity"), std::move(identity));
 
         QList<DetailField> timing;
@@ -172,13 +180,13 @@ private:
         if (node.has_attributes()) {
             const auto& attrs = node.attributes();
             QList<DetailField> attributes;
-            addField(attributes, QStringLiteral("LIN Protocol"), QString::fromStdString(attrs.lin_protocol()));
+            addField(attributes, QStringLiteral("LIN Protocol"), text(attrs.lin_protocol()));
             addField(attributes, QStringLiteral("Configured NAD"), hexAndDecimal(attrs.configured_nad()));
             if (attrs.initial_nad() != 0) {
                 addField(attributes, QStringLiteral("Initial NAD"), hexAndDecimal(attrs.initial_nad()));
             }
             addField(attributes, QStringLiteral("Product ID"), joinNumbers(attrs.product_id()));
-            addField(attributes, QStringLiteral("Response Error"), QString::fromStdString(attrs.response_error()));
+            addField(attributes, QStringLiteral("Response Error"), text(attrs.response_error()));
             addField(attributes, QStringLiteral("Fault State Signals"), joinStrings(attrs.fault_state_signals()));
             addOptionalNumberField(attributes, QStringLiteral("P2 Min (ms)"), attrs.p2_min_ms());
             addOptionalNumberField(attributes, QStringLiteral("ST Min (ms)"), attrs.st_min_ms());
@@ -203,16 +211,16 @@ private:
         pushSection(sections,
                     QStringLiteral("Identity"),
                     {
-                        DetailField{QStringLiteral("Name"), QString::fromStdString(frame.name())},
+                        DetailField{QStringLiteral("Name"), text(frame.name())},
                         DetailField{QStringLiteral("Frame ID"), hexAndDecimal(frame.id())},
-                        DetailField{QStringLiteral("Publisher"), QString::fromStdString(frame.publisher())},
+                        DetailField{QStringLiteral("Publisher"), text(frame.publisher())},
                         DetailField{QStringLiteral("Length"), frame.length() == 0 ? QStringLiteral("Unspecified") : QStringLiteral("%1 bytes").arg(frame.length())},
                         DetailField{QStringLiteral("Signals"), numberText(frame.signals_size())},
                     });
 
         QList<DetailField> signals;
         for (const auto& signal : frame.signals()) {
-            addField(signals, QString::fromStdString(signal.signal_name()), QStringLiteral("Start bit %1").arg(signal.start_bit()));
+            addField(signals, text(signal.signal_name()), QStringLiteral("Start bit %1").arg(signal.start_bit()));
         }
         pushSection(sections, QStringLiteral("Signals"), std::move(signals));
         return sections;
@@ -231,8 +239,8 @@ private:
 
         const auto& frameSignal = frame.signals(path.secondaryIndex);
         QList<DetailField> placement;
-        addField(placement, QStringLiteral("Signal"), QString::fromStdString(frameSignal.signal_name()));
-        addField(placement, QStringLiteral("Frame"), QString::fromStdString(frame.name()));
+        addField(placement, QStringLiteral("Signal"), text(frameSignal.signal_name()));
+        addField(placement, QStringLiteral("Frame"), text(frame.name()));
         addField(placement, QStringLiteral("Frame ID"), hexAndDecimal(frame.id()));
         addNumberField(placement, QStringLiteral("Start Bit"), frameSignal.start_bit());
         pushSection(sections, QStringLiteral("Placement"), std::move(placement));
@@ -241,10 +249,10 @@ private:
             QList<DetailField> signalFields;
             addNumberField(signalFields, QStringLiteral("Bit Length"), signal->bit_length());
             addNumberField(signalFields, QStringLiteral("Init Value"), signal->init_value());
-            addField(signalFields, QStringLiteral("Publisher"), QString::fromStdString(signal->publisher()));
+            addField(signalFields, QStringLiteral("Publisher"), text(signal->publisher()));
             addField(signalFields, QStringLiteral("Subscribers"), joinStrings(signal->subscribers()));
             if (signal->has_encoding()) {
-                addField(signalFields, QStringLiteral("Encoding"), QString::fromStdString(signal->encoding().encoding_name()));
+                addField(signalFields, QStringLiteral("Encoding"), text(signal->encoding().encoding_name()));
             }
             pushSection(sections, QStringLiteral("Signal"), std::move(signalFields));
         }
@@ -262,21 +270,21 @@ private:
         pushSection(sections,
                     QStringLiteral("Identity"),
                     {
-                        DetailField{QStringLiteral("Name"), QString::fromStdString(signal.name())},
+                        DetailField{QStringLiteral("Name"), text(signal.name())},
                         DetailField{QStringLiteral("Bit Length"), numberText(signal.bit_length())},
                         DetailField{QStringLiteral("Init Value"), numberText(signal.init_value())},
-                        DetailField{QStringLiteral("Publisher"), QString::fromStdString(signal.publisher())},
+                        DetailField{QStringLiteral("Publisher"), text(signal.publisher())},
                         DetailField{QStringLiteral("Subscribers"), joinStrings(signal.subscribers())},
                     });
 
         QList<DetailField> mapping;
-        addField(mapping, QStringLiteral("Frame"), QString::fromStdString(signal.frame_name()));
+        addField(mapping, QStringLiteral("Frame"), text(signal.frame_name()));
         if (signal.frame_id() != 0 || !signal.frame_name().empty()) {
             addField(mapping, QStringLiteral("Frame ID"), hexAndDecimal(signal.frame_id()));
             addNumberField(mapping, QStringLiteral("Start Bit"), signal.start_bit());
         }
         if (signal.has_encoding()) {
-            addField(mapping, QStringLiteral("Encoding"), QString::fromStdString(signal.encoding().encoding_name()));
+            addField(mapping, QStringLiteral("Encoding"), text(signal.encoding().encoding_name()));
             addNumberField(mapping, QStringLiteral("Physical Values"), signal.encoding().physical_values_size());
             addNumberField(mapping, QStringLiteral("Logical Values"), signal.encoding().logical_values_size());
         }
@@ -294,7 +302,7 @@ private:
         pushSection(sections,
                     QStringLiteral("Encoding"),
                     {
-                        DetailField{QStringLiteral("Name"), QString::fromStdString(encoding.name())},
+                        DetailField{QStringLiteral("Name"), text(encoding.name())},
                         DetailField{QStringLiteral("Physical Values"), numberText(encoding.physical_values_size())},
                         DetailField{QStringLiteral("Logical Values"), numberText(encoding.logical_values_size())},
                     });
@@ -311,13 +319,13 @@ private:
         pushSection(sections,
                     QStringLiteral("Schedule"),
                     {
-                        DetailField{QStringLiteral("Name"), QString::fromStdString(schedule.name())},
+                        DetailField{QStringLiteral("Name"), text(schedule.name())},
                         DetailField{QStringLiteral("Entries"), numberText(schedule.entries_size())},
                     });
 
         QList<DetailField> entries;
         for (const auto& entry : schedule.entries()) {
-            addField(entries, QString::fromStdString(entry.command()), QStringLiteral("%1 ms").arg(numberText(entry.delay_ms())));
+            addField(entries, text(entry.command()), QStringLiteral("%1 ms").arg(numberText(entry.delay_ms())));
         }
         pushSection(sections, QStringLiteral("Entries"), std::move(entries));
         return sections;
@@ -333,9 +341,9 @@ private:
         pushSection(sections,
                     QStringLiteral("Event Frame"),
                     {
-                        DetailField{QStringLiteral("Name"), QString::fromStdString(frame.name())},
+                        DetailField{QStringLiteral("Name"), text(frame.name())},
                         DetailField{QStringLiteral("Frame ID"), hexAndDecimal(frame.id())},
-                        DetailField{QStringLiteral("Collision Resolver"), QString::fromStdString(frame.collision_resolver())},
+                        DetailField{QStringLiteral("Collision Resolver"), text(frame.collision_resolver())},
                         DetailField{QStringLiteral("Associated Frames"), joinStrings(frame.associated_frames())},
                     });
         return sections;
@@ -351,7 +359,7 @@ private:
         pushSection(sections,
                     QStringLiteral("Diagnostic Address"),
                     {
-                        DetailField{QStringLiteral("Node"), QString::fromStdString(address.node_name())},
+                        DetailField{QStringLiteral("Node"), text(address.node_name())},
                         DetailField{QStringLiteral("NAD"), hexAndDecimal(address.nad())},
                     });
         return sections;
@@ -367,7 +375,7 @@ private:
         pushSection(sections,
                     QStringLiteral("Signal Group"),
                     {
-                        DetailField{QStringLiteral("Name"), QString::fromStdString(group.name())},
+                        DetailField{QStringLiteral("Name"), text(group.name())},
                         DetailField{QStringLiteral("Group Size"), QStringLiteral("%1 bits").arg(group.group_size())},
                         DetailField{QStringLiteral("Signals"), numberText(group.signals_size())},
                     });
@@ -384,7 +392,7 @@ private:
         pushSection(sections,
                     QStringLiteral("Diagnostic Signal"),
                     {
-                        DetailField{QStringLiteral("Name"), QString::fromStdString(signal.name())},
+                        DetailField{QStringLiteral("Name"), text(signal.name())},
                         DetailField{QStringLiteral("Bit Length"), numberText(signal.bit_length())},
                         DetailField{QStringLiteral("Init Value"), numberText(signal.init_value())},
                     });
@@ -401,7 +409,7 @@ private:
         pushSection(sections,
                     QStringLiteral("Diagnostic Frame"),
                     {
-                        DetailField{QStringLiteral("Name"), QString::fromStdString(frame.name())},
+                        DetailField{QStringLiteral("Name"), text(frame.name())},
                         DetailField{QStringLiteral("Frame ID"), hexAndDecimal(frame.id())},
                         DetailField{QStringLiteral("Signals"), numberText(frame.signals_size())},
                     });
@@ -435,7 +443,7 @@ void LdfDocumentSession::buildTree() {
     appendNode(root.get(),
                QStringLiteral("Overview"),
                QStringLiteral("LIN %1  %2 kbps")
-                   .arg(QString::fromStdString(document_.lin_protocol_version()))
+                   .arg(text(document_.lin_protocol_version()))
                    .arg(numberText(document_.lin_speed_kbps())),
                QStringLiteral("overview"),
                SemanticKind::Entity,
@@ -450,7 +458,7 @@ void LdfDocumentSession::buildTree() {
 
         if (document_.has_master()) {
             appendNode(nodes,
-                       QString::fromStdString(document_.master().name()),
+                       text(document_.master().name()),
                        QStringLiteral("master"),
                        QStringLiteral("master"),
                        SemanticKind::Entity,
@@ -463,7 +471,7 @@ void LdfDocumentSession::buildTree() {
                 ? hexValue(slave.attributes().configured_nad())
                 : QStringLiteral("slave");
             appendNode(nodes,
-                       QString::fromStdString(slave.name()),
+                       text(slave.name()),
                        subtitle,
                        QStringLiteral("slave"),
                        SemanticKind::Entity,
@@ -476,7 +484,7 @@ void LdfDocumentSession::buildTree() {
         for (int i = 0; i < document_.signals_size(); ++i) {
             const auto& signal = document_.signals(i);
             appendNode(signals,
-                       QString::fromStdString(signal.name()),
+                       text(signal.name()),
                        QStringLiteral("%1 bits").arg(signal.bit_length()),
                        QStringLiteral("signal"),
                        SemanticKind::Entity,
@@ -489,7 +497,7 @@ void LdfDocumentSession::buildTree() {
         for (int i = 0; i < document_.frames_size(); ++i) {
             const auto& frame = document_.frames(i);
             TreeItem* frameItem = appendNode(frames,
-                                             QString::fromStdString(frame.name()),
+                                             text(frame.name()),
                                              QStringLiteral("%1  %2B").arg(hexValue(frame.id())).arg(frame.length()),
                                              QStringLiteral("frame"),
                                              SemanticKind::Entity,
@@ -498,7 +506,7 @@ void LdfDocumentSession::buildTree() {
             for (int j = 0; j < frame.signals_size(); ++j) {
                 const auto& signal = frame.signals(j);
                 appendNode(frameItem,
-                           QString::fromStdString(signal.signal_name()),
+                           text(signal.signal_name()),
                            QStringLiteral("@%1").arg(signal.start_bit()),
                            QStringLiteral("framesignal"),
                            SemanticKind::Entity,
@@ -512,7 +520,7 @@ void LdfDocumentSession::buildTree() {
         for (int i = 0; i < document_.signal_encoding_types_size(); ++i) {
             const auto& encoding = document_.signal_encoding_types(i);
             appendNode(encodings,
-                       QString::fromStdString(encoding.name()),
+                       text(encoding.name()),
                        QStringLiteral("P%1 / L%2").arg(encoding.physical_values_size()).arg(encoding.logical_values_size()),
                        QStringLiteral("encoding"),
                        SemanticKind::Entity,
@@ -525,7 +533,7 @@ void LdfDocumentSession::buildTree() {
         for (int i = 0; i < document_.schedule_tables_size(); ++i) {
             const auto& schedule = document_.schedule_tables(i);
             TreeItem* scheduleItem = appendNode(schedules,
-                                                QString::fromStdString(schedule.name()),
+                                                text(schedule.name()),
                                                 QStringLiteral("%1 entries").arg(schedule.entries_size()),
                                                 QStringLiteral("schedule"),
                                                 SemanticKind::Entity,
@@ -533,7 +541,7 @@ void LdfDocumentSession::buildTree() {
 
             for (const auto& entry : schedule.entries()) {
                 appendNode(scheduleItem,
-                           QString::fromStdString(entry.command()),
+                           text(entry.command()),
                            QStringLiteral("%1 ms").arg(numberText(entry.delay_ms())),
                            QStringLiteral("scheduleentry"),
                            SemanticKind::Attribute);
@@ -546,7 +554,7 @@ void LdfDocumentSession::buildTree() {
         for (int i = 0; i < document_.event_triggered_frames_size(); ++i) {
             const auto& frame = document_.event_triggered_frames(i);
             appendNode(events,
-                       QString::fromStdString(frame.name()),
+                       text(frame.name()),
                        hexValue(frame.id()),
                        QStringLiteral("eventframe"),
                        SemanticKind::Entity,
@@ -559,7 +567,7 @@ void LdfDocumentSession::buildTree() {
         for (int i = 0; i < document_.signal_groups_size(); ++i) {
             const auto& group = document_.signal_groups(i);
             appendNode(groups,
-                       QString::fromStdString(group.name()),
+                       text(group.name()),
                        QStringLiteral("%1 bits").arg(group.group_size()),
                        QStringLiteral("group"),
                        SemanticKind::Entity,
@@ -577,7 +585,7 @@ void LdfDocumentSession::buildTree() {
             for (int i = 0; i < document_.diagnostic_addresses_size(); ++i) {
                 const auto& address = document_.diagnostic_addresses(i);
                 appendNode(addresses,
-                           QString::fromStdString(address.node_name()),
+                           text(address.node_name()),
                            hexValue(address.nad()),
                            QStringLiteral("diag-address"),
                            SemanticKind::Diagnostic,
@@ -590,7 +598,7 @@ void LdfDocumentSession::buildTree() {
             for (int i = 0; i < document_.diagnostic_signals_size(); ++i) {
                 const auto& signal = document_.diagnostic_signals(i);
                 appendNode(signals,
-                           QString::fromStdString(signal.name()),
+                           text(signal.name()),
                            QStringLiteral("%1 bits").arg(signal.bit_length()),
                            QStringLiteral("diag-signal"),
                            SemanticKind::Diagnostic,
@@ -603,7 +611,7 @@ void LdfDocumentSession::buildTree() {
             for (int i = 0; i < document_.diagnostic_frames_size(); ++i) {
                 const auto& frame = document_.diagnostic_frames(i);
                 appendNode(frames,
-                           QString::fromStdString(frame.name()),
+                           text(frame.name()),
                            hexValue(frame.id()),
                            QStringLiteral("diag-frame"),
                            SemanticKind::Diagnostic,

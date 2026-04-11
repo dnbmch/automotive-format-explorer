@@ -322,94 +322,154 @@ ApplicationWindow {
                     }
                 }
 
-                // --- Detail content area ---
-                Rectangle {
+                // --- Content area: center panel + detail ---
+                SplitView {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: Theme.bg
+                    orientation: Qt.Horizontal
 
-                    ScrollView {
-                        anchors.fill: parent
-                        anchors.margins: Theme.sp8
+                    handle: Rectangle {
+                        implicitWidth: 6
+                        implicitHeight: 6
+                        color: "transparent"
 
-                        ScrollBar.vertical.background: Rectangle { color: "transparent" }
-                        ScrollBar.vertical.contentItem: Rectangle {
-                            implicitWidth: 6
-                            radius: 3
-                            color: parent.pressed ? Theme.bgButtonPrs
-                                 : parent.hovered ? Theme.bgButtonHov : Theme.borderHover
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 2
+                            height: parent.height
+                            color: SplitHandle.pressed ? Theme.accent
+                                 : SplitHandle.hovered ? Theme.borderHover
+                                 : Theme.border
+                        }
+                    }
+
+                    // --- Center panel (memory view or empty) ---
+                    Loader {
+                        id: centerPanelLoader
+                        SplitView.preferredWidth: hasCenterPanel ? 520 : 0
+                        SplitView.minimumWidth: hasCenterPanel ? 300 : 0
+                        SplitView.maximumWidth: hasCenterPanel ? 99999 : 0
+                        visible: hasCenterPanel
+                        clip: true
+
+                        property bool hasCenterPanel: AppController.centerPanelSource.toString() !== ""
+
+                        function reload() {
+                            let src = AppController.centerPanelSource
+                            let model = AppController.centerPanelModel
+                            if (src.toString() !== "" && model) {
+                                centerPanelLoader.setSource(src, { "mapModel": model })
+                            } else {
+                                centerPanelLoader.source = ""
+                            }
                         }
 
-                        ListView {
-                            id: detailList
-                            spacing: Theme.sp12
-                            clip: true
-                            model: AppController.currentDetailModel
+                        onLoaded: {
+                            if (item) {
+                                item.nodeKeyClicked.connect(function(nodeKey) {
+                                    AppController.selectCurrentNode(nodeKey)
+                                    navPanel.selectAndScrollTo(nodeKey)
+                                })
+                            }
+                        }
 
-                            delegate: Rectangle {
-                                width: ListView.view.width
-                                implicitHeight: cardLayout.implicitHeight + Theme.sp16 * 2
-                                radius: Theme.radius
-                                color: Theme.bgCard
-                                border.color: Theme.border
-                                border.width: 1
+                        Connections {
+                            target: AppController
+                            function onCurrentSessionChanged() {
+                                centerPanelLoader.reload()
+                            }
+                        }
+                    }
 
-                                ColumnLayout {
-                                    id: cardLayout
-                                    anchors.fill: parent
-                                    anchors.margins: Theme.sp16
-                                    spacing: Theme.sp8
+                    // --- Detail panel (right) ---
+                    Rectangle {
+                        SplitView.fillWidth: true
+                        SplitView.minimumWidth: 250
+                        color: Theme.bg
 
-                                    Label {
-                                        Layout.fillWidth: true
-                                        font.bold: true
-                                        font.pixelSize: Theme.fontSizeL
-                                        color: Theme.textBright
-                                        text: model.title
-                                    }
+                        ScrollView {
+                            anchors.fill: parent
+                            anchors.margins: Theme.sp8
 
-                                    Rectangle {
-                                        Layout.fillWidth: true
-                                        height: 1
-                                        color: Theme.border
-                                    }
+                            ScrollBar.vertical.background: Rectangle { color: "transparent" }
+                            ScrollBar.vertical.contentItem: Rectangle {
+                                implicitWidth: 6
+                                radius: 3
+                                color: parent.pressed ? Theme.bgButtonPrs
+                                     : parent.hovered ? Theme.bgButtonHov : Theme.borderHover
+                            }
 
-                                    Repeater {
-                                        model: fields
+                            ListView {
+                                id: detailList
+                                spacing: Theme.sp12
+                                clip: true
+                                model: AppController.currentDetailModel
 
-                                        delegate: RowLayout {
+                                delegate: Rectangle {
+                                    width: ListView.view.width
+                                    implicitHeight: cardLayout.implicitHeight + Theme.sp16 * 2
+                                    radius: Theme.radius
+                                    color: Theme.bgCard
+                                    border.color: Theme.border
+                                    border.width: 1
+
+                                    ColumnLayout {
+                                        id: cardLayout
+                                        anchors.fill: parent
+                                        anchors.margins: Theme.sp16
+                                        spacing: Theme.sp8
+
+                                        Label {
                                             Layout.fillWidth: true
-                                            spacing: Theme.sp12
+                                            font.bold: true
+                                            font.pixelSize: Theme.fontSizeL
+                                            color: Theme.textBright
+                                            text: model.title
+                                        }
 
-                                            Label {
-                                                Layout.preferredWidth: 180
-                                                font.bold: true
-                                                font.pixelSize: Theme.fontSizeM
-                                                color: Theme.textSecondary
-                                                text: modelData.key + ":"
-                                            }
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            height: 1
+                                            color: Theme.border
+                                        }
 
-                                            Label {
+                                        Repeater {
+                                            model: fields
+
+                                            delegate: RowLayout {
                                                 Layout.fillWidth: true
-                                                wrapMode: Text.WrapAnywhere
-                                                font.pixelSize: Theme.fontSizeM
-                                                color: Theme.textPrimary
-                                                text: modelData.value
+                                                spacing: Theme.sp12
+
+                                                Label {
+                                                    Layout.preferredWidth: 180
+                                                    font.bold: true
+                                                    font.pixelSize: Theme.fontSizeM
+                                                    color: Theme.textSecondary
+                                                    text: modelData.key + ":"
+                                                }
+
+                                                Label {
+                                                    Layout.fillWidth: true
+                                                    wrapMode: Text.WrapAnywhere
+                                                    font.pixelSize: Theme.fontSizeM
+                                                    color: Theme.textPrimary
+                                                    text: modelData.value
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            // Empty state
-                            Label {
-                                anchors.centerIn: parent
-                                font.pixelSize: Theme.fontSizeL
-                                color: Theme.textMuted
-                                text: tabs.count === 0
-                                      ? "Open a file to inspect its structure."
-                                      : "Select a tree node to view details."
-                                visible: detailList.count === 0
+                                // Empty state
+                                Label {
+                                    anchors.centerIn: parent
+                                    font.pixelSize: Theme.fontSizeL
+                                    color: Theme.textMuted
+                                    text: tabs.count === 0
+                                          ? "Open a file to inspect its structure."
+                                          : "Select a tree node to view details."
+                                    visible: detailList.count === 0
+                                }
                             }
                         }
                     }

@@ -5,6 +5,7 @@
 #include "models/tabmodel.h"
 #include "models/treemodel.h"
 
+#include <QAbstractListModel>
 #include <QObject>
 #include <QLibrary>
 #include <memory>
@@ -15,6 +16,8 @@ class AppController : public QObject {
     Q_PROPERTY(TabModel* tabModel READ tabModel CONSTANT)
     Q_PROPERTY(TreeModel* currentTreeModel READ currentTreeModel NOTIFY currentSessionChanged)
     Q_PROPERTY(DetailModel* currentDetailModel READ currentDetailModel NOTIFY currentSessionChanged)
+    Q_PROPERTY(QUrl centerPanelSource READ centerPanelSource NOTIFY currentSessionChanged)
+    Q_PROPERTY(QAbstractListModel* centerPanelModel READ centerPanelModel NOTIFY currentSessionChanged)
     Q_PROPERTY(int currentTabIndex READ currentTabIndex WRITE setCurrentTabIndex NOTIFY currentTabIndexChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(bool startupLoading READ startupLoading WRITE setStartupLoading NOTIFY startupLoadingChanged)
@@ -26,6 +29,8 @@ public:
     TabModel* tabModel();
     TreeModel* currentTreeModel();
     DetailModel* currentDetailModel();
+    QUrl centerPanelSource();
+    QAbstractListModel* centerPanelModel();
 
     int currentTabIndex() const;
     void setCurrentTabIndex(int index);

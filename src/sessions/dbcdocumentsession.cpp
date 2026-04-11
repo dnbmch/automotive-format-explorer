@@ -7,6 +7,14 @@
 
 namespace {
 
+QString text(const std::string& value) {
+    auto utf8 = QString::fromUtf8(value.data(), static_cast<int>(value.size()));
+    if (utf8.contains(QChar::ReplacementCharacter)) {
+        return QString::fromLatin1(value.data(), static_cast<int>(value.size()));
+    }
+    return utf8;
+}
+
 QString boolText(bool value) {
     return value ? QStringLiteral("Yes") : QStringLiteral("No");
 }
@@ -14,7 +22,7 @@ QString boolText(bool value) {
 QString joinStrings(const google::protobuf::RepeatedPtrField<std::string>& values) {
     QStringList items;
     for (const std::string& value : values) {
-        items.push_back(QString::fromStdString(value));
+        items.push_back(text(value));
     }
     return items.join(QStringLiteral(", "));
 }
@@ -88,21 +96,21 @@ private:
 
         const auto& node = document_.nodes(path.primaryIndex);
         QList<DetailField> identity;
-        addField(identity, QStringLiteral("Name"), QString::fromStdString(node.name()));
+        addField(identity, QStringLiteral("Name"), text(node.name()));
         addNumberField(identity, QStringLiteral("Attributes"), node.attributes_size());
         pushSection(sections, QStringLiteral("Identity"), std::move(identity));
 
         if (!node.comment().empty()) {
             pushSection(sections,
                         QStringLiteral("Comment"),
-                        {DetailField{QStringLiteral("Text"), QString::fromStdString(node.comment())}});
+                        {DetailField{QStringLiteral("Text"), text(node.comment())}});
         }
 
         QList<DetailField> attributes;
         for (const auto& attribute : node.attributes()) {
             addField(attributes,
-                     QString::fromStdString(attribute.name()),
-                     QString::fromStdString(attribute.value()));
+                     text(attribute.name()),
+                     text(attribute.value()));
         }
         pushSection(sections, QStringLiteral("Attributes"), std::move(attributes));
         return sections;
@@ -116,11 +124,11 @@ private:
 
         const auto& message = document_.messages(path.primaryIndex);
         QList<DetailField> identity;
-        addField(identity, QStringLiteral("Name"), QString::fromStdString(message.name()));
+        addField(identity, QStringLiteral("Name"), text(message.name()));
         addField(identity, QStringLiteral("CAN ID"), hexId(message.id()));
         addField(identity, QStringLiteral("Extended ID"), boolText(message.is_extended_id()));
         addNumberField(identity, QStringLiteral("DLC"), message.dlc());
-        addField(identity, QStringLiteral("Sender"), QString::fromStdString(message.sender()));
+        addField(identity, QStringLiteral("Sender"), text(message.sender()));
         addNumberField(identity, QStringLiteral("Signals"), message.signals_size());
         pushSection(sections, QStringLiteral("Identity"), std::move(identity));
 
@@ -131,14 +139,14 @@ private:
         if (!message.comment().empty()) {
             pushSection(sections,
                         QStringLiteral("Comment"),
-                        {DetailField{QStringLiteral("Text"), QString::fromStdString(message.comment())}});
+                        {DetailField{QStringLiteral("Text"), text(message.comment())}});
         }
 
         QList<DetailField> attributes;
         for (const auto& attribute : message.attributes()) {
             addField(attributes,
-                     QString::fromStdString(attribute.name()),
-                     QString::fromStdString(attribute.value()));
+                     text(attribute.name()),
+                     text(attribute.value()));
         }
         pushSection(sections, QStringLiteral("Attributes"), std::move(attributes));
         return sections;
@@ -157,8 +165,8 @@ private:
 
         const auto& signal = message.signals(path.secondaryIndex);
         QList<DetailField> identity;
-        addField(identity, QStringLiteral("Signal"), QString::fromStdString(signal.name()));
-        addField(identity, QStringLiteral("Message"), QString::fromStdString(message.name()));
+        addField(identity, QStringLiteral("Signal"), text(signal.name()));
+        addField(identity, QStringLiteral("Message"), text(message.name()));
         pushSection(sections, QStringLiteral("Identity"), std::move(identity));
 
         QList<DetailField> layout;
@@ -166,7 +174,7 @@ private:
         addNumberField(layout, QStringLiteral("Bit Length"), signal.bit_length());
         addField(layout,
                  QStringLiteral("Byte Order"),
-                 QString::fromStdString(dbc::ByteOrder_Name(signal.byte_order())));
+                 text(dbc::ByteOrder_Name(signal.byte_order())));
         addField(layout, QStringLiteral("Signed"), boolText(signal.is_signed()));
         pushSection(sections, QStringLiteral("Layout"), std::move(layout));
 
@@ -175,16 +183,16 @@ private:
         addNumberField(scaling, QStringLiteral("Offset"), signal.offset());
         addNumberField(scaling, QStringLiteral("Min"), signal.min());
         addNumberField(scaling, QStringLiteral("Max"), signal.max());
-        addField(scaling, QStringLiteral("Unit"), QString::fromStdString(signal.unit()));
+        addField(scaling, QStringLiteral("Unit"), text(signal.unit()));
         addField(scaling,
                  QStringLiteral("Value Type"),
-                 QString::fromStdString(dbc::ValueType_Name(signal.value_type())));
+                 text(dbc::ValueType_Name(signal.value_type())));
         pushSection(sections, QStringLiteral("Scaling"), std::move(scaling));
 
         QList<DetailField> multiplexing;
         addField(multiplexing,
                  QStringLiteral("Mode"),
-                 QString::fromStdString(dbc::MultiplexType_Name(signal.multiplex_type())));
+                 text(dbc::MultiplexType_Name(signal.multiplex_type())));
         if (signal.multiplex_type() == dbc::MULTIPLEX_MULTIPLEXED ||
             signal.multiplex_type() == dbc::MULTIPLEX_MULTIPLEXED_AND_MULTIPLEXOR) {
             addNumberField(multiplexing, QStringLiteral("Value"), signal.multiplex_value());
@@ -198,22 +206,22 @@ private:
         if (!signal.comment().empty()) {
             pushSection(sections,
                         QStringLiteral("Comment"),
-                        {DetailField{QStringLiteral("Text"), QString::fromStdString(signal.comment())}});
+                        {DetailField{QStringLiteral("Text"), text(signal.comment())}});
         }
 
         QList<DetailField> values;
         for (const auto& entry : signal.value_descriptions()) {
             addField(values,
                      QString::number(entry.value()),
-                     QString::fromStdString(entry.description()));
+                     text(entry.description()));
         }
         pushSection(sections, QStringLiteral("Value Descriptions"), std::move(values));
 
         QList<DetailField> attributes;
         for (const auto& attribute : signal.attributes()) {
             addField(attributes,
-                     QString::fromStdString(attribute.name()),
-                     QString::fromStdString(attribute.value()));
+                     text(attribute.name()),
+                     text(attribute.value()));
         }
         pushSection(sections, QStringLiteral("Attributes"), std::move(attributes));
         return sections;
@@ -229,7 +237,7 @@ private:
         pushSection(sections,
                     QStringLiteral("Identity"),
                     {
-                        DetailField{QStringLiteral("Name"), QString::fromStdString(table.name())},
+                        DetailField{QStringLiteral("Name"), text(table.name())},
                         DetailField{QStringLiteral("Entries"), QString::number(table.entries_size())},
                     });
 
@@ -237,7 +245,7 @@ private:
         for (const auto& entry : table.entries()) {
             addField(entries,
                      QString::number(entry.value()),
-                     QString::fromStdString(entry.description()));
+                     text(entry.description()));
         }
         pushSection(sections, QStringLiteral("Entries"), std::move(entries));
         return sections;
@@ -251,13 +259,13 @@ private:
 
         const auto& definition = document_.attribute_definitions(path.primaryIndex);
         QList<DetailField> fields;
-        addField(fields, QStringLiteral("Name"), QString::fromStdString(definition.name()));
+        addField(fields, QStringLiteral("Name"), text(definition.name()));
         addField(fields,
                  QStringLiteral("Scope"),
-                 QString::fromStdString(dbc::AttributeScope_Name(definition.scope())));
+                 text(dbc::AttributeScope_Name(definition.scope())));
         addField(fields,
                  QStringLiteral("Value Type"),
-                 QString::fromStdString(dbc::AttributeValueType_Name(definition.value_type())));
+                 text(dbc::AttributeValueType_Name(definition.value_type())));
         addField(fields,
                  QStringLiteral("Enum Values"),
                  joinStrings(definition.enum_values()));
@@ -275,8 +283,8 @@ private:
         pushSection(sections,
                     QStringLiteral("Default"),
                     {
-                        DetailField{QStringLiteral("Name"), QString::fromStdString(value.name())},
-                        DetailField{QStringLiteral("Value"), QString::fromStdString(value.value())},
+                        DetailField{QStringLiteral("Name"), text(value.name())},
+                        DetailField{QStringLiteral("Value"), text(value.value())},
                     });
         return sections;
     }
@@ -289,11 +297,11 @@ private:
 
         const auto& value = document_.attribute_values(path.primaryIndex);
         QList<DetailField> fields;
-        addField(fields, QStringLiteral("Name"), QString::fromStdString(value.name()));
-        addField(fields, QStringLiteral("Value"), QString::fromStdString(value.value()));
+        addField(fields, QStringLiteral("Name"), text(value.name()));
+        addField(fields, QStringLiteral("Value"), text(value.value()));
         addField(fields,
                  QStringLiteral("Scope"),
-                 QString::fromStdString(dbc::AttributeScope_Name(value.scope())));
+                 text(dbc::AttributeScope_Name(value.scope())));
         pushSection(sections, QStringLiteral("Attribute"), std::move(fields));
         return sections;
     }
@@ -306,11 +314,11 @@ private:
 
         const auto& envVar = document_.environment_variables(path.primaryIndex);
         QList<DetailField> identity;
-        addField(identity, QStringLiteral("Name"), QString::fromStdString(envVar.name()));
+        addField(identity, QStringLiteral("Name"), text(envVar.name()));
         addField(identity,
                  QStringLiteral("Type"),
-                 QString::fromStdString(dbc::EnvironmentVariableType_Name(envVar.var_type())));
-        addField(identity, QStringLiteral("Unit"), QString::fromStdString(envVar.unit()));
+                 text(dbc::EnvironmentVariableType_Name(envVar.var_type())));
+        addField(identity, QStringLiteral("Unit"), text(envVar.unit()));
         pushSection(sections, QStringLiteral("Identity"), std::move(identity));
 
         QList<DetailField> range;
@@ -321,14 +329,14 @@ private:
         pushSection(sections, QStringLiteral("Range"), std::move(range));
 
         QList<DetailField> access;
-        addField(access, QStringLiteral("Access Type"), QString::fromStdString(envVar.access_type()));
+        addField(access, QStringLiteral("Access Type"), text(envVar.access_type()));
         addField(access, QStringLiteral("Access Nodes"), joinStrings(envVar.access_nodes()));
         pushSection(sections, QStringLiteral("Access"), std::move(access));
 
         if (!envVar.comment().empty()) {
             pushSection(sections,
                         QStringLiteral("Comment"),
-                        {DetailField{QStringLiteral("Text"), QString::fromStdString(envVar.comment())}});
+                        {DetailField{QStringLiteral("Text"), text(envVar.comment())}});
         }
         return sections;
     }
@@ -341,14 +349,14 @@ private:
 
         const auto& group = document_.signal_groups(path.primaryIndex);
         QList<DetailField> identity;
-        addField(identity, QStringLiteral("Name"), QString::fromStdString(group.name()));
+        addField(identity, QStringLiteral("Name"), text(group.name()));
         addField(identity, QStringLiteral("Message ID"), hexId(group.message_id()));
         addNumberField(identity, QStringLiteral("Repetitions"), group.repetitions());
         pushSection(sections, QStringLiteral("Identity"), std::move(identity));
 
         QList<DetailField> signals;
         for (const std::string& signalName : group.signal_names()) {
-            addField(signals, QString::fromStdString(signalName), QStringLiteral("Included"));
+            addField(signals, text(signalName), QStringLiteral("Included"));
         }
         pushSection(sections, QStringLiteral("Signals"), std::move(signals));
         return sections;
@@ -383,7 +391,7 @@ void DbcDocumentSession::buildTree() {
         for (int i = 0; i < document_.nodes_size(); ++i) {
             const auto& node = document_.nodes(i);
             appendNode(section,
-                       QString::fromStdString(node.name()),
+                       text(node.name()),
                        node.comment().empty() ? QString() : QStringLiteral("commented"),
                        QStringLiteral("node"),
                        SemanticKind::Entity,
@@ -396,7 +404,7 @@ void DbcDocumentSession::buildTree() {
         for (int i = 0; i < document_.messages_size(); ++i) {
             const auto& message = document_.messages(i);
             TreeItem* messageItem = appendNode(section,
-                                               QString::fromStdString(message.name()),
+                                               text(message.name()),
                                                QStringLiteral("%1  DLC=%2").arg(hexId(message.id())).arg(message.dlc()),
                                                QStringLiteral("message"),
                                                SemanticKind::Entity,
@@ -405,7 +413,7 @@ void DbcDocumentSession::buildTree() {
             for (int j = 0; j < message.signals_size(); ++j) {
                 const auto& signal = message.signals(j);
                 appendNode(messageItem,
-                           QString::fromStdString(signal.name()),
+                           text(signal.name()),
                            QStringLiteral("[%1|%2]").arg(signal.start_bit()).arg(signal.bit_length()),
                            QStringLiteral("signal"),
                            SemanticKind::Entity,
@@ -419,7 +427,7 @@ void DbcDocumentSession::buildTree() {
         for (int i = 0; i < document_.value_tables_size(); ++i) {
             const auto& table = document_.value_tables(i);
             appendNode(section,
-                       QString::fromStdString(table.name()),
+                       text(table.name()),
                        QString::number(table.entries_size()),
                        QStringLiteral("valuetable"),
                        SemanticKind::Entity,
@@ -432,8 +440,8 @@ void DbcDocumentSession::buildTree() {
         for (int i = 0; i < document_.environment_variables_size(); ++i) {
             const auto& envVar = document_.environment_variables(i);
             appendNode(section,
-                       QString::fromStdString(envVar.name()),
-                       QString::fromStdString(dbc::EnvironmentVariableType_Name(envVar.var_type())),
+                       text(envVar.name()),
+                       text(dbc::EnvironmentVariableType_Name(envVar.var_type())),
                        QStringLiteral("envvar"),
                        SemanticKind::Entity,
                        NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::EnvironmentVariable, i, -1, -1}, true});
@@ -445,7 +453,7 @@ void DbcDocumentSession::buildTree() {
         for (int i = 0; i < document_.signal_groups_size(); ++i) {
             const auto& group = document_.signal_groups(i);
             appendNode(section,
-                       QString::fromStdString(group.name()),
+                       text(group.name()),
                        hexId(group.message_id()),
                        QStringLiteral("signalgroup"),
                        SemanticKind::Entity,
@@ -461,8 +469,8 @@ void DbcDocumentSession::buildTree() {
             for (int i = 0; i < document_.attribute_definitions_size(); ++i) {
                 const auto& definition = document_.attribute_definitions(i);
                 appendNode(defs,
-                           QString::fromStdString(definition.name()),
-                           QString::fromStdString(dbc::AttributeScope_Name(definition.scope())),
+                           text(definition.name()),
+                           text(dbc::AttributeScope_Name(definition.scope())),
                            QStringLiteral("attrdef"),
                            SemanticKind::Entity,
                            NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::AttributeDefinition, i, -1, -1}, true});
@@ -474,8 +482,8 @@ void DbcDocumentSession::buildTree() {
             for (int i = 0; i < document_.attribute_defaults_size(); ++i) {
                 const auto& value = document_.attribute_defaults(i);
                 appendNode(defaults,
-                           QString::fromStdString(value.name()),
-                           QString::fromStdString(value.value()),
+                           text(value.name()),
+                           text(value.value()),
                            QStringLiteral("attrdefault"),
                            SemanticKind::Entity,
                            NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::AttributeDefault, i, -1, -1}, true});
@@ -487,8 +495,8 @@ void DbcDocumentSession::buildTree() {
             for (int i = 0; i < document_.attribute_values_size(); ++i) {
                 const auto& value = document_.attribute_values(i);
                 appendNode(values,
-                           QString::fromStdString(value.name()),
-                           QString::fromStdString(value.value()),
+                           text(value.name()),
+                           text(value.value()),
                            QStringLiteral("attrvalue"),
                            SemanticKind::Entity,
                            NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::AttributeValue, i, -1, -1}, true});

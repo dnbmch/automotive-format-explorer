@@ -39,6 +39,21 @@ QtObject {
     readonly property color accentRed:        "#e06060"
     readonly property color accentPurple:     "#8888cc"
 
+    // --- Memory view object colors (indexed 0-7) ---
+    // 0=VALUE, 1=CURVE, 2=MAP, 3=CUBOID+, 4=ASCII, 5=VAL_BLK, 6=MEASUREMENT, 7=AXIS_PTS
+    readonly property var memoryColors: [
+        "#5b9bd5",  // 0 VALUE - blue
+        "#26a69a",  // 1 CURVE - teal
+        "#8888cc",  // 2 MAP - purple
+        "#5c6bc0",  // 3 CUBOID+ - indigo
+        "#ff9800",  // 4 ASCII - orange
+        "#00bcd4",  // 5 VAL_BLK - cyan
+        "#4caf50",  // 6 MEASUREMENT - green
+        "#e0c060"   // 7 AXIS_PTS - yellow/gold
+    ]
+    readonly property color memoryUnoccupied: "#333"
+    readonly property color memoryHighlight: "#fff"
+
     // --- Fonts ---
     readonly property string fontMono: "Consolas"
     readonly property int fontSizeS:  10

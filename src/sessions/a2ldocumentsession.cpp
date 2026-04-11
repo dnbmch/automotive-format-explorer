@@ -1,4 +1,5 @@
 #include "sessions/a2ldocumentsession.h"
+#include "models/memorymapmodel.h"
 
 #pragma push_macro("signals")
 #undef signals
@@ -9,6 +10,7 @@
 
 #include <QStringList>
 #include <type_traits>
+#include <unordered_map>
 #include <variant>
 
 namespace {
@@ -18,7 +20,11 @@ constexpr int kTypedefStructureCategory = 1;
 constexpr int kTypedefAxisCategory = 2;
 
 QString text(const std::string& value) {
-    return QString::fromStdString(value);
+    auto utf8 = QString::fromUtf8(value.data(), static_cast<int>(value.size()));
+    if (utf8.contains(QChar::ReplacementCharacter)) {
+        return QString::fromLatin1(value.data(), static_cast<int>(value.size()));
+    }
+    return utf8;
 }
 
 QString boolText(bool value) {
@@ -126,6 +132,98 @@ void addIfDataCounts(QList<DetailField>& fields,
     }
 }
 
+QString a2lEntityKindName(A2lEntityKind kind) {
+    switch (kind) {
+    case A2lEntityKind::Module:         return QStringLiteral("Module");
+    case A2lEntityKind::Measurement:    return QStringLiteral("Measurement");
+    case A2lEntityKind::Characteristic: return QStringLiteral("Characteristic");
+    case A2lEntityKind::AxisPts:        return QStringLiteral("Axis Points");
+    case A2lEntityKind::CompuMethod:    return QStringLiteral("Compu Method");
+    case A2lEntityKind::RecordLayout:   return QStringLiteral("Record Layout");
+    case A2lEntityKind::Unit:           return QStringLiteral("Unit");
+    case A2lEntityKind::Function:       return QStringLiteral("Function");
+    case A2lEntityKind::Group:          return QStringLiteral("Group");
+    case A2lEntityKind::XcpSummary:     return QStringLiteral("XCP Summary");
+    case A2lEntityKind::CcpSummary:     return QStringLiteral("CCP Summary");
+    case A2lEntityKind::TypedefItem:    return QStringLiteral("Typedef");
+    case A2lEntityKind::Instance:       return QStringLiteral("Instance");
+    case A2lEntityKind::VariantCoding:  return QStringLiteral("Variant Coding");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString a2lSectionName(A2lEntityKind kind) {
+    switch (kind) {
+    case A2lEntityKind::Module:         return QStringLiteral("Modules");
+    case A2lEntityKind::Measurement:    return QStringLiteral("Measurements");
+    case A2lEntityKind::Characteristic: return QStringLiteral("Characteristics");
+    case A2lEntityKind::AxisPts:        return QStringLiteral("Axis Points");
+    case A2lEntityKind::CompuMethod:    return QStringLiteral("Compu Methods");
+    case A2lEntityKind::RecordLayout:   return QStringLiteral("Record Layouts");
+    case A2lEntityKind::Unit:           return QStringLiteral("Units");
+    case A2lEntityKind::Function:       return QStringLiteral("Functions");
+    case A2lEntityKind::Group:          return QStringLiteral("Groups");
+    case A2lEntityKind::XcpSummary:     return QStringLiteral("Protocols");
+    case A2lEntityKind::CcpSummary:     return QStringLiteral("Protocols");
+    case A2lEntityKind::TypedefItem:    return QStringLiteral("Types");
+    case A2lEntityKind::Instance:       return QStringLiteral("Types");
+    case A2lEntityKind::VariantCoding:  return QStringLiteral("Variant Coding");
+    }
+    return {};
+}
+
+int dataTypeSizeBytes(a2l::DataType dt) {
+    switch (dt) {
+    case a2l::DATA_TYPE_UBYTE:
+    case a2l::DATA_TYPE_SBYTE:        return 1;
+    case a2l::DATA_TYPE_UWORD:
+    case a2l::DATA_TYPE_SWORD:
+    case a2l::DATA_TYPE_FLOAT16_IEEE: return 2;
+    case a2l::DATA_TYPE_ULONG:
+    case a2l::DATA_TYPE_SLONG:
+    case a2l::DATA_TYPE_FLOAT32_IEEE: return 4;
+    case a2l::DATA_TYPE_A_UINT64:
+    case a2l::DATA_TYPE_A_INT64:
+    case a2l::DATA_TYPE_FLOAT64_IEEE: return 8;
+    default:                          return 0;
+    }
+}
+
+QString formatCompuMethodSummary(const a2l::CompuMethod& method) {
+    QString type = text(a2l::ConversionType_Name(method.conversion_type()));
+    if (method.has_coeffs_linear()) {
+        const auto& c = method.coeffs_linear();
+        return QStringLiteral("%1: %2x + %3")
+            .arg(type)
+            .arg(numberText(c.a()))
+            .arg(numberText(c.b()));
+    }
+    if (method.has_coeffs()) {
+        const auto& c = method.coeffs();
+        if (c.a() == 0.0 && c.d() == 0.0 && c.e() == 0.0 && c.f() == 1.0) {
+            return QStringLiteral("%1: %2x + %3")
+                .arg(type)
+                .arg(numberText(c.b()))
+                .arg(numberText(c.c()));
+        }
+        return QStringLiteral("%1: (%2x\u00B2+%3x+%4)/(%5x\u00B2+%6x+%7)")
+            .arg(type)
+            .arg(numberText(c.a()))
+            .arg(numberText(c.b()))
+            .arg(numberText(c.c()))
+            .arg(numberText(c.d()))
+            .arg(numberText(c.e()))
+            .arg(numberText(c.f()));
+    }
+    if (method.has_compu_tab_ref()) {
+        return QStringLiteral("%1: %2").arg(type, text(method.compu_tab_ref()));
+    }
+    if (method.has_formula_raw()) {
+        return QStringLiteral("%1: %2").arg(type, text(method.formula_raw()));
+    }
+    return type;
+}
+
 QString recordLayoutComponentSummary(const a2l::RecordLayoutComponent& component) {
     if (component.has_alignment()) {
         const auto& alignment = component.alignment();
@@ -211,38 +309,57 @@ public:
         }
 
         const A2lPath path = std::get<A2lPath>(binding.payload);
+        QList<DetailSection> sections;
+
         switch (path.kind) {
         case A2lEntityKind::Module:
-            return moduleDetails(path);
+            sections = moduleDetails(path); break;
         case A2lEntityKind::Measurement:
-            return measurementDetails(path);
+            sections = measurementDetails(path); break;
         case A2lEntityKind::Characteristic:
-            return characteristicDetails(path);
+            sections = characteristicDetails(path); break;
         case A2lEntityKind::AxisPts:
-            return axisPtsDetails(path);
+            sections = axisPtsDetails(path); break;
         case A2lEntityKind::CompuMethod:
-            return compuMethodDetails(path);
+            sections = compuMethodDetails(path); break;
         case A2lEntityKind::RecordLayout:
-            return recordLayoutDetails(path);
+            sections = recordLayoutDetails(path); break;
         case A2lEntityKind::Unit:
-            return unitDetails(path);
+            sections = unitDetails(path); break;
         case A2lEntityKind::Function:
-            return functionDetails(path);
+            sections = functionDetails(path); break;
         case A2lEntityKind::Group:
-            return groupDetails(path);
+            sections = groupDetails(path); break;
         case A2lEntityKind::XcpSummary:
-            return xcpSummaryDetails(path);
+            sections = xcpSummaryDetails(path); break;
         case A2lEntityKind::CcpSummary:
-            return ccpSummaryDetails(path);
+            sections = ccpSummaryDetails(path); break;
         case A2lEntityKind::TypedefItem:
-            return typedefDetails(path);
+            sections = typedefDetails(path); break;
         case A2lEntityKind::Instance:
-            return instanceDetails(path);
+            sections = instanceDetails(path); break;
         case A2lEntityKind::VariantCoding:
-            return variantCodingDetails(path);
+            sections = variantCodingDetails(path); break;
         }
 
-        return {};
+        if (sections.isEmpty()) {
+            return sections;
+        }
+
+        // Prepend breadcrumb context section
+        QList<DetailField> context;
+        addField(context, QStringLiteral("Entity Type"), a2lEntityKindName(path.kind));
+        QString breadcrumb = buildBreadcrumb(path);
+        addField(context, QStringLiteral("Path"), breadcrumb);
+        sections.prepend(DetailSection{QStringLiteral("Context"), std::move(context)});
+
+        // Append inline compu method + data size for applicable entities
+        appendConversionSummary(sections, path);
+
+        // Append cross-references (which functions/groups reference this entity)
+        appendCrossReferences(sections, path);
+
+        return sections;
     }
 
 private:
@@ -251,6 +368,188 @@ private:
             return nullptr;
         }
         return &document_.modules(index);
+    }
+
+    QString entityName(const A2lPath& path) const {
+        const auto* module = moduleAt(path.primaryIndex);
+        if (!module) {
+            return {};
+        }
+        int i = path.secondaryIndex;
+        switch (path.kind) {
+        case A2lEntityKind::Module:         return text(module->name());
+        case A2lEntityKind::Measurement:    return (i >= 0 && i < module->measurements_size()) ? text(module->measurements(i).name()) : QString();
+        case A2lEntityKind::Characteristic: return (i >= 0 && i < module->characteristics_size()) ? text(module->characteristics(i).name()) : QString();
+        case A2lEntityKind::AxisPts:        return (i >= 0 && i < module->axis_points_size()) ? text(module->axis_points(i).name()) : QString();
+        case A2lEntityKind::CompuMethod:    return (i >= 0 && i < module->compu_methods_size()) ? text(module->compu_methods(i).name()) : QString();
+        case A2lEntityKind::RecordLayout:   return (i >= 0 && i < module->record_layouts_size()) ? text(module->record_layouts(i).name()) : QString();
+        case A2lEntityKind::Unit:           return (i >= 0 && i < module->units_size()) ? text(module->units(i).name()) : QString();
+        case A2lEntityKind::Function:       return (i >= 0 && i < module->functions_size()) ? text(module->functions(i).name()) : QString();
+        case A2lEntityKind::Group:          return (i >= 0 && i < module->groups_size()) ? text(module->groups(i).name()) : QString();
+        case A2lEntityKind::Instance:       return (i >= 0 && i < module->instances_size()) ? text(module->instances(i).name()) : QString();
+        case A2lEntityKind::XcpSummary:     return QStringLiteral("XCP");
+        case A2lEntityKind::CcpSummary:     return QStringLiteral("CCP");
+        case A2lEntityKind::TypedefItem: {
+            if (path.tertiaryIndex == kTypedefCharacteristicCategory && i >= 0 && i < module->typedef_characteristics_size())
+                return text(module->typedef_characteristics(i).name());
+            if (path.tertiaryIndex == kTypedefStructureCategory && i >= 0 && i < module->typedef_structures_size())
+                return text(module->typedef_structures(i).name());
+            if (path.tertiaryIndex == kTypedefAxisCategory && i >= 0 && i < module->typedef_axes_size())
+                return text(module->typedef_axes(i).name());
+            return {};
+        }
+        case A2lEntityKind::VariantCoding:  return QStringLiteral("Variant Coding");
+        }
+        return {};
+    }
+
+    QString buildBreadcrumb(const A2lPath& path) const {
+        const auto* module = moduleAt(path.primaryIndex);
+        if (!module) {
+            return {};
+        }
+        QString moduleName = text(module->name());
+        if (path.kind == A2lEntityKind::Module) {
+            return moduleName;
+        }
+        QString section = a2lSectionName(path.kind);
+        QString name = entityName(path);
+        if (name.isEmpty()) {
+            return QStringLiteral("%1 \u203A %2").arg(moduleName, section);
+        }
+        return QStringLiteral("%1 \u203A %2 \u203A %3").arg(moduleName, section, name);
+    }
+
+    const a2l::CompuMethod* findCompuMethod(const a2l::Module& module, const std::string& name) const {
+        if (name.empty()) {
+            return nullptr;
+        }
+        for (int i = 0; i < module.compu_methods_size(); ++i) {
+            if (module.compu_methods(i).name() == name) {
+                return &module.compu_methods(i);
+            }
+        }
+        return nullptr;
+    }
+
+    void appendConversionSummary(QList<DetailSection>& sections, const A2lPath& path) const {
+        const auto* module = moduleAt(path.primaryIndex);
+        if (!module) {
+            return;
+        }
+
+        std::string convRef;
+        int sizeBytes = 0;
+
+        if (path.kind == A2lEntityKind::Measurement) {
+            int i = path.secondaryIndex;
+            if (i >= 0 && i < module->measurements_size()) {
+                const auto& m = module->measurements(i);
+                convRef = m.conversion();
+                sizeBytes = dataTypeSizeBytes(m.datatype());
+            }
+        } else if (path.kind == A2lEntityKind::Characteristic) {
+            int i = path.secondaryIndex;
+            if (i >= 0 && i < module->characteristics_size()) {
+                convRef = module->characteristics(i).conversion();
+            }
+        } else if (path.kind == A2lEntityKind::AxisPts) {
+            int i = path.secondaryIndex;
+            if (i >= 0 && i < module->axis_points_size()) {
+                convRef = module->axis_points(i).conversion_ref();
+            }
+        } else {
+            return;
+        }
+
+        QList<DetailField> fields;
+        const auto* cm = findCompuMethod(*module, convRef);
+        if (cm) {
+            addField(fields, QStringLiteral("Conversion Formula"), formatCompuMethodSummary(*cm));
+            if (!cm->unit().empty()) {
+                addField(fields, QStringLiteral("Physical Unit"), text(cm->unit()));
+            }
+        }
+        if (sizeBytes > 0) {
+            addNumberField(fields, QStringLiteral("Data Size (bytes)"), sizeBytes);
+        }
+        pushSection(sections, QStringLiteral("Resolved Conversion"), std::move(fields));
+    }
+
+    void appendCrossReferences(QList<DetailSection>& sections, const A2lPath& path) const {
+        if (path.kind != A2lEntityKind::Measurement &&
+            path.kind != A2lEntityKind::Characteristic) {
+            return;
+        }
+
+        const auto* module = moduleAt(path.primaryIndex);
+        if (!module) {
+            return;
+        }
+
+        QString name = entityName(path);
+        if (name.isEmpty()) {
+            return;
+        }
+        std::string nameStd = name.toStdString();
+
+        QStringList functionRefs;
+        for (int i = 0; i < module->functions_size(); ++i) {
+            const auto& fn = module->functions(i);
+            bool found = false;
+            if (path.kind == A2lEntityKind::Measurement) {
+                for (const auto& ref : fn.in_measurements()) {
+                    if (ref == nameStd) { found = true; break; }
+                }
+                if (!found) for (const auto& ref : fn.out_measurements()) {
+                    if (ref == nameStd) { found = true; break; }
+                }
+                if (!found) for (const auto& ref : fn.loc_measurements()) {
+                    if (ref == nameStd) { found = true; break; }
+                }
+            } else {
+                for (const auto& ref : fn.def_characteristics()) {
+                    if (ref == nameStd) { found = true; break; }
+                }
+                if (!found) for (const auto& ref : fn.ref_characteristics()) {
+                    if (ref == nameStd) { found = true; break; }
+                }
+            }
+            if (found) {
+                functionRefs.push_back(text(fn.name()));
+            }
+        }
+
+        QStringList groupRefs;
+        for (int i = 0; i < module->groups_size(); ++i) {
+            const auto& grp = module->groups(i);
+            bool found = false;
+            if (path.kind == A2lEntityKind::Measurement) {
+                for (const auto& ref : grp.ref_measurements()) {
+                    if (ref == nameStd) { found = true; break; }
+                }
+            } else {
+                for (const auto& ref : grp.ref_characteristics()) {
+                    if (ref == nameStd) { found = true; break; }
+                }
+            }
+            if (found) {
+                groupRefs.push_back(text(grp.name()));
+            }
+        }
+
+        QList<DetailField> fields;
+        if (!functionRefs.isEmpty()) {
+            addField(fields,
+                     QStringLiteral("Functions (%1)").arg(functionRefs.size()),
+                     functionRefs.join(QStringLiteral(", ")));
+        }
+        if (!groupRefs.isEmpty()) {
+            addField(fields,
+                     QStringLiteral("Groups (%1)").arg(groupRefs.size()),
+                     groupRefs.join(QStringLiteral(", ")));
+        }
+        pushSection(sections, QStringLiteral("Referenced By"), std::move(fields));
     }
 
     QList<DetailSection> moduleDetails(const A2lPath& path) const {
@@ -1175,6 +1474,338 @@ A2lDocumentSession::A2lDocumentSession(QString displayName,
       document_(std::move(document)) {
     setDetailPresenter(std::make_unique<A2lDetailPresenter>(document_));
     buildTree();
+    buildMemoryMap();
+}
+
+A2lDocumentSession::~A2lDocumentSession() = default;
+
+QUrl A2lDocumentSession::centerPanelSource() const {
+    if (memoryMapModel_ && memoryMapModel_->totalObjectCount() > 0) {
+        return QUrl(QStringLiteral("qrc:/qt/qml/ExplorerApp/qml/components/MemoryView.qml"));
+    }
+    return {};
+}
+
+QAbstractListModel* A2lDocumentSession::centerPanelModel() {
+    return memoryMapModel_.get();
+}
+
+namespace {
+
+// DataType -> byte size lookup.
+uint64_t dataTypeSize(a2l::DataType dt) {
+    switch (dt) {
+    case a2l::DATA_TYPE_UBYTE:
+    case a2l::DATA_TYPE_SBYTE:
+        return 1;
+    case a2l::DATA_TYPE_UWORD:
+    case a2l::DATA_TYPE_SWORD:
+    case a2l::DATA_TYPE_FLOAT16_IEEE:
+        return 2;
+    case a2l::DATA_TYPE_ULONG:
+    case a2l::DATA_TYPE_SLONG:
+    case a2l::DATA_TYPE_FLOAT32_IEEE:
+        return 4;
+    case a2l::DATA_TYPE_A_UINT64:
+    case a2l::DATA_TYPE_A_INT64:
+    case a2l::DATA_TYPE_FLOAT64_IEEE:
+        return 8;
+    default:
+        return 0;
+    }
+}
+
+// Color index mapping for object types.
+// 0=VALUE, 1=CURVE, 2=MAP, 3=CUBOID+, 4=ASCII, 5=VAL_BLK, 6=MEASUREMENT, 7=AXIS_PTS
+int characteristicColorIndex(a2l::CharacteristicType type) {
+    switch (type) {
+    case a2l::CHARACTERISTIC_TYPE_VALUE:   return 0;
+    case a2l::CHARACTERISTIC_TYPE_CURVE:   return 1;
+    case a2l::CHARACTERISTIC_TYPE_MAP:     return 2;
+    case a2l::CHARACTERISTIC_TYPE_CUBOID:
+    case a2l::CHARACTERISTIC_TYPE_CUBE_4:
+    case a2l::CHARACTERISTIC_TYPE_CUBE_5:  return 3;
+    case a2l::CHARACTERISTIC_TYPE_ASCII:   return 4;
+    case a2l::CHARACTERISTIC_TYPE_VAL_BLK: return 5;
+    default:                               return 0;
+    }
+}
+
+struct RecordLayoutInfo {
+    a2l::DataType functionValuesType = a2l::DATA_TYPE_UNSPECIFIED;
+    a2l::DataType axisXType = a2l::DATA_TYPE_UNSPECIFIED;
+    a2l::DataType axisYType = a2l::DATA_TYPE_UNSPECIFIED;
+    a2l::DataType identType = a2l::DATA_TYPE_UNSPECIFIED;
+    a2l::DataType axisCountXType = a2l::DATA_TYPE_UNSPECIFIED;
+    a2l::DataType axisCountYType = a2l::DATA_TYPE_UNSPECIFIED;
+    bool hasAlternateMode = false;
+};
+
+RecordLayoutInfo analyzeRecordLayout(const a2l::RecordLayout& rl) {
+    RecordLayoutInfo info;
+    for (const auto& comp : rl.components()) {
+        if (comp.has_function_values()) {
+            info.functionValuesType = comp.function_values().datatype();
+            auto mode = comp.function_values().index_mode();
+            info.hasAlternateMode =
+                (mode == a2l::RECORD_LAYOUT_INDEX_MODE_ALTERNATE_CURVES ||
+                 mode == a2l::RECORD_LAYOUT_INDEX_MODE_ALTERNATE_WITH_X ||
+                 mode == a2l::RECORD_LAYOUT_INDEX_MODE_ALTERNATE_WITH_Y);
+        } else if (comp.has_axis_points()) {
+            if (comp.axis_points().axis() == a2l::RECORD_LAYOUT_AXIS_X) {
+                info.axisXType = comp.axis_points().datatype();
+            } else if (comp.axis_points().axis() == a2l::RECORD_LAYOUT_AXIS_Y) {
+                info.axisYType = comp.axis_points().datatype();
+            }
+        } else if (comp.has_identification()) {
+            info.identType = comp.identification().datatype();
+        } else if (comp.has_axis_count()) {
+            if (comp.axis_count().axis() == a2l::RECORD_LAYOUT_AXIS_X) {
+                info.axisCountXType = comp.axis_count().datatype();
+            } else if (comp.axis_count().axis() == a2l::RECORD_LAYOUT_AXIS_Y) {
+                info.axisCountYType = comp.axis_count().datatype();
+            }
+        }
+    }
+    return info;
+}
+
+struct SizeResult {
+    uint64_t size = 0;
+    bool approximate = false;
+};
+
+SizeResult computeCharacteristicSize(const a2l::Characteristic& ch,
+                                     const RecordLayoutInfo& rlInfo) {
+    uint64_t fvSize = dataTypeSize(rlInfo.functionValuesType);
+    if (fvSize == 0) {
+        return {0, true};
+    }
+
+    switch (ch.type()) {
+    case a2l::CHARACTERISTIC_TYPE_VALUE:
+        return {fvSize, false};
+
+    case a2l::CHARACTERISTIC_TYPE_ASCII: {
+        // matrix_dim gives string length, or number field.
+        uint64_t len = 0;
+        if (ch.matrix_dim_size() > 0) {
+            len = ch.matrix_dim(0);
+        } else if (ch.has_number()) {
+            len = ch.number();
+        }
+        return {len > 0 ? len : fvSize, len == 0};
+    }
+
+    case a2l::CHARACTERISTIC_TYPE_VAL_BLK: {
+        uint64_t count = 1;
+        for (int i = 0; i < ch.matrix_dim_size(); ++i) {
+            count *= ch.matrix_dim(i);
+        }
+        if (ch.matrix_dim_size() == 0 && ch.has_number()) {
+            count = ch.number();
+        }
+        return {count * fvSize, false};
+    }
+
+    case a2l::CHARACTERISTIC_TYPE_CURVE: {
+        if (rlInfo.hasAlternateMode) {
+            // Tier 3: deferred.
+            uint32_t axisCount = 0;
+            if (ch.axis_descrs_size() > 0) {
+                axisCount = ch.axis_descrs(0).max_axis_points();
+            }
+            uint64_t axSize = dataTypeSize(rlInfo.axisXType);
+            uint64_t est = axisCount * (fvSize + axSize);
+            return {est > 0 ? est : fvSize, true};
+        }
+        uint32_t axisCount = 0;
+        if (ch.axis_descrs_size() > 0) {
+            axisCount = ch.axis_descrs(0).max_axis_points();
+        }
+        uint64_t axSize = dataTypeSize(rlInfo.axisXType);
+        // NO_AXIS_PTS_X header field.
+        uint64_t header = dataTypeSize(rlInfo.axisCountXType);
+        // Identification header.
+        header += dataTypeSize(rlInfo.identType);
+        uint64_t total = header + axisCount * axSize + axisCount * fvSize;
+        return {total > 0 ? total : fvSize, false};
+    }
+
+    case a2l::CHARACTERISTIC_TYPE_MAP: {
+        if (rlInfo.hasAlternateMode) {
+            uint32_t xCount = 0, yCount = 0;
+            if (ch.axis_descrs_size() > 0) xCount = ch.axis_descrs(0).max_axis_points();
+            if (ch.axis_descrs_size() > 1) yCount = ch.axis_descrs(1).max_axis_points();
+            uint64_t est = xCount * yCount * fvSize;
+            return {est > 0 ? est : fvSize, true};
+        }
+        uint32_t xCount = 0, yCount = 0;
+        if (ch.axis_descrs_size() > 0) xCount = ch.axis_descrs(0).max_axis_points();
+        if (ch.axis_descrs_size() > 1) yCount = ch.axis_descrs(1).max_axis_points();
+        uint64_t axXSize = dataTypeSize(rlInfo.axisXType);
+        uint64_t axYSize = dataTypeSize(rlInfo.axisYType);
+        uint64_t header = dataTypeSize(rlInfo.axisCountXType)
+                        + dataTypeSize(rlInfo.axisCountYType)
+                        + dataTypeSize(rlInfo.identType);
+        uint64_t total = header + xCount * axXSize + yCount * axYSize
+                       + static_cast<uint64_t>(xCount) * yCount * fvSize;
+        return {total > 0 ? total : fvSize, false};
+    }
+
+    case a2l::CHARACTERISTIC_TYPE_CUBOID:
+    case a2l::CHARACTERISTIC_TYPE_CUBE_4:
+    case a2l::CHARACTERISTIC_TYPE_CUBE_5: {
+        // Tier 3: approximate.
+        uint64_t count = 1;
+        for (int i = 0; i < ch.axis_descrs_size(); ++i) {
+            count *= ch.axis_descrs(i).max_axis_points();
+        }
+        return {count * fvSize, true};
+    }
+
+    default:
+        return {fvSize, true};
+    }
+}
+
+SizeResult computeAxisPtsSize(const a2l::AxisPts& ap,
+                              const RecordLayoutInfo& rlInfo) {
+    uint64_t axSize = dataTypeSize(rlInfo.axisXType);
+    if (axSize == 0) {
+        axSize = dataTypeSize(rlInfo.functionValuesType);
+    }
+    if (axSize == 0) {
+        return {0, true};
+    }
+    uint64_t header = dataTypeSize(rlInfo.axisCountXType)
+                    + dataTypeSize(rlInfo.identType);
+    uint64_t total = header + ap.max_axis_points() * axSize;
+    return {total, false};
+}
+
+} // namespace (size calculation helpers)
+
+void A2lDocumentSession::buildMemoryMap() {
+    memoryMapModel_ = std::make_unique<MemoryMapModel>();
+
+    // Build record layout lookup across all modules.
+    std::unordered_map<std::string, const a2l::RecordLayout*> rlMap;
+    for (int m = 0; m < document_.modules_size(); ++m) {
+        const auto& module = document_.modules(m);
+        for (int i = 0; i < module.record_layouts_size(); ++i) {
+            rlMap[module.record_layouts(i).name()] = &module.record_layouts(i);
+        }
+    }
+
+    int excludedMeasurements = 0;
+
+    for (int m = 0; m < document_.modules_size(); ++m) {
+        const auto& module = document_.modules(m);
+
+        // Add real memory segments.
+        if (module.has_mod_par()) {
+            for (const auto& seg : module.mod_par().memory_segments()) {
+                MemorySegmentInfo info;
+                info.name = text(seg.name());
+                info.address = seg.address();
+                info.size = seg.size();
+                info.memoryType = text(
+                    a2l::MemoryType_Name(seg.memory_type()));
+                info.prgType = text(
+                    a2l::MemoryPrgType_Name(seg.prg_type()));
+                memoryMapModel_->addSegment(std::move(info));
+            }
+        }
+
+        // Characteristics.
+        for (int i = 0; i < module.characteristics_size(); ++i) {
+            const auto& ch = module.characteristics(i);
+            RecordLayoutInfo rlInfo;
+            auto rlIt = rlMap.find(ch.record_layout_ref());
+            if (rlIt != rlMap.end()) {
+                rlInfo = analyzeRecordLayout(*rlIt->second);
+            }
+
+            SizeResult sr = computeCharacteristicSize(ch, rlInfo);
+
+            MemoryObject obj;
+            obj.name = text(ch.name());
+            obj.longIdentifier = text(ch.long_identifier());
+            obj.typeName = text(
+                a2l::CharacteristicType_Name(ch.type()));
+            obj.address = ch.address();
+            obj.size = sr.size;
+            obj.sizeApproximate = sr.approximate;
+            obj.colorIndex = characteristicColorIndex(ch.type());
+            obj.recordLayoutRef = text(ch.record_layout_ref());
+            obj.conversion = text(ch.conversion());
+            auto keyIt = treeNodeKeys_.find({static_cast<int>(A2lEntityKind::Characteristic), m, i});
+            if (keyIt != treeNodeKeys_.end()) obj.nodeKey = keyIt->second;
+            memoryMapModel_->addObject(std::move(obj));
+        }
+
+        // AxisPts.
+        for (int i = 0; i < module.axis_points_size(); ++i) {
+            const auto& ap = module.axis_points(i);
+            RecordLayoutInfo rlInfo;
+            auto rlIt = rlMap.find(ap.record_layout_ref());
+            if (rlIt != rlMap.end()) {
+                rlInfo = analyzeRecordLayout(*rlIt->second);
+            }
+
+            SizeResult sr = computeAxisPtsSize(ap, rlInfo);
+
+            MemoryObject obj;
+            obj.name = text(ap.name());
+            obj.longIdentifier = text(ap.long_identifier());
+            obj.typeName = QStringLiteral("AXIS_PTS");
+            obj.address = ap.address();
+            obj.size = sr.size;
+            obj.sizeApproximate = sr.approximate;
+            obj.colorIndex = 7; // AXIS_PTS color
+            obj.recordLayoutRef = text(ap.record_layout_ref());
+            obj.conversion = text(ap.conversion_ref());
+            auto keyIt = treeNodeKeys_.find({static_cast<int>(A2lEntityKind::AxisPts), m, i});
+            if (keyIt != treeNodeKeys_.end()) obj.nodeKey = keyIt->second;
+            memoryMapModel_->addObject(std::move(obj));
+        }
+
+        // Measurements (only those with ecu_address).
+        for (int i = 0; i < module.measurements_size(); ++i) {
+            const auto& meas = module.measurements(i);
+            if (!meas.has_ecu_address()) {
+                ++excludedMeasurements;
+                continue;
+            }
+
+            uint64_t size = dataTypeSize(meas.datatype());
+            if (meas.has_array_size() && meas.array_size() > 1) {
+                size *= meas.array_size();
+            } else if (meas.matrix_dim_size() > 0) {
+                uint64_t count = 1;
+                for (int d = 0; d < meas.matrix_dim_size(); ++d) {
+                    count *= meas.matrix_dim(d);
+                }
+                size *= count;
+            }
+
+            MemoryObject obj;
+            obj.name = text(meas.name());
+            obj.longIdentifier = text(meas.long_identifier());
+            obj.typeName = QStringLiteral("MEASUREMENT");
+            obj.address = meas.ecu_address();
+            obj.size = size > 0 ? size : 1;
+            obj.sizeApproximate = (size == 0);
+            obj.colorIndex = 6; // MEASUREMENT color
+            auto keyIt = treeNodeKeys_.find({static_cast<int>(A2lEntityKind::Measurement), m, i});
+            if (keyIt != treeNodeKeys_.end()) obj.nodeKey = keyIt->second;
+            memoryMapModel_->addObject(std::move(obj));
+        }
+    }
+
+    memoryMapModel_->setExcludedMeasurementCount(excludedMeasurements);
+    memoryMapModel_->finalize();
 }
 
 void A2lDocumentSession::buildTree() {
@@ -1212,7 +1843,7 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.measurements_size(); ++i) {
                 const auto& item = module.measurements(i);
-                appendNode(section,
+                TreeItem* node = appendNode(section,
                            text(item.name()),
                            text(a2l::DataType_Name(item.datatype())),
                            QStringLiteral("measurement"),
@@ -1220,6 +1851,9 @@ void A2lDocumentSession::buildTree() {
                            NodeBinding{SemanticKind::Entity,
                                        A2lPath{A2lEntityKind::Measurement, moduleIndex, i, -1},
                                        true});
+                if (node->nodeKey) {
+                    treeNodeKeys_[{static_cast<int>(A2lEntityKind::Measurement), moduleIndex, i}] = node->nodeKey;
+                }
             }
         }
 
@@ -1231,7 +1865,7 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.characteristics_size(); ++i) {
                 const auto& item = module.characteristics(i);
-                appendNode(section,
+                TreeItem* node = appendNode(section,
                            text(item.name()),
                            text(a2l::CharacteristicType_Name(item.type())),
                            QStringLiteral("characteristic"),
@@ -1239,6 +1873,9 @@ void A2lDocumentSession::buildTree() {
                            NodeBinding{SemanticKind::Entity,
                                        A2lPath{A2lEntityKind::Characteristic, moduleIndex, i, -1},
                                        true});
+                if (node->nodeKey) {
+                    treeNodeKeys_[{static_cast<int>(A2lEntityKind::Characteristic), moduleIndex, i}] = node->nodeKey;
+                }
             }
         }
 
@@ -1250,7 +1887,7 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.axis_points_size(); ++i) {
                 const auto& item = module.axis_points(i);
-                appendNode(section,
+                TreeItem* node = appendNode(section,
                            text(item.name()),
                            text(item.record_layout_ref()),
                            QStringLiteral("axispt"),
@@ -1258,6 +1895,9 @@ void A2lDocumentSession::buildTree() {
                            NodeBinding{SemanticKind::Entity,
                                        A2lPath{A2lEntityKind::AxisPts, moduleIndex, i, -1},
                                        true});
+                if (node->nodeKey) {
+                    treeNodeKeys_[{static_cast<int>(A2lEntityKind::AxisPts), moduleIndex, i}] = node->nodeKey;
+                }
             }
         }
 

@@ -63,6 +63,16 @@ DetailModel* AppController::currentDetailModel() {
     return session ? session->detailModel() : &emptyDetailModel_;
 }
 
+QUrl AppController::centerPanelSource() {
+    DocumentSession* session = tabModel_.sessionAt(currentTabIndex_);
+    return session ? session->centerPanelSource() : QUrl();
+}
+
+QAbstractListModel* AppController::centerPanelModel() {
+    DocumentSession* session = tabModel_.sessionAt(currentTabIndex_);
+    return session ? session->centerPanelModel() : nullptr;
+}
+
 int AppController::currentTabIndex() const {
     return currentTabIndex_;
 }

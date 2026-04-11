@@ -1,4 +1,5 @@
 #include "core/appcontroller.h"
+#include "ui/memorygriditem.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -24,6 +25,8 @@ int main(int argc, char* argv[]) {
     app.setWindowIcon(appIcon);
 
     QQuickStyle::setStyle("Fusion");
+
+    qmlRegisterType<MemoryGridItem>("ExplorerApp", 1, 0, "MemoryGridItem");
 
     AppController controller;
     qmlRegisterSingletonInstance("ExplorerApp", 1, 0, "AppController", &controller);

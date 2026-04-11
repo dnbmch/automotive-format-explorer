@@ -13,6 +13,37 @@ Rectangle {
     signal nodeSelected(var nodeKey)
     signal collapseRequested()
 
+    function selectAndScrollTo(nodeKey) {
+        if (!treeView.model) return
+        let modelIdx = treeView.model.indexForNodeKey(nodeKey)
+        if (!modelIdx.valid) return
+
+        // Expand all ancestors so the node is visible.
+        let parentIdx = treeView.model.parent(modelIdx)
+        let toExpand = []
+        while (parentIdx.valid) {
+            toExpand.push(parentIdx)
+            parentIdx = treeView.model.parent(parentIdx)
+        }
+        for (let i = toExpand.length - 1; i >= 0; --i) {
+            let row = treeView.rowAtIndex(toExpand[i])
+            if (row >= 0 && !treeView.isExpanded(row))
+                treeView.expand(row)
+        }
+
+        // Force layout so row indices are up to date after expanding.
+        treeView.forceLayout()
+
+        // Select and scroll.
+        let row = treeView.rowAtIndex(modelIdx)
+        if (row >= 0) {
+            treeView.selectionModel.setCurrentIndex(
+                treeView.index(row, 0),
+                ItemSelectionModel.ClearAndSelect)
+            treeView.positionViewAtRow(row, Qt.AlignVCenter)
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -195,19 +226,26 @@ Rectangle {
                     contentItem: RowLayout {
                         spacing: 5
 
-                        // Expand indicator for non-leaf nodes
-                        Label {
-                            visible: treeDelegate.hasChildren
-                            text: treeDelegate.expanded ? "\u25BE" : "\u25B8"
-                            font.pixelSize: Theme.fontSizeS
-                            color: Theme.textSecondary
-                            Layout.preferredWidth: 10
-                        }
-
-                        // Spacer when no chevron
+                        // Expand indicator for non-leaf nodes (wider hit area)
                         Item {
-                            visible: !treeDelegate.hasChildren
-                            Layout.preferredWidth: 10
+                            Layout.preferredWidth: 16
+                            Layout.fillHeight: true
+
+                            Label {
+                                anchors.centerIn: parent
+                                visible: treeDelegate.hasChildren
+                                text: treeDelegate.expanded ? "\u25BE" : "\u25B8"
+                                font.pixelSize: Theme.fontSizeS
+                                color: Theme.textSecondary
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -4
+                                visible: treeDelegate.hasChildren
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: treeView.toggleExpanded(treeDelegate.row)
+                            }
                         }
 
                         // Semantic icon/glyph
@@ -262,7 +300,7 @@ Rectangle {
                     }
 
                     TapHandler {
-                        onTapped: {
+                        onSingleTapped: {
                             if (treeDelegate.selectable) {
                                 treeView.selectionModel.setCurrentIndex(
                                     treeView.index(treeDelegate.row, 0),
@@ -272,7 +310,178 @@ Rectangle {
                                 treeView.toggleExpanded(treeDelegate.row)
                             }
                         }
+                        onDoubleTapped: {
+                            if (treeDelegate.hasChildren) {
+                                treeView.toggleExpanded(treeDelegate.row)
+                            }
+                        }
                     }
+                }
+            }
+        }
+
+        // Help bar at bottom
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 24
+            color: Theme.bgHeader
+            visible: navPanel.hasContent
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 8
+                anchors.rightMargin: 6
+                spacing: 4
+
+                Label {
+                    text: "Double-click to expand/collapse"
+                    font.pixelSize: 10
+                    color: Theme.textMuted
+                    Layout.fillWidth: true
+                }
+
+                Rectangle {
+                    width: 18; height: 18
+                    radius: 9
+                    color: helpMa.containsMouse ? Theme.bgButtonHov : Theme.bgButton
+                    ToolTip.text: "Help & shortcuts"
+                    ToolTip.visible: helpMa.containsMouse
+                    ToolTip.delay: 300
+
+                    Label {
+                        anchors.centerIn: parent
+                        text: "?"
+                        font.pixelSize: 11
+                        font.bold: true
+                        color: Theme.textSecondary
+                    }
+                    MouseArea {
+                        id: helpMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: helpPopup.open()
+                    }
+                }
+            }
+        }
+    }
+
+    // Help popup / manual
+    Popup {
+        id: helpPopup
+        anchors.centerIn: parent
+        width: Math.min(navPanel.width - 32, 340)
+        height: contentColumn.implicitHeight + 32
+        modal: true
+        padding: 16
+
+        background: Rectangle {
+            color: Theme.bgPanel
+            border.color: Theme.border
+            border.width: 1
+            radius: Theme.radius * 2
+        }
+
+        ColumnLayout {
+            id: contentColumn
+            anchors.fill: parent
+            spacing: 12
+
+            Label {
+                text: "Help & Keyboard Shortcuts"
+                font.pixelSize: Theme.fontSizeL
+                font.bold: true
+                color: Theme.textWhite
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: Theme.border
+            }
+
+            Label {
+                text: "Navigation"
+                font.pixelSize: Theme.fontSizeM
+                font.bold: true
+                color: Theme.accent
+            }
+
+            Label {
+                text: "• Click a tree item to select it\n"
+                    + "• Double-click to expand/collapse\n"
+                    + "• Click the \u25B8 chevron to expand/collapse"
+                font.pixelSize: Theme.fontSizeXS
+                color: Theme.textSecondary
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+                lineHeight: 1.4
+            }
+
+            Label {
+                text: "Keyboard Shortcuts"
+                font.pixelSize: Theme.fontSizeM
+                font.bold: true
+                color: Theme.accent
+            }
+
+            GridLayout {
+                columns: 2
+                columnSpacing: 16
+                rowSpacing: 4
+                Layout.fillWidth: true
+
+                Label { text: "Ctrl+O";             font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "Open file";           font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+                Label { text: "Ctrl+W";              font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "Close tab";           font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+                Label { text: "Ctrl+Tab";            font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "Next tab";            font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+                Label { text: "Ctrl+Shift+Tab";      font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "Previous tab";        font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+                Label { text: "Ctrl+Alt+B";          font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "Toggle sidebar";      font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+            }
+
+            Label {
+                text: "Header Buttons"
+                font.pixelSize: Theme.fontSizeM
+                font.bold: true
+                color: Theme.accent
+            }
+
+            Label {
+                text: "• \u229E  Expand all tree nodes\n"
+                    + "• \u229F  Collapse all tree nodes\n"
+                    + "• \u25C0  Hide sidebar panel"
+                font.pixelSize: Theme.fontSizeXS
+                color: Theme.textSecondary
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+                lineHeight: 1.4
+            }
+
+            Item { Layout.preferredHeight: 4 }
+
+            Button {
+                text: "Close"
+                Layout.alignment: Qt.AlignRight
+                onClicked: helpPopup.close()
+
+                background: Rectangle {
+                    implicitWidth: 64
+                    implicitHeight: 28
+                    radius: Theme.radius
+                    color: parent.hovered ? Theme.bgButtonHov : Theme.bgButton
+                }
+
+                contentItem: Label {
+                    text: parent.text
+                    font.pixelSize: Theme.fontSizeXS
+                    color: Theme.textSecondary
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
             }
         }

@@ -46,6 +46,7 @@ qt_add_library(explorer-core SHARED
     src/core/formatregistry.cpp
     src/core/noderegistry.cpp
     src/models/detailmodel.cpp
+    src/models/memorymapmodel.cpp
     src/models/tabmodel.cpp
     src/models/treemodel.cpp
     src/sessions/adaptersessionbase.cpp
@@ -69,6 +70,7 @@ qt_add_library(explorer-ldf-backend SHARED
 qt_add_executable(automotive-format-explorer
     src/main.cpp
     src/core/appcontroller.cpp
+    src/ui/memorygriditem.cpp
     $<$<PLATFORM_ID:Windows>:resources/explorer.rc>
 )
 
@@ -154,6 +156,7 @@ qt_add_qml_module(automotive-format-explorer
         qml/components/SplashOverlay.qml
         qml/components/NavPanel.qml
         qml/components/Toast.qml
+        qml/components/MemoryView.qml
 )
 
 qt_add_resources(automotive-format-explorer "icons"
