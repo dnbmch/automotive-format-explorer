@@ -28,7 +28,7 @@ Item {
 
         let sigIdx = mapModel.signalIndexForNodeKey(nodeKey)
         if (sigIdx >= 0) {
-            gridItem.setSelectedSignalIndex(sigIdx)
+            gridItem.selectedSignalIndex = sigIdx
             gridItem.highlightSignal(sigIdx)
         }
     }

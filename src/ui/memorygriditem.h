@@ -22,6 +22,8 @@ class MemoryGridItem : public QQuickPaintedItem {
     Q_PROPERTY(QString hoveredTooltip READ hoveredTooltip NOTIFY hoveredObjectChanged)
     Q_PROPERTY(qreal mouseX READ mouseX NOTIFY mousePosChanged)
     Q_PROPERTY(qreal mouseY READ mouseY NOTIFY mousePosChanged)
+    Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex WRITE setSelectedObjectIndex
+               NOTIFY selectedObjectChanged)
 
 public:
     explicit MemoryGridItem(QQuickItem* parent = nullptr);
@@ -49,6 +51,9 @@ public:
     qreal mouseX() const;
     qreal mouseY() const;
 
+    int selectedObjectIndex() const;
+    void setSelectedObjectIndex(int index);
+
     Q_INVOKABLE void setColors(const QVariantList& colors, const QColor& unoccupied);
     Q_INVOKABLE int rowForAddress(quint64 address) const;
     Q_INVOKABLE void highlightObject(int objectIndex);
@@ -62,6 +67,7 @@ signals:
     void gutterWidthChanged();
     void hoveredObjectChanged();
     void mousePosChanged();
+    void selectedObjectChanged();
     void objectClicked(int objectIndex);
     void nodeKeyClicked(qulonglong nodeKey);
 
@@ -88,6 +94,7 @@ private:
     int cellGap_ = 1;
     int gutterWidth_ = 90;
     int hoveredObj_ = -1;
+    int selectedObj_ = -1;
     QPointF mousePos_;
 
     // Pre-computed flat color map: one int8 per byte in the segment.

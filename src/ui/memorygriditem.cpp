@@ -84,6 +84,14 @@ void MemoryGridItem::paint(QPainter* painter) {
                 painter->fillRect(QRectF(x, y, cs, cs), unoccupiedColor_);
             }
 
+            // Persistent selection border.
+            if (selectedObj_ >= 0 && mapIdx < objectMap_.size() &&
+                objectMap_[mapIdx] == selectedObj_) {
+                painter->setPen(QPen(QColor(255, 255, 255), 2));
+                painter->drawRect(QRectF(x, y, cs, cs));
+                painter->setPen(Qt::NoPen);
+            }
+
             // Highlight flash overlay.
             if (highlightObj_ >= 0 && highlightOpacity_ > 0.0 &&
                 mapIdx < objectMap_.size() && objectMap_[mapIdx] == highlightObj_) {
@@ -198,6 +206,14 @@ QString MemoryGridItem::hoveredTooltip() const {
 qreal MemoryGridItem::mouseX() const { return mousePos_.x(); }
 qreal MemoryGridItem::mouseY() const { return mousePos_.y(); }
 
+int MemoryGridItem::selectedObjectIndex() const { return selectedObj_; }
+void MemoryGridItem::setSelectedObjectIndex(int index) {
+    if (selectedObj_ == index) return;
+    selectedObj_ = index;
+    emit selectedObjectChanged();
+    update();
+}
+
 void MemoryGridItem::setColors(const QVariantList& colors, const QColor& unoccupied) {
     palette_.clear();
     // Build 16 entries: 0-7 = normal, 16-23 (stored as 8-15) = darker shade.
@@ -221,6 +237,7 @@ int MemoryGridItem::rowForAddress(quint64 address) const {
 }
 
 void MemoryGridItem::highlightObject(int objectIndex) {
+    setSelectedObjectIndex(objectIndex);
     highlightObj_ = objectIndex;
     highlightOpacity_ = 1.0;
     highlightTimer_.start();
@@ -259,6 +276,7 @@ void MemoryGridItem::mousePressEvent(QMouseEvent* event) {
         return;
     }
     int idx = objectIndexAtPixel(event->position().x(), event->position().y());
+    setSelectedObjectIndex(idx);
     if (idx >= 0) {
         emit objectClicked(idx);
         if (model_) {
