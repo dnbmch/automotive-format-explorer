@@ -196,7 +196,7 @@ int SignalMapModel::signalIndexForNodeKey(quint64 nodeKey) const {
     if (nodeKey == 0) return -1;
     const auto& sigs = currentSignals();
     for (int i = 0; i < static_cast<int>(sigs.size()); ++i) {
-        if (sigs[i].nodeKey == nodeKey) return i;
+        if (sigs[i].nodeKey == nodeKey || sigs[i].signalNodeKey == nodeKey) return i;
     }
     return -1;
 }
@@ -206,7 +206,7 @@ int SignalMapModel::messageIndexForNodeKey(quint64 nodeKey) const {
     for (int m = 0; m < static_cast<int>(messages_.size()); ++m) {
         if (messages_[m].nodeKey == nodeKey) return m;
         for (const auto& sig : messages_[m].signalEntries) {
-            if (sig.nodeKey == nodeKey) return m;
+            if (sig.nodeKey == nodeKey || sig.signalNodeKey == nodeKey) return m;
         }
     }
     return -1;

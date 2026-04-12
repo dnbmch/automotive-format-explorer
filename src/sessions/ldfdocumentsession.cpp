@@ -674,12 +674,15 @@ void LdfDocumentSession::buildTree() {
         TreeItem* signals = appendNode(root.get(), QStringLiteral("Signals"), QString::number(document_.signals_size()), QStringLiteral("signals"), SemanticKind::Section);
         for (int i = 0; i < document_.signals_size(); ++i) {
             const auto& signal = document_.signals(i);
-            appendNode(signals,
+            TreeItem* sigNode = appendNode(signals,
                        text(signal.name()),
                        QStringLiteral("%1 bits").arg(signal.bit_length()),
                        QStringLiteral("signal"),
                        SemanticKind::Entity,
                        NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::Signal, i, -1, -1}, true});
+            if (sigNode->nodeKey) {
+                treeNodeKeys_[{static_cast<int>(LdfEntityKind::Signal), i, -1}] = sigNode->nodeKey;
+            }
         }
     }
 
@@ -872,6 +875,16 @@ void LdfDocumentSession::buildSignalMap() {
 
             auto sigKeyIt = treeNodeKeys_.find({static_cast<int>(LdfEntityKind::FrameSignal), i, j});
             if (sigKeyIt != treeNodeKeys_.end()) sig.nodeKey = sigKeyIt->second;
+
+            // Also store standalone Signal key so clicking a Signal in
+            // the tree navigates to it in the signal map.
+            for (int si = 0; si < document_.signals_size(); ++si) {
+                if (document_.signals(si).name() == frameSig.signal_name()) {
+                    auto standaloneSigKey = treeNodeKeys_.find({static_cast<int>(LdfEntityKind::Signal), si, -1});
+                    if (standaloneSigKey != treeNodeKeys_.end()) sig.signalNodeKey = standaloneSigKey->second;
+                    break;
+                }
+            }
 
             entry.signalEntries.push_back(std::move(sig));
         }

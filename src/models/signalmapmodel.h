@@ -19,7 +19,8 @@ struct SignalEntry {
     double maximum = 0.0;
     QString unit;
     int colorIndex = 0;
-    quint64 nodeKey = 0;
+    quint64 nodeKey = 0;          // FrameSignal tree key
+    quint64 signalNodeKey = 0;    // Standalone Signal tree key
     int multiplexType = 0;   // 0=none, 1=multiplexor, 2=multiplexed, 3=both
     int multiplexValue = -1;
     QString sender;
