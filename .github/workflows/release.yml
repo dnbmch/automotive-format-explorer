@@ -109,3 +109,71 @@ jobs:
         with:
           files: automotive-format-explorer-*.zip
           generate_release_notes: true
+
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.*'
+          modules: 'qtshadertools'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build protobuf-compiler libprotobuf-dev libabsl-dev \
+            libgl1-mesa-dev libxkbcommon-dev libfuse2
+
+      - name: Configure
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Package AppDir
+        run: |
+          mkdir -p AppDir/usr/bin AppDir/usr/share/icons/hicolor/256x256/apps \
+                   AppDir/usr/share/applications
+
+          cp build/automotive-format-explorer AppDir/usr/bin/
+
+          cp resources/icons/explorer_256.png \
+            AppDir/usr/share/icons/hicolor/256x256/apps/automotive-format-explorer.png
+
+          cat > AppDir/usr/share/applications/automotive-format-explorer.desktop << 'DESKTOP'
+          [Desktop Entry]
+          Type=Application
+          Name=Automotive Format Explorer
+          Exec=automotive-format-explorer
+          Icon=automotive-format-explorer
+          Categories=Development;Engineering;
+          Comment=Inspect A2L, DBC, and LDF automotive files
+          DESKTOP
+
+          # Symlinks for AppImage convention.
+          ln -sf usr/share/applications/automotive-format-explorer.desktop AppDir/
+          ln -sf usr/share/icons/hicolor/256x256/apps/automotive-format-explorer.png AppDir/
+
+      - name: Download linuxdeploy
+        run: |
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy-*.AppImage
+
+      - name: Create AppImage
+        run: |
+          export QMAKE="${QT_ROOT_DIR}/bin/qmake"
+          export QML_SOURCES_PATHS="qml"
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage
+          mv Automotive_Format_Explorer-*.AppImage \
+            automotive-format-explorer-${GITHUB_REF_NAME}-linux-x86_64.AppImage
+
+      - name: Upload release artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          files: automotive-format-explorer-*.AppImage
