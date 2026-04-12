@@ -4,9 +4,10 @@
 
 A desktop tool for inspecting **A2L**, **DBC**, and **LDF** automotive files. Built with Qt/QML and C++17 by [Danube Mechatronics](https://danube-mechatronics.com).
 
-> **[Download latest release](https://github.com/dnbmch/automotive-format-explorer/releases/latest)** (Windows)
+> **[Download latest release](https://github.com/dnbmch/automotive-format-explorer/releases/latest)**
 >
-> No installation required -- extract and run.
+> **Windows**: extract the zip and run `automotive-format-explorer.exe`
+> **Linux**: `chmod +x *.AppImage && ./automotive-format-explorer-*.AppImage`
 
 ---
 

@@ -5,3 +5,4 @@ build/
 *.autosave
 out.txt
 err.txt
+fix_enhance_plan*.md
