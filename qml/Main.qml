@@ -502,7 +502,7 @@ ApplicationWindow {
 
                                                     Label {
                                                         Layout.fillWidth: true
-                                                        wrapMode: Text.WrapAnywhere
+                                                        wrapMode: Text.Wrap
                                                         font.pixelSize: Theme.fontSizeM
                                                         color: Theme.textPrimary
                                                         text: modelData.value
