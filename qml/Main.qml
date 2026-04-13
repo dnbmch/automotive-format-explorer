@@ -138,6 +138,7 @@ ApplicationWindow {
                     centerPanelLoader.item.scrollToNodeKey(nodeKey)
             }
             onCollapseRequested: root.leftPaneVisible = false
+            onOpenRequested: fileDialog.open()
         }
 
         // --- Center/right: tabs + detail ---
@@ -161,80 +162,6 @@ ApplicationWindow {
                         anchors.leftMargin: 10
                         anchors.rightMargin: 10
                         spacing: 8
-
-                        // Open button
-                        Rectangle {
-                            width: openRow.implicitWidth + 16
-                            height: 26
-                            radius: Theme.radius
-                            color: openMa.containsMouse ? Theme.bgButtonHov : Theme.bgButton
-                            border.color: Theme.borderHover
-                            border.width: 1
-
-                            Row {
-                                id: openRow
-                                anchors.centerIn: parent
-                                spacing: 5
-
-                                Label {
-                                    text: "\u2750"
-                                    font.pixelSize: 12
-                                    color: Theme.textPrimary
-                                    anchors.verticalCenter: parent.verticalCenter
-                                }
-                                Label {
-                                    text: "Open"
-                                    font.pixelSize: Theme.fontSizeM
-                                    color: Theme.textPrimary
-                                    anchors.verticalCenter: parent.verticalCenter
-                                }
-                            }
-                            MouseArea {
-                                id: openMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: fileDialog.open()
-                            }
-                        }
-
-                        // Close tab button
-                        Rectangle {
-                            width: closeRow.implicitWidth + 16
-                            height: 26
-                            radius: Theme.radius
-                            color: closeMa.containsMouse ? Theme.bgButtonHov : Theme.bgButton
-                            border.color: Theme.borderHover
-                            border.width: 1
-                            opacity: AppController.currentTabIndex >= 0 ? 1.0 : 0.4
-
-                            Row {
-                                id: closeRow
-                                anchors.centerIn: parent
-                                spacing: 5
-
-                                Label {
-                                    text: "\u2715"
-                                    font.pixelSize: 12
-                                    color: Theme.textPrimary
-                                    anchors.verticalCenter: parent.verticalCenter
-                                }
-                                Label {
-                                    text: "Close Tab"
-                                    font.pixelSize: Theme.fontSizeM
-                                    color: Theme.textPrimary
-                                    anchors.verticalCenter: parent.verticalCenter
-                                }
-                            }
-                            MouseArea {
-                                id: closeMa
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                enabled: AppController.currentTabIndex >= 0
-                                onClicked: AppController.closeTab(AppController.currentTabIndex)
-                            }
-                        }
 
                         // Error label
                         Label {
@@ -293,19 +220,56 @@ ApplicationWindow {
                         Repeater {
                             model: AppController.tabModel
                             delegate: TabButton {
+                                id: tabDelegate
                                 required property int index
                                 required property string title
                                 required property bool hasWarnings
 
-                                text: hasWarnings ? title + " \u26A0" : title
-                                width: Math.min(implicitWidth + 20, Theme.tabWidthMax)
+                                width: Math.min(tabRow.implicitWidth + 24, Theme.tabWidthMax)
                                 font.pixelSize: Theme.fontSizeM
 
                                 palette.buttonText: tabs.currentIndex === index
                                     ? Theme.textWhite : Theme.textSecondary
 
+                                contentItem: Row {
+                                    id: tabRow
+                                    spacing: 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    leftPadding: 4
+
+                                    Label {
+                                        text: tabDelegate.hasWarnings ? tabDelegate.title + " \u26A0" : tabDelegate.title
+                                        font.pixelSize: Theme.fontSizeM
+                                        color: tabs.currentIndex === tabDelegate.index
+                                            ? Theme.textWhite : Theme.textSecondary
+                                        elide: Text.ElideRight
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+
+                                    Rectangle {
+                                        width: 16; height: 16
+                                        radius: 3
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: tabCloseMa.containsMouse ? Theme.bgButtonHov : "transparent"
+
+                                        Label {
+                                            anchors.centerIn: parent
+                                            text: "\u2715"
+                                            font.pixelSize: 9
+                                            color: tabCloseMa.containsMouse ? Theme.textWhite : Theme.textMuted
+                                        }
+                                        MouseArea {
+                                            id: tabCloseMa
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: AppController.closeTab(tabDelegate.index)
+                                        }
+                                    }
+                                }
+
                                 background: Rectangle {
-                                    color: tabs.currentIndex === index
+                                    color: tabs.currentIndex === tabDelegate.index
                                         ? Theme.bgActive : "transparent"
                                     radius: Theme.radius
 
@@ -314,7 +278,7 @@ ApplicationWindow {
                                         width: parent.width
                                         height: 2
                                         color: Theme.accent
-                                        visible: tabs.currentIndex === index
+                                        visible: tabs.currentIndex === tabDelegate.index
                                     }
                                 }
 
@@ -477,6 +441,7 @@ ApplicationWindow {
                                 Layout.margins: Theme.sp8
                                 visible: !detailPanel.showRawJson
 
+                                ScrollBar.vertical.policy: ScrollBar.AsNeeded
                                 ScrollBar.vertical.background: Rectangle { color: "transparent" }
                                 ScrollBar.vertical.contentItem: Rectangle {
                                     implicitWidth: 6
@@ -489,10 +454,11 @@ ApplicationWindow {
                                     id: detailList
                                     spacing: Theme.sp12
                                     clip: true
+                                    rightMargin: Theme.sp12
                                     model: AppController.currentDetailModel
 
                                     delegate: Rectangle {
-                                        width: ListView.view.width
+                                        width: ListView.view.width - Theme.sp12
                                         implicitHeight: cardLayout.implicitHeight + Theme.sp16 * 2
                                         radius: Theme.radius
                                         color: Theme.bgCard
@@ -566,6 +532,7 @@ ApplicationWindow {
                                 Layout.margins: Theme.sp8
                                 visible: detailPanel.showRawJson
 
+                                ScrollBar.vertical.policy: ScrollBar.AsNeeded
                                 ScrollBar.vertical.background: Rectangle { color: "transparent" }
                                 ScrollBar.vertical.contentItem: Rectangle {
                                     implicitWidth: 6

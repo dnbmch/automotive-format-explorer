@@ -58,6 +58,7 @@ Rectangle {
 
     signal nodeSelected(var nodeKey)
     signal collapseRequested()
+    signal openRequested()
 
     function selectAndScrollTo(nodeKey) {
         if (!treeView.model) return
@@ -113,6 +114,30 @@ Rectangle {
                     font.letterSpacing: 1.2
                     color: Theme.textSecondary
                     Layout.fillWidth: true
+                }
+
+                // Open file
+                Rectangle {
+                    width: 24; height: 24
+                    radius: Theme.radius
+                    color: openMa.containsMouse ? Theme.bgButtonHov : "transparent"
+                    ToolTip.text: "Open file (Ctrl+O)"
+                    ToolTip.visible: openMa.containsMouse
+                    ToolTip.delay: 400
+
+                    Label {
+                        anchors.centerIn: parent
+                        text: "\u2750"
+                        font.pixelSize: 14
+                        color: Theme.textSecondary
+                    }
+                    MouseArea {
+                        id: openMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: navPanel.openRequested()
+                    }
                 }
 
                 // Expand all
