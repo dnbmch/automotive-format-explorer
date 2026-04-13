@@ -286,6 +286,7 @@ private:
                     }
                 }
             }
+            addField(sigFields, QStringLiteral("Subscribers"), joinStrings(fs.subscribers()));
             pushSection(sections, text(fs.signal_name()), std::move(sigFields));
         }
         return sections;

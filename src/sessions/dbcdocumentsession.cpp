@@ -213,6 +213,18 @@ private:
             }
             addField(sigFields, QStringLiteral("Unit"), text(sig.unit()));
             addField(sigFields, QStringLiteral("Receivers"), joinStrings(sig.receivers()));
+            addField(sigFields, QStringLiteral("Signed"), sig.is_signed() ? QStringLiteral("Yes") : QStringLiteral("No"));
+            if (sig.value_type() != dbc::VALUE_TYPE_INTEGER) {
+                addField(sigFields, QStringLiteral("Value Type"), text(dbc::ValueType_Name(sig.value_type())));
+            }
+            if (sig.multiplex_type() != dbc::MULTIPLEX_NONE) {
+                QString muxText = text(dbc::MultiplexType_Name(sig.multiplex_type()));
+                if (sig.multiplex_type() == dbc::MULTIPLEX_MULTIPLEXED ||
+                    sig.multiplex_type() == dbc::MULTIPLEX_MULTIPLEXED_AND_MULTIPLEXOR) {
+                    muxText += QStringLiteral(" (m%1)").arg(sig.multiplex_value());
+                }
+                addField(sigFields, QStringLiteral("Multiplex"), muxText);
+            }
             if (sig.value_descriptions_size() > 0) {
                 QStringList vds;
                 for (const auto& vd : sig.value_descriptions()) {
@@ -220,6 +232,24 @@ private:
                         .arg(QString::number(static_cast<qlonglong>(vd.value())), text(vd.description())));
                 }
                 addField(sigFields, QStringLiteral("Values"), vds.join(QStringLiteral(", ")));
+            }
+            if (!sig.comment().empty()) {
+                addField(sigFields, QStringLiteral("Comment"), text(sig.comment()));
+            }
+            for (const auto& attr : sig.attributes()) {
+                addField(sigFields, text(attr.name()), text(attr.value()));
+            }
+            if (sig.extended_mux_values_size() > 0) {
+                QStringList muxEntries;
+                for (const auto& emv : sig.extended_mux_values()) {
+                    QStringList ranges;
+                    for (const auto& r : emv.ranges()) {
+                        ranges.push_back(QStringLiteral("%1-%2").arg(r.from()).arg(r.to()));
+                    }
+                    muxEntries.push_back(QStringLiteral("%1: %2")
+                        .arg(text(emv.mux_signal_name()), ranges.join(QStringLiteral(", "))));
+                }
+                addField(sigFields, QStringLiteral("Extended Mux"), muxEntries.join(QStringLiteral("; ")));
             }
             pushSection(sections, text(sig.name()), std::move(sigFields));
         }

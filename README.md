@@ -44,7 +44,7 @@ Browse every parsed entity in a structured tree with expand/collapse, keyboard s
 
 ### Detail Panel
 
-Structured property cards for every entity type. All fields, references, and metadata at a glance. Toggle **raw JSON** view to inspect the underlying protobuf data directly.
+Structured property cards for every entity type. Structured property cards with key fields, references, and metadata. Toggle **raw JSON** view to inspect the underlying protobuf data directly.
 
 ### Memory View (A2L)
 

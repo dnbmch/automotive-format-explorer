@@ -991,14 +991,39 @@ private:
                         DetailField{QStringLiteral("Components"), QString::number(layout.components_size())},
                     });
 
-        QList<DetailField> components;
         for (int i = 0; i < layout.components_size(); ++i) {
-            components.push_back(DetailField{
-                QStringLiteral("Component %1").arg(i + 1),
-                recordLayoutComponentSummary(layout.components(i)),
-            });
+            const auto& comp = layout.components(i);
+            QList<DetailField> cf;
+            addField(cf, QStringLiteral("Summary"), recordLayoutComponentSummary(comp));
+
+            if (comp.has_function_values()) {
+                const auto& fv = comp.function_values();
+                addField(cf, QStringLiteral("Data Type"), text(a2l::DataType_Name(fv.datatype())));
+                addField(cf, QStringLiteral("Index Mode"), text(a2l::RecordLayoutIndexMode_Name(fv.index_mode())));
+                addField(cf, QStringLiteral("Address Type"), text(a2l::RecordLayoutAddressType_Name(fv.address_type())));
+            } else if (comp.has_axis_points()) {
+                const auto& ap = comp.axis_points();
+                addField(cf, QStringLiteral("Data Type"), text(a2l::DataType_Name(ap.datatype())));
+                addField(cf, QStringLiteral("Index Order"), text(a2l::IndexOrder_Name(ap.index_order())));
+                addField(cf, QStringLiteral("Address Type"), text(a2l::RecordLayoutAddressType_Name(ap.address_type())));
+            } else if (comp.has_axis_rescale()) {
+                const auto& ar = comp.axis_rescale();
+                addField(cf, QStringLiteral("Data Type"), text(a2l::DataType_Name(ar.datatype())));
+                addField(cf, QStringLiteral("Index Order"), text(a2l::IndexOrder_Name(ar.index_order())));
+                addField(cf, QStringLiteral("Address Type"), text(a2l::RecordLayoutAddressType_Name(ar.address_type())));
+                addNumberField(cf, QStringLiteral("Max Rescale Pairs"), ar.max_number_of_rescale_pairs());
+            } else if (comp.has_axis_count()) {
+                addField(cf, QStringLiteral("Data Type"), text(a2l::DataType_Name(comp.axis_count().datatype())));
+            } else if (comp.has_rescale_count()) {
+                addField(cf, QStringLiteral("Data Type"), text(a2l::DataType_Name(comp.rescale_count().datatype())));
+            } else if (comp.has_axis_operand()) {
+                addField(cf, QStringLiteral("Data Type"), text(a2l::DataType_Name(comp.axis_operand().datatype())));
+            } else if (comp.has_address_reference()) {
+                addField(cf, QStringLiteral("Data Type"), text(a2l::DataType_Name(comp.address_reference().datatype())));
+            }
+
+            pushSection(sections, QStringLiteral("Component %1").arg(i + 1), std::move(cf));
         }
-        pushSection(sections, QStringLiteral("Components"), std::move(components));
         return sections;
     }
 
