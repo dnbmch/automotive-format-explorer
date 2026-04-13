@@ -1,6 +1,6 @@
-# Signal Map View — DBC & LDF Design Plan
+# Signal Map View — DBC & LDF
 
-Bit-level visualization of CAN/LIN message payloads. Shows how signals pack into a message frame with colored bit cells, byte boundaries, and endianness visualization. Reuses the center panel slot already built for A2L's memory view.
+Bit-level visualization of CAN/LIN message payloads. Signals are rendered at their exact bit positions with colored cells, byte boundaries, and endianness-correct layout. Reuses the generic center panel slot.
 
 ## Why this matters
 
@@ -427,7 +427,7 @@ The infrastructure (center panel slot, NodeRegistry, bidirectional selection, Th
 
 ## Implementation Status
 
-All phases implemented except export/print.
+Fully implemented. Export/print is backlog.
 
 - SignalMapModel with message list, signal entries, bit map, mux filtering
 - LE + BE (Motorola) bit position resolution with visual endianness arrows

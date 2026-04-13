@@ -1,6 +1,6 @@
-# Memory View — Design Plan
+# Memory View
 
-A visual ECU memory map for A2L files. Shows calibration parameters and measurements laid out at their ECU addresses with colored blocks, alongside the existing text detail panel.
+Visual ECU memory map for A2L files. Calibration parameters and measurements are laid out at their ECU addresses as colored blocks, alongside the tree and detail panel.
 
 ## Layout
 
@@ -40,18 +40,18 @@ The center panel is **not** A2L-specific infrastructure — it's a generic sessi
 Q_PROPERTY(QUrl centerPanelSource READ centerPanelSource CONSTANT)
 ```
 
-- `A2lDocumentSession` returns `qrc:/components/MemoryView.qml`
-- `DbcDocumentSession` returns empty (future: CAN matrix view)
-- `LdfDocumentSession` returns empty (future: schedule timeline)
+- `A2lDocumentSession` returns `MemoryView.qml`
+- `DbcDocumentSession` returns `SignalMapView.qml`
+- `LdfDocumentSession` returns `SignalMapView.qml`
 
 Main.qml uses a `Loader` in the center SplitView pane, bound to the active session's `centerPanelSource`. When empty, the center pane collapses and the layout falls back to the current two-column tree + detail.
 
 The MemoryView component itself is fully A2L-specific. The generic part is just the slot plumbing (~20 lines in Main.qml + one property per session).
 
 ### Format-specific center content
-- **A2L**: Memory view (hex grid) — always available (see segment fallback below)
-- **DBC**: Empty for now (future: CAN matrix view)
-- **LDF**: Empty for now (future: schedule timeline)
+- **A2L**: Memory view (hex grid) — see this document
+- **DBC**: Signal map (bit-level CAN message layout) — see `signal_map.md`
+- **LDF**: Signal map (bit-level LIN frame layout) — see `signal_map.md`
 
 ## Data Sources (from A2L protobuf)
 
@@ -143,7 +143,7 @@ Click-drag to select a byte range. Status bar shows: `Selected: 0x80100 — 0x80
 
 Size calculation is the hardest part of this feature. The ASAP2 spec has complex layout rules with alignment padding, index modes, deposit modes, and axis interleaving. We use a **tiered approach**: handle common cases correctly, mark complex cases as approximate.
 
-### Tier 1 — Trivially correct (Phase 1)
+### Tier 1 — Trivially correct
 
 These cases have straightforward size computation:
 
@@ -151,14 +151,14 @@ These cases have straightforward size computation:
 - **Measurement**: `sizeof(datatype)` from the measurement's `datatype` field. For array measurements, multiply by `array_size` or product of `matrix_dim`.
 - **AxisPts (simple)**: `max_axis_points * sizeof(axis datatype)` + header fields from RecordLayout.
 
-### Tier 2 — Common but non-trivial (Phase 1, best-effort)
+### Tier 2 — Common but non-trivial
 
 - **CURVE** with `ROW_DIR` index mode: axis values block + function values block, laid out sequentially. Size = `(max_axis_points * sizeof(axis_type)) + (max_axis_points * sizeof(value_type))` + any `NO_AXIS_PTS_X` header field.
 - **MAP** with `ROW_DIR`: similar, but two axis dimensions. Size = axis_x block + axis_y block + (x_count * y_count * sizeof(value_type)).
 
-### Tier 3 — Complex (Phase 3)
+### Tier 3 — Complex (backlog)
 
-These require full RecordLayout interpretation and are deferred:
+These require full RecordLayout interpretation:
 
 - **`ALTERNATE_CURVES` / `ALTERNATE_WITH_X`** index modes — axis and value bytes are interleaved, not blocked
 - **Alignment padding** between RecordLayout components (`ALIGNMENT_BYTE`, `ALIGNMENT_WORD`, `ALIGNMENT_LONG`, `ALIGNMENT_FLOAT32_IEEE`, `ALIGNMENT_FLOAT64_IEEE`) — must be applied between fields, not just at the end
@@ -178,8 +178,6 @@ This avoids the cascading visual error problem: an incorrect size for one object
 For Measurements with `bit_mask`, the footprint is the byte(s) containing the masked bits. Display as a partially-filled cell. Multiple measurements sharing the same byte(s) via different bit_masks are shown as subdivided cells.
 
 ## Implementation Status
-
-Phases 1 and 2 are implemented. Phase 3 is backlog.
 
 ### Implemented
 
