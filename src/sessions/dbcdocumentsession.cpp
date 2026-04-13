@@ -354,14 +354,10 @@ private:
         addField(fields,
                  QStringLiteral("Value Type"),
                  text(dbc::AttributeValueType_Name(definition.value_type())));
-        if (definition.int_min() != 0 || definition.int_max() != 0) {
-            addNumberField(fields, QStringLiteral("Int Min"), definition.int_min());
-            addNumberField(fields, QStringLiteral("Int Max"), definition.int_max());
-        }
-        if (definition.float_min() != 0.0 || definition.float_max() != 0.0) {
-            addNumberField(fields, QStringLiteral("Float Min"), definition.float_min());
-            addNumberField(fields, QStringLiteral("Float Max"), definition.float_max());
-        }
+        addNumberField(fields, QStringLiteral("Int Min"), definition.int_min());
+        addNumberField(fields, QStringLiteral("Int Max"), definition.int_max());
+        addNumberField(fields, QStringLiteral("Float Min"), definition.float_min());
+        addNumberField(fields, QStringLiteral("Float Max"), definition.float_max());
         addField(fields,
                  QStringLiteral("Enum Values"),
                  joinStrings(definition.enum_values()));

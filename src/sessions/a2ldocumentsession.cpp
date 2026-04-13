@@ -792,7 +792,7 @@ private:
 
         for (int a = 0; a < characteristic.axis_descrs_size(); ++a) {
             const auto& axis = characteristic.axis_descrs(a);
-            QString axisLabel = (a == 0) ? QStringLiteral("X") : (a == 1) ? QStringLiteral("Y") : QStringLiteral("Z");
+            QString axisLabel = (a < 3) ? QString(QChar('X' + a)) : QStringLiteral("Axis %1").arg(a + 1);
             QList<DetailField> axisFields;
             addField(axisFields,
                      QStringLiteral("Attribute"),

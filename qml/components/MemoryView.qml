@@ -24,7 +24,7 @@ Item {
         let objIdx = mapModel.objectIndexForNodeKey(nodeKey)
         if (objIdx < 0) return
         let addr = mapModel.objectAddress(objIdx)
-        if (addr === 0) return
+
         let row = gridItem.rowForAddress(addr)
         let rh = gridItem.cellSize + gridItem.cellGap
         // Center the object vertically.
