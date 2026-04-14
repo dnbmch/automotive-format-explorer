@@ -10,50 +10,84 @@ Rectangle {
     property var treeModel: null
     property bool hasContent: treeView.rows > 0
 
-    // Per-model expand state: maps TreeModel pointer (as string) -> [nodeKey, ...]
+    // Per-model state: expand keys, selected node key, scroll position.
     // Keyed by model object identity so tab close/reorder doesn't invalidate entries.
     property var _expandState: ({})
+    property var _selectionState: ({})
+    property var _scrollState: ({})
     property var _prevModel: null
     readonly property int _nodeKeyRole: 261  // Qt::UserRole + 5 (TreeModel::NodeKeyRole)
 
     onTreeModelChanged: {
-        _saveExpandState(_prevModel)
+        _saveState(_prevModel)
         treeView.model = treeModel
-        Qt.callLater(_restoreExpandState, treeModel)
+        Qt.callLater(_restoreState, treeModel)
         _prevModel = treeModel
     }
 
     function _modelKey(model) {
-        // Use the object itself as a JS property key (toString gives unique ptr).
         return model ? model.toString() : ""
     }
 
-    function _saveExpandState(model) {
+    function _saveState(model) {
         if (!model) return
+        let mk = _modelKey(model)
+
+        // Expand state
         let keys = []
         for (let r = 0; r < treeView.rows; ++r) {
             if (treeView.isExpanded(r)) {
                 let idx = treeView.index(r, 0)
-                let key = treeView.model.data(idx, _nodeKeyRole)
+                let key = model.data(idx, _nodeKeyRole)
                 if (key !== undefined) keys.push(key)
             }
         }
-        _expandState[_modelKey(model)] = keys
+        _expandState[mk] = keys
+
+        // Selected node
+        let cur = treeView.selectionModel.currentIndex
+        if (cur.valid)
+            _selectionState[mk] = model.data(cur, _nodeKeyRole)
+
+        // Scroll position
+        _scrollState[mk] = treeView.contentY
     }
 
-    function _restoreExpandState(model) {
+    function _restoreState(model) {
         if (!model) return
-        let keys = _expandState[_modelKey(model)]
-        if (!keys || keys.length === 0) return
-        for (let i = 0; i < keys.length; ++i) {
-            let idx = model.indexForNodeKey(keys[i])
-            if (idx.valid) {
-                let row = treeView.rowAtIndex(idx)
-                if (row >= 0 && !treeView.isExpanded(row))
-                    treeView.expand(row)
+        let mk = _modelKey(model)
+
+        // Restore expand state — forceLayout after each expand so children become visible rows.
+        let keys = _expandState[mk]
+        if (keys && keys.length > 0) {
+            for (let i = 0; i < keys.length; ++i) {
+                let idx = model.indexForNodeKey(keys[i])
+                if (idx.valid) {
+                    let row = treeView.rowAtIndex(idx)
+                    if (row >= 0 && !treeView.isExpanded(row)) {
+                        treeView.expand(row)
+                        treeView.forceLayout()
+                    }
+                }
             }
         }
-        treeView.forceLayout()
+
+        // Restore selection
+        let selKey = _selectionState[mk]
+        if (selKey !== undefined) {
+            let idx = model.indexForNodeKey(selKey)
+            if (idx.valid) {
+                let row = treeView.rowAtIndex(idx)
+                if (row >= 0)
+                    treeView.selectionModel.setCurrentIndex(
+                        treeView.index(row, 0), ItemSelectionModel.ClearAndSelect)
+            }
+        }
+
+        // Restore scroll position
+        let scrollY = _scrollState[mk]
+        if (scrollY !== undefined)
+            treeView.contentY = scrollY
     }
 
     signal nodeSelected(var nodeKey)
