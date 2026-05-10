@@ -19,10 +19,11 @@ Rectangle {
     readonly property int _nodeKeyRole: 261  // Qt::UserRole + 5 (TreeModel::NodeKeyRole)
 
     onTreeModelChanged: {
+        let nextModel = treeModel
         _saveState(_prevModel)
-        treeView.model = treeModel
-        Qt.callLater(_restoreState, treeModel)
-        _prevModel = treeModel
+        treeView.model = nextModel
+        Qt.callLater(function() { _restoreState(nextModel) })
+        _prevModel = nextModel
     }
 
     function _modelKey(model) {
@@ -54,7 +55,7 @@ Rectangle {
     }
 
     function _restoreState(model) {
-        if (!model) return
+        if (!model || treeView.model !== model) return
         let mk = _modelKey(model)
 
         // Restore expand state — forceLayout after each expand so children become visible rows.
@@ -108,8 +109,10 @@ Rectangle {
         }
         for (let i = toExpand.length - 1; i >= 0; --i) {
             let row = treeView.rowAtIndex(toExpand[i])
-            if (row >= 0 && !treeView.isExpanded(row))
+            if (row >= 0 && !treeView.isExpanded(row)) {
                 treeView.expand(row)
+                treeView.forceLayout()
+            }
         }
 
         // Force layout so row indices are up to date after expanding.
