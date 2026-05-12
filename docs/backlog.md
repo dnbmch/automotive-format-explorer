@@ -17,9 +17,3 @@ Items deliberately deferred or pending. Each entry says **what**, **where**, and
 `src/main.cpp:33` registers `&controller` as a singleton instance with the QML engine. Engine teardown order on `QGuiApplication::exec()` return depends on declaration order in main; the controller currently survives the engine, which works today but is brittle. Move `QQmlApplicationEngine engine;` above `AppController controller;` so the engine is destroyed first.
 
 **Size:** XS.
-
-### BL-E3: `setCurrentTabIndex` / `closeSession` ordering
-
-`src/core/appcontroller.cpp:96` (`setCurrentTabIndex`) short-circuits on `currentTabIndex_ == index`. After `closeSession` left-shifts the tab model, the index can refer to an out-of-range tab. Validate `index < tabModel_.rowCount()` before honouring the request.
-
-**Size:** XS.
