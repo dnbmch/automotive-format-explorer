@@ -136,3 +136,16 @@ cmake -B build -DA2L_PARSER_VERSION=v0.2.0 -DDBC_PARSER_VERSION=v0.2.0 -DLDF_PAR
 
 - **Windows (MinGW)**: Primary development platform. Backends are shared libraries loaded at runtime.
 - **Linux**: Backends are linked statically into the executable. Tested on Ubuntu 24.04 with system protobuf.
+
+## Documentation
+
+- [docs/arch/architecture.md](docs/arch/architecture.md) — process layout, plugin loading, DocumentSession contract, NodeRegistry lifecycle, startup splash + DWM cloak.
+- [docs/ref/memory_view.md](docs/ref/memory_view.md) — A2L memory grid visual + interaction reference.
+- [docs/ref/signal_map.md](docs/ref/signal_map.md) — DBC/LDF signal grid visual + interaction reference.
+- [docs/backlog.md](docs/backlog.md) — known issues / planned changes.
+
+## License
+
+GPL-3.0-or-later. See [LICENSE.md](LICENSE.md).
+
+The parser libraries this app loads are dual-licensed (GPL-2.0 or Commercial); they are linked via their public release artifacts, not via source dependency.

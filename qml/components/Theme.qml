@@ -49,7 +49,7 @@ QtObject {
         "#ff9800",  // 4 ASCII - orange
         "#00bcd4",  // 5 VAL_BLK - cyan
         "#4caf50",  // 6 MEASUREMENT - green
-        "#e0c060"   // 7 AXIS_PTS - yellow/gold
+        "#e0c060"   // 7 AXIS_PTS - gold
     ]
     readonly property color memoryUnoccupied: "#333"
     readonly property color memoryHighlight: "#fff"
@@ -62,7 +62,7 @@ QtObject {
         "#ff9800",  // 3 - orange
         "#4caf50",  // 4 - green
         "#00bcd4",  // 5 - cyan
-        "#e0c060",  // 6 - yellow/gold
+        "#e0c060",  // 6 - gold
         "#5c6bc0"   // 7 - indigo
     ]
 

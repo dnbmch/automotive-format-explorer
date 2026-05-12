@@ -89,7 +89,7 @@ Each row = 16 bytes (configurable: 8, 16, 32). Left gutter shows absolute addres
 | Characteristic (ASCII) | Orange | String parameter |
 | Characteristic (VAL_BLK) | Cyan | Array of values |
 | Measurement | Green | Runtime signal overlay |
-| AxisPts | Yellow | Standalone axis distribution |
+| AxisPts | Gold | Standalone axis distribution |
 | Unoccupied (in segment) | Dark gray | Allocated but not assigned |
 | Outside segment | Background | No data |
 
