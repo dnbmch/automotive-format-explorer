@@ -81,11 +81,11 @@ Qt 6.5+, CMake 3.21+, Protobuf required. Parser libraries are fetched automatica
 
 ## Code Conventions
 
-- C++17, Qt6, QML
-- PascalCase types, camelCase methods, `snake_case_` private members
-- Max ~1256 LOC per file (a2ldocumentsession.cpp is over — needs splitting)
-- RAII with unique_ptr, raw pointers for non-owning access
-- No exceptions in main flow
+See workspace [CLAUDE.md "Code Conventions"](../CLAUDE.md). Repo-specific exceptions:
+
+- Qt 6 + QML is the entire UI layer. The workspace "no Qt" rule applies to the parser/library repos, not here.
+
+Existing private members use `snake_case_` (trailing underscore); the source rewrite to `_snake_case` is tracked as BL-W1 in workspace [BACKLOG.md](../BACKLOG.md). `a2ldocumentsession.cpp` is ~2300 LOC and is queued for splitting along clear concern boundaries.
 
 ## Commits on dnbmch org
 
