@@ -20,21 +20,21 @@ set(DBC_PARSER_VERSION "v0.2.0" CACHE STRING "dbc-parser-lib release tag")
 set(LDF_PARSER_VERSION "v0.3.0" CACHE STRING "ldf-parser-lib release tag")
 
 fetch_parser_lib(
-    TARGET  a2lextract
+    TARGET  a2lparser
     REPO    dnbmch/a2l-parser-lib
     VERSION "${A2L_PARSER_VERSION}"
     HEADER  a2l/a2lfile.h
 )
 
 fetch_parser_lib(
-    TARGET  dbcextract
+    TARGET  dbcparser
     REPO    dnbmch/dbc-parser-lib
     VERSION "${DBC_PARSER_VERSION}"
     HEADER  dbc/dbcfile.h
 )
 
 fetch_parser_lib(
-    TARGET  ldfextract
+    TARGET  ldfparser
     REPO    dnbmch/ldf-parser-lib
     VERSION "${LDF_PARSER_VERSION}"
     HEADER  ldf/ldffile.h
@@ -112,7 +112,7 @@ target_link_libraries(explorer-a2l-backend
         Qt6::Core
         protobuf::libprotobuf
         explorer-core
-        a2lextract
+        a2lparser
 )
 
 target_link_libraries(explorer-dbc-backend
@@ -120,7 +120,7 @@ target_link_libraries(explorer-dbc-backend
         Qt6::Core
         protobuf::libprotobuf
         explorer-core
-        dbcextract
+        dbcparser
 )
 
 target_link_libraries(explorer-ldf-backend
@@ -128,7 +128,7 @@ target_link_libraries(explorer-ldf-backend
         Qt6::Core
         protobuf::libprotobuf
         explorer-core
-        ldfextract
+        ldfparser
 )
 
 target_link_libraries(automotive-format-explorer PRIVATE

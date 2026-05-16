@@ -100,7 +100,7 @@ The explorer is built on top of three parser libraries published by [Danube Mech
 
 Each library parses its respective format into Protocol Buffer messages. The explorer downloads prebuilt release artifacts automatically at CMake configure time -- no manual setup required.
 
-The parser libraries are **dual-licensed** (GPL / Commercial). See their repositories for details, or contact [Danube Mechatronics](https://danube-mechatronics.com) for commercial licensing.
+The parser libraries are **dual licensed: GPL-2.0 or Commercial**. See their repositories for details, or contact [Danube Mechatronics](https://danube-mechatronics.com) for commercial licensing.
 
 ---
 

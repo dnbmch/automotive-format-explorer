@@ -5,7 +5,7 @@
 #
 # Usage:
 #   fetch_parser_lib(
-#       TARGET      dbcextract
+#       TARGET      dbcparser
 #       REPO        dnbmch/dbc-parser-lib
 #       VERSION     v0.1.0
 #       HEADER      dbcfile.h
