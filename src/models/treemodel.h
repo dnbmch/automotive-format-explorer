@@ -38,5 +38,5 @@ private:
     TreeItem* itemForIndex(const QModelIndex& index) const;
     int rowForItem(const TreeItem* item) const;
 
-    std::unique_ptr<TreeItem> root_;
+    std::unique_ptr<TreeItem> _root;
 };

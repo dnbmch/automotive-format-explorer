@@ -119,13 +119,13 @@ signals:
 private:
     void rebuildFilteredObjects();
 
-    std::vector<MemorySegmentInfo> segments_;
-    std::vector<MemoryObject> allObjects_;
+    std::vector<MemorySegmentInfo> _segments;
+    std::vector<MemoryObject> _all_objects;
 
     // Objects filtered to the current segment's address range, sorted by address.
-    std::vector<const MemoryObject*> filteredObjects_;
+    std::vector<const MemoryObject*> _filtered_objects;
 
-    int currentSegment_ = 0;
-    int bytesPerRow_ = 16;
-    int excludedMeasurements_ = 0;
+    int _current_segment = 0;
+    int _bytes_per_row = 16;
+    int _excluded_measurements = 0;
 };

@@ -58,7 +58,7 @@ void pushSection(QList<DetailSection>& sections, const QString& title, QList<Det
 class DbcDetailPresenter final : public DetailPresenter {
 public:
     explicit DbcDetailPresenter(const dbc::DbcFile& document)
-        : document_(document) {
+        : _document(document) {
     }
 
     QList<DetailSection> buildDetails(const NodeBinding& binding) const override {
@@ -102,15 +102,15 @@ public:
         int j = path.secondaryIndex;
 
         switch (path.kind) {
-        case DbcEntityKind::Node:                if (i >= 0 && i < document_.nodes_size()) msg = &document_.nodes(i); break;
-        case DbcEntityKind::Message:             if (i >= 0 && i < document_.messages_size()) msg = &document_.messages(i); break;
-        case DbcEntityKind::Signal:              if (i >= 0 && i < document_.messages_size() && j >= 0 && j < document_.messages(i).signals_size()) msg = &document_.messages(i).signals(j); break;
-        case DbcEntityKind::ValueTable:          if (i >= 0 && i < document_.value_tables_size()) msg = &document_.value_tables(i); break;
-        case DbcEntityKind::AttributeDefinition: if (i >= 0 && i < document_.attribute_definitions_size()) msg = &document_.attribute_definitions(i); break;
-        case DbcEntityKind::AttributeDefault:    if (i >= 0 && i < document_.attribute_defaults_size()) msg = &document_.attribute_defaults(i); break;
-        case DbcEntityKind::AttributeValue:      if (i >= 0 && i < document_.attribute_values_size()) msg = &document_.attribute_values(i); break;
-        case DbcEntityKind::EnvironmentVariable: if (i >= 0 && i < document_.environment_variables_size()) msg = &document_.environment_variables(i); break;
-        case DbcEntityKind::SignalGroup:         if (i >= 0 && i < document_.signal_groups_size()) msg = &document_.signal_groups(i); break;
+        case DbcEntityKind::Node:                if (i >= 0 && i < _document.nodes_size()) msg = &_document.nodes(i); break;
+        case DbcEntityKind::Message:             if (i >= 0 && i < _document.messages_size()) msg = &_document.messages(i); break;
+        case DbcEntityKind::Signal:              if (i >= 0 && i < _document.messages_size() && j >= 0 && j < _document.messages(i).signals_size()) msg = &_document.messages(i).signals(j); break;
+        case DbcEntityKind::ValueTable:          if (i >= 0 && i < _document.value_tables_size()) msg = &_document.value_tables(i); break;
+        case DbcEntityKind::AttributeDefinition: if (i >= 0 && i < _document.attribute_definitions_size()) msg = &_document.attribute_definitions(i); break;
+        case DbcEntityKind::AttributeDefault:    if (i >= 0 && i < _document.attribute_defaults_size()) msg = &_document.attribute_defaults(i); break;
+        case DbcEntityKind::AttributeValue:      if (i >= 0 && i < _document.attribute_values_size()) msg = &_document.attribute_values(i); break;
+        case DbcEntityKind::EnvironmentVariable: if (i >= 0 && i < _document.environment_variables_size()) msg = &_document.environment_variables(i); break;
+        case DbcEntityKind::SignalGroup:         if (i >= 0 && i < _document.signal_groups_size()) msg = &_document.signal_groups(i); break;
         }
 
         if (!msg) {
@@ -130,11 +130,11 @@ public:
 private:
     QList<DetailSection> nodeDetails(const DbcPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.nodes_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.nodes_size()) {
             return sections;
         }
 
-        const auto& node = document_.nodes(path.primaryIndex);
+        const auto& node = _document.nodes(path.primaryIndex);
         QList<DetailField> identity;
         addField(identity, QStringLiteral("Name"), text(node.name()));
         addNumberField(identity, QStringLiteral("Attributes"), node.attributes_size());
@@ -160,11 +160,11 @@ private:
 
     QList<DetailSection> messageDetails(const DbcPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.messages_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.messages_size()) {
             return sections;
         }
 
-        const auto& message = document_.messages(path.primaryIndex);
+        const auto& message = _document.messages(path.primaryIndex);
         QList<DetailField> identity;
         addField(identity, QStringLiteral("Name"), text(message.name()));
         addField(identity, QStringLiteral("CAN ID"), hexId(message.id()));
@@ -258,11 +258,11 @@ private:
 
     QList<DetailSection> signalDetails(const DbcPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.messages_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.messages_size()) {
             return sections;
         }
 
-        const auto& message = document_.messages(path.primaryIndex);
+        const auto& message = _document.messages(path.primaryIndex);
         if (path.secondaryIndex < 0 || path.secondaryIndex >= message.signals_size()) {
             return sections;
         }
@@ -347,11 +347,11 @@ private:
 
     QList<DetailSection> valueTableDetails(const DbcPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.value_tables_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.value_tables_size()) {
             return sections;
         }
 
-        const auto& table = document_.value_tables(path.primaryIndex);
+        const auto& table = _document.value_tables(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Identity"),
                     {
@@ -371,11 +371,11 @@ private:
 
     QList<DetailSection> attributeDefinitionDetails(const DbcPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.attribute_definitions_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.attribute_definitions_size()) {
             return sections;
         }
 
-        const auto& definition = document_.attribute_definitions(path.primaryIndex);
+        const auto& definition = _document.attribute_definitions(path.primaryIndex);
         QList<DetailField> fields;
         addField(fields, QStringLiteral("Name"), text(definition.name()));
         addField(fields,
@@ -397,11 +397,11 @@ private:
 
     QList<DetailSection> attributeDefaultDetails(const DbcPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.attribute_defaults_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.attribute_defaults_size()) {
             return sections;
         }
 
-        const auto& value = document_.attribute_defaults(path.primaryIndex);
+        const auto& value = _document.attribute_defaults(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Default"),
                     {
@@ -413,11 +413,11 @@ private:
 
     QList<DetailSection> attributeValueDetails(const DbcPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.attribute_values_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.attribute_values_size()) {
             return sections;
         }
 
-        const auto& value = document_.attribute_values(path.primaryIndex);
+        const auto& value = _document.attribute_values(path.primaryIndex);
         QList<DetailField> fields;
         addField(fields, QStringLiteral("Name"), text(value.name()));
         addField(fields, QStringLiteral("Value"), text(value.value()));
@@ -430,11 +430,11 @@ private:
 
     QList<DetailSection> environmentVariableDetails(const DbcPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.environment_variables_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.environment_variables_size()) {
             return sections;
         }
 
-        const auto& envVar = document_.environment_variables(path.primaryIndex);
+        const auto& envVar = _document.environment_variables(path.primaryIndex);
         QList<DetailField> identity;
         addField(identity, QStringLiteral("Name"), text(envVar.name()));
         addField(identity,
@@ -465,11 +465,11 @@ private:
 
     QList<DetailSection> signalGroupDetails(const DbcPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.signal_groups_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.signal_groups_size()) {
             return sections;
         }
 
-        const auto& group = document_.signal_groups(path.primaryIndex);
+        const auto& group = _document.signal_groups(path.primaryIndex);
         QList<DetailField> identity;
         addField(identity, QStringLiteral("Name"), text(group.name()));
         addField(identity, QStringLiteral("Message ID"), hexId(group.message_id()));
@@ -488,8 +488,8 @@ private:
         QStringList sentMessages;
         QStringList receivedSignals;
 
-        for (int i = 0; i < document_.messages_size(); ++i) {
-            const auto& msg = document_.messages(i);
+        for (int i = 0; i < _document.messages_size(); ++i) {
+            const auto& msg = _document.messages(i);
             if (msg.sender() == nodeName) {
                 sentMessages.push_back(text(msg.name()));
             }
@@ -519,7 +519,7 @@ private:
         pushSection(sections, QStringLiteral("Referenced By"), std::move(fields));
     }
 
-    const dbc::DbcFile& document_;
+    const dbc::DbcFile& _document;
 };
 
 } // namespace
@@ -533,8 +533,8 @@ DbcDocumentSession::DbcDocumentSession(QString displayName,
                          std::move(displayName),
                          std::move(sourcePath),
                          std::move(diagnostics)),
-      document_(std::move(document)) {
-    setDetailPresenter(std::make_unique<DbcDetailPresenter>(document_));
+      _document(std::move(document)) {
+    setDetailPresenter(std::make_unique<DbcDetailPresenter>(_document));
     buildTree();
     buildSignalMap();
 }
@@ -542,20 +542,20 @@ DbcDocumentSession::DbcDocumentSession(QString displayName,
 DbcDocumentSession::~DbcDocumentSession() = default;
 
 QUrl DbcDocumentSession::centerPanelSource() const {
-    if (signalMapModel_ && signalMapModel_->messageCount() > 0) {
+    if (_signal_map_model && _signal_map_model->messageCount() > 0) {
         return QUrl(QStringLiteral("qrc:/qt/qml/ExplorerApp/qml/components/SignalMapView.qml"));
     }
     return {};
 }
 
 QAbstractListModel* DbcDocumentSession::centerPanelModel() {
-    return signalMapModel_.get();
+    return _signal_map_model.get();
 }
 
 void DbcDocumentSession::moveModelsToThread(QThread* thread) {
     AdapterSessionBase::moveModelsToThread(thread);
-    if (signalMapModel_)
-        signalMapModel_->moveToThread(thread);
+    if (_signal_map_model)
+        _signal_map_model->moveToThread(thread);
 }
 
 void DbcDocumentSession::buildTree() {
@@ -563,10 +563,10 @@ void DbcDocumentSession::buildTree() {
     root->title = displayName();
     root->semanticKind = SemanticKind::Root;
 
-    if (document_.nodes_size() > 0) {
-        TreeItem* section = appendNode(root.get(), QStringLiteral("Nodes"), QString::number(document_.nodes_size()), QStringLiteral("nodes"), SemanticKind::Section);
-        for (int i = 0; i < document_.nodes_size(); ++i) {
-            const auto& node = document_.nodes(i);
+    if (_document.nodes_size() > 0) {
+        TreeItem* section = appendNode(root.get(), QStringLiteral("Nodes"), QString::number(_document.nodes_size()), QStringLiteral("nodes"), SemanticKind::Section);
+        for (int i = 0; i < _document.nodes_size(); ++i) {
+            const auto& node = _document.nodes(i);
             appendNode(section,
                        text(node.name()),
                        node.comment().empty() ? QString() : QStringLiteral("commented"),
@@ -576,17 +576,17 @@ void DbcDocumentSession::buildTree() {
         }
     }
 
-    if (document_.messages_size() > 0) {
-        TreeItem* section = appendNode(root.get(), QStringLiteral("Messages"), QString::number(document_.messages_size()), QStringLiteral("messages"), SemanticKind::Section);
-        for (int i = 0; i < document_.messages_size(); ++i) {
-            const auto& message = document_.messages(i);
+    if (_document.messages_size() > 0) {
+        TreeItem* section = appendNode(root.get(), QStringLiteral("Messages"), QString::number(_document.messages_size()), QStringLiteral("messages"), SemanticKind::Section);
+        for (int i = 0; i < _document.messages_size(); ++i) {
+            const auto& message = _document.messages(i);
             TreeItem* messageItem = appendNode(section,
                                                text(message.name()),
                                                QStringLiteral("%1  DLC=%2").arg(hexId(message.id())).arg(message.dlc()),
                                                QStringLiteral("message"),
                                                SemanticKind::Entity,
                                                NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::Message, i, -1, -1}, true});
-            treeNodeKeys_[{static_cast<int>(DbcEntityKind::Message), i, -1}] = messageItem->nodeKey;
+            _tree_node_keys[{static_cast<int>(DbcEntityKind::Message), i, -1}] = messageItem->nodeKey;
 
             for (int j = 0; j < message.signals_size(); ++j) {
                 const auto& signal = message.signals(j);
@@ -596,15 +596,15 @@ void DbcDocumentSession::buildTree() {
                            QStringLiteral("signal"),
                            SemanticKind::Entity,
                            NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::Signal, i, j, -1}, true});
-                treeNodeKeys_[{static_cast<int>(DbcEntityKind::Signal), i, j}] = sigItem->nodeKey;
+                _tree_node_keys[{static_cast<int>(DbcEntityKind::Signal), i, j}] = sigItem->nodeKey;
             }
         }
     }
 
-    if (document_.value_tables_size() > 0) {
-        TreeItem* section = appendNode(root.get(), QStringLiteral("Value Tables"), QString::number(document_.value_tables_size()), QStringLiteral("valuetables"), SemanticKind::Section);
-        for (int i = 0; i < document_.value_tables_size(); ++i) {
-            const auto& table = document_.value_tables(i);
+    if (_document.value_tables_size() > 0) {
+        TreeItem* section = appendNode(root.get(), QStringLiteral("Value Tables"), QString::number(_document.value_tables_size()), QStringLiteral("valuetables"), SemanticKind::Section);
+        for (int i = 0; i < _document.value_tables_size(); ++i) {
+            const auto& table = _document.value_tables(i);
             appendNode(section,
                        text(table.name()),
                        QString::number(table.entries_size()),
@@ -614,10 +614,10 @@ void DbcDocumentSession::buildTree() {
         }
     }
 
-    if (document_.environment_variables_size() > 0) {
-        TreeItem* section = appendNode(root.get(), QStringLiteral("Environment Variables"), QString::number(document_.environment_variables_size()), QStringLiteral("envvars"), SemanticKind::Section);
-        for (int i = 0; i < document_.environment_variables_size(); ++i) {
-            const auto& envVar = document_.environment_variables(i);
+    if (_document.environment_variables_size() > 0) {
+        TreeItem* section = appendNode(root.get(), QStringLiteral("Environment Variables"), QString::number(_document.environment_variables_size()), QStringLiteral("envvars"), SemanticKind::Section);
+        for (int i = 0; i < _document.environment_variables_size(); ++i) {
+            const auto& envVar = _document.environment_variables(i);
             appendNode(section,
                        text(envVar.name()),
                        text(dbc::EnvironmentVariableType_Name(envVar.var_type())),
@@ -627,10 +627,10 @@ void DbcDocumentSession::buildTree() {
         }
     }
 
-    if (document_.signal_groups_size() > 0) {
-        TreeItem* section = appendNode(root.get(), QStringLiteral("Signal Groups"), QString::number(document_.signal_groups_size()), QStringLiteral("signalgroups"), SemanticKind::Section);
-        for (int i = 0; i < document_.signal_groups_size(); ++i) {
-            const auto& group = document_.signal_groups(i);
+    if (_document.signal_groups_size() > 0) {
+        TreeItem* section = appendNode(root.get(), QStringLiteral("Signal Groups"), QString::number(_document.signal_groups_size()), QStringLiteral("signalgroups"), SemanticKind::Section);
+        for (int i = 0; i < _document.signal_groups_size(); ++i) {
+            const auto& group = _document.signal_groups(i);
             appendNode(section,
                        text(group.name()),
                        hexId(group.message_id()),
@@ -640,13 +640,13 @@ void DbcDocumentSession::buildTree() {
         }
     }
 
-    if (document_.attribute_definitions_size() > 0 || document_.attribute_defaults_size() > 0 || document_.attribute_values_size() > 0) {
+    if (_document.attribute_definitions_size() > 0 || _document.attribute_defaults_size() > 0 || _document.attribute_values_size() > 0) {
         TreeItem* attributes = appendNode(root.get(), QStringLiteral("Attributes"), QString(), QStringLiteral("attributes"), SemanticKind::Section);
 
-        if (document_.attribute_definitions_size() > 0) {
-            TreeItem* defs = appendNode(attributes, QStringLiteral("Definitions"), QString::number(document_.attribute_definitions_size()), QStringLiteral("attrdefs"), SemanticKind::Section);
-            for (int i = 0; i < document_.attribute_definitions_size(); ++i) {
-                const auto& definition = document_.attribute_definitions(i);
+        if (_document.attribute_definitions_size() > 0) {
+            TreeItem* defs = appendNode(attributes, QStringLiteral("Definitions"), QString::number(_document.attribute_definitions_size()), QStringLiteral("attrdefs"), SemanticKind::Section);
+            for (int i = 0; i < _document.attribute_definitions_size(); ++i) {
+                const auto& definition = _document.attribute_definitions(i);
                 appendNode(defs,
                            text(definition.name()),
                            text(dbc::AttributeScope_Name(definition.scope())),
@@ -656,10 +656,10 @@ void DbcDocumentSession::buildTree() {
             }
         }
 
-        if (document_.attribute_defaults_size() > 0) {
-            TreeItem* defaults = appendNode(attributes, QStringLiteral("Defaults"), QString::number(document_.attribute_defaults_size()), QStringLiteral("attrdefaults"), SemanticKind::Section);
-            for (int i = 0; i < document_.attribute_defaults_size(); ++i) {
-                const auto& value = document_.attribute_defaults(i);
+        if (_document.attribute_defaults_size() > 0) {
+            TreeItem* defaults = appendNode(attributes, QStringLiteral("Defaults"), QString::number(_document.attribute_defaults_size()), QStringLiteral("attrdefaults"), SemanticKind::Section);
+            for (int i = 0; i < _document.attribute_defaults_size(); ++i) {
+                const auto& value = _document.attribute_defaults(i);
                 appendNode(defaults,
                            text(value.name()),
                            text(value.value()),
@@ -669,10 +669,10 @@ void DbcDocumentSession::buildTree() {
             }
         }
 
-        if (document_.attribute_values_size() > 0) {
-            TreeItem* values = appendNode(attributes, QStringLiteral("Global Values"), QString::number(document_.attribute_values_size()), QStringLiteral("attrvalues"), SemanticKind::Section);
-            for (int i = 0; i < document_.attribute_values_size(); ++i) {
-                const auto& value = document_.attribute_values(i);
+        if (_document.attribute_values_size() > 0) {
+            TreeItem* values = appendNode(attributes, QStringLiteral("Global Values"), QString::number(_document.attribute_values_size()), QStringLiteral("attrvalues"), SemanticKind::Section);
+            for (int i = 0; i < _document.attribute_values_size(); ++i) {
+                const auto& value = _document.attribute_values(i);
                 appendNode(values,
                            text(value.name()),
                            text(value.value()),
@@ -687,10 +687,10 @@ void DbcDocumentSession::buildTree() {
 }
 
 void DbcDocumentSession::buildSignalMap() {
-    signalMapModel_ = std::make_unique<SignalMapModel>();
+    _signal_map_model = std::make_unique<SignalMapModel>();
 
-    for (int i = 0; i < document_.messages_size(); ++i) {
-        const auto& message = document_.messages(i);
+    for (int i = 0; i < _document.messages_size(); ++i) {
+        const auto& message = _document.messages(i);
 
         MessageEntry entry;
         entry.name = text(message.name());
@@ -699,8 +699,8 @@ void DbcDocumentSession::buildSignalMap() {
         entry.isExtendedId = message.is_extended_id();
         entry.sender = text(message.sender());
 
-        auto keyIt = treeNodeKeys_.find({static_cast<int>(DbcEntityKind::Message), i, -1});
-        if (keyIt != treeNodeKeys_.end()) entry.nodeKey = keyIt->second;
+        auto keyIt = _tree_node_keys.find({static_cast<int>(DbcEntityKind::Message), i, -1});
+        if (keyIt != _tree_node_keys.end()) entry.nodeKey = keyIt->second;
 
         for (int j = 0; j < message.signals_size(); ++j) {
             const auto& signal = message.signals(j);
@@ -724,8 +724,8 @@ void DbcDocumentSession::buildSignalMap() {
                 sig.receivers.push_back(text(r));
             }
 
-            auto sigKeyIt = treeNodeKeys_.find({static_cast<int>(DbcEntityKind::Signal), i, j});
-            if (sigKeyIt != treeNodeKeys_.end()) sig.nodeKey = sigKeyIt->second;
+            auto sigKeyIt = _tree_node_keys.find({static_cast<int>(DbcEntityKind::Signal), i, j});
+            if (sigKeyIt != _tree_node_keys.end()) sig.nodeKey = sigKeyIt->second;
 
             entry.signalEntries.push_back(std::move(sig));
         }
@@ -743,8 +743,8 @@ void DbcDocumentSession::buildSignalMap() {
             if (maxByteUsed >= 0) entry.dlc = maxByteUsed + 1;
         }
 
-        signalMapModel_->addMessage(std::move(entry));
+        _signal_map_model->addMessage(std::move(entry));
     }
 
-    signalMapModel_->finalize();
+    _signal_map_model->finalize();
 }

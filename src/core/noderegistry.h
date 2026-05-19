@@ -95,6 +95,6 @@ public:
     void clear();
 
 private:
-    quint64 nextKey_ = 1;
-    QHash<quint64, NodeBinding> bindings_;
+    quint64 _next_key = 1;
+    QHash<quint64, NodeBinding> _bindings;
 };

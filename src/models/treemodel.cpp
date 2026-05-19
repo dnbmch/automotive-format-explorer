@@ -2,7 +2,7 @@
 
 TreeModel::TreeModel(QObject* parent)
     : QAbstractItemModel(parent),
-      root_(std::make_unique<TreeItem>()) {
+      _root(std::make_unique<TreeItem>()) {
 }
 
 QModelIndex TreeModel::index(int row, int column, const QModelIndex& parent) const {
@@ -28,7 +28,7 @@ QModelIndex TreeModel::parent(const QModelIndex& child) const {
     }
 
     TreeItem* childItem = itemForIndex(child);
-    if (!childItem || !childItem->parent || childItem->parent == root_.get()) {
+    if (!childItem || !childItem->parent || childItem->parent == _root.get()) {
         return {};
     }
 
@@ -88,30 +88,30 @@ QHash<int, QByteArray> TreeModel::roleNames() const {
 
 void TreeModel::setRoot(std::unique_ptr<TreeItem> root) {
     beginResetModel();
-    root_ = std::move(root);
-    if (!root_) {
-        root_ = std::make_unique<TreeItem>();
+    _root = std::move(root);
+    if (!_root) {
+        _root = std::make_unique<TreeItem>();
     }
     endResetModel();
 }
 
 TreeItem* TreeModel::rootItem() {
-    return root_.get();
+    return _root.get();
 }
 
 const TreeItem* TreeModel::rootItem() const {
-    return root_.get();
+    return _root.get();
 }
 
 QModelIndex TreeModel::indexForNodeKey(qulonglong nodeKey) const {
-    if (nodeKey == 0 || !root_) {
+    if (nodeKey == 0 || !_root) {
         return {};
     }
 
     // BFS to find the node with matching key.
     struct Frame { TreeItem* item; QModelIndex parentIdx; };
     std::vector<Frame> stack;
-    stack.push_back({root_.get(), {}});
+    stack.push_back({_root.get(), {}});
 
     while (!stack.empty()) {
         auto [item, parentIdx] = stack.back();
@@ -134,7 +134,7 @@ QModelIndex TreeModel::indexForNodeKey(qulonglong nodeKey) const {
 
 TreeItem* TreeModel::itemForIndex(const QModelIndex& index) const {
     if (!index.isValid()) {
-        return root_.get();
+        return _root.get();
     }
 
     return static_cast<TreeItem*>(index.internalPointer());

@@ -29,10 +29,10 @@ private:
     void buildTree();
     void buildSignalMap();
 
-    dbc::DbcFile document_;
-    std::unique_ptr<SignalMapModel> signalMapModel_;
+    dbc::DbcFile _document;
+    std::unique_ptr<SignalMapModel> _signal_map_model;
 
     // Maps (entityKind, messageIndex, signalIndex) -> tree nodeKey.
     using EntityKey = std::tuple<int, int, int>;
-    std::map<EntityKey, quint64> treeNodeKeys_;
+    std::map<EntityKey, quint64> _tree_node_keys;
 };

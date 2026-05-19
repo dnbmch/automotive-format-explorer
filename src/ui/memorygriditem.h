@@ -88,26 +88,26 @@ private:
     int objectIndexAtPixel(qreal px, qreal py) const;
     void clampScrollY();
 
-    MemoryMapModel* model_ = nullptr;
-    qreal scrollY_ = 0;
-    int cellSize_ = 18;
-    int cellGap_ = 1;
-    int gutterWidth_ = 90;
-    int hoveredObj_ = -1;
-    int selectedObj_ = -1;
-    QPointF mousePos_;
+    MemoryMapModel* _model = nullptr;
+    qreal _scroll_y = 0;
+    int _cell_size = 18;
+    int _cell_gap = 1;
+    int _gutter_width = 90;
+    int _hovered_obj = -1;
+    int _selected_obj = -1;
+    QPointF _mouse_pos;
 
     // Pre-computed flat color map: one int8 per byte in the segment.
     // -1 = unoccupied, 0-7 = color index.
-    std::vector<int8_t> colorMap_;
+    std::vector<int8_t> _color_map;
     // Parallel map: object index per byte (-1 = none).
-    std::vector<int32_t> objectMap_;
+    std::vector<int32_t> _object_map;
 
-    std::vector<QColor> palette_;
-    QColor unoccupiedColor_{0x33, 0x33, 0x33};
+    std::vector<QColor> _palette;
+    QColor _unoccupied_color{0x33, 0x33, 0x33};
 
     // Highlight flash state.
-    int highlightObj_ = -1;
-    qreal highlightOpacity_ = 0.0;
-    QTimer highlightTimer_;
+    int _highlight_obj = -1;
+    qreal _highlight_opacity = 0.0;
+    QTimer _highlight_timer;
 };

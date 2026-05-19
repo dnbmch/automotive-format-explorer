@@ -145,15 +145,15 @@ private:
 
     const std::vector<SignalEntry>& currentSignals() const;
 
-    std::vector<MessageEntry> messages_;
-    int currentMessage_ = 0;
+    std::vector<MessageEntry> _messages;
+    int _current_message = 0;
 
     // Pre-computed bit map for current message + mux filter.
-    std::vector<int16_t> bitMap_;
-    std::vector<bool> overlapMap_; // true if multiple signals claim this bit
-    int usedBits_ = 0;
+    std::vector<int16_t> _bit_map;
+    std::vector<bool> _overlap_map; // true if multiple signals claim this bit
+    int _used_bits = 0;
 
     // Mux groups for current message: sorted unique mux values.
-    std::vector<int> muxValues_;
-    int currentMuxGroup_ = -1; // -1 = all
+    std::vector<int> _mux_values;
+    int _current_mux_group = -1; // -1 = all
 };

@@ -30,5 +30,5 @@ public:
     const DocumentSession* sessionAt(int index) const;
 
 private:
-    std::vector<std::unique_ptr<DocumentSession>> sessions_;
+    std::vector<std::unique_ptr<DocumentSession>> _sessions;
 };

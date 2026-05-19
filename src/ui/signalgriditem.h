@@ -72,19 +72,19 @@ private:
     int rowHeight() const { return kCellSize + kCellGap; }
     int totalHeight() const;
 
-    SignalMapModel* model_ = nullptr;
-    int hoveredSig_ = -1;
-    int selectedSig_ = -1;
-    QPointF mousePos_;
+    SignalMapModel* _model = nullptr;
+    int _hovered_sig = -1;
+    int _selected_sig = -1;
+    QPointF _mouse_pos;
 
-    // colorMap_[displayBit]: encoded color index or -1.
-    std::vector<int8_t> colorMap_;
+    // _color_map[displayBit]: encoded color index or -1.
+    std::vector<int8_t> _color_map;
 
-    std::vector<QColor> palette_;
-    QColor unoccupiedColor_{0x33, 0x33, 0x33};
+    std::vector<QColor> _palette;
+    QColor _unoccupied_color{0x33, 0x33, 0x33};
 
     // Highlight flash state.
-    int highlightSig_ = -1;
-    qreal highlightOpacity_ = 0.0;
-    QTimer highlightTimer_;
+    int _highlight_sig = -1;
+    qreal _highlight_opacity = 0.0;
+    QTimer _highlight_timer;
 };

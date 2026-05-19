@@ -10,15 +10,15 @@ int MemoryMapModel::rowCount(const QModelIndex& parent) const {
     if (parent.isValid()) {
         return 0;
     }
-    return static_cast<int>(filteredObjects_.size());
+    return static_cast<int>(_filtered_objects.size());
 }
 
 QVariant MemoryMapModel::data(const QModelIndex& index, int role) const {
-    if (!index.isValid() || index.row() < 0 || index.row() >= static_cast<int>(filteredObjects_.size())) {
+    if (!index.isValid() || index.row() < 0 || index.row() >= static_cast<int>(_filtered_objects.size())) {
         return {};
     }
 
-    const MemoryObject* obj = filteredObjects_[static_cast<size_t>(index.row())];
+    const MemoryObject* obj = _filtered_objects[static_cast<size_t>(index.row())];
     switch (role) {
     case NameRole:          return obj->name;
     case AddressRole:       return QVariant::fromValue(static_cast<qulonglong>(obj->address));
@@ -44,30 +44,30 @@ QHash<int, QByteArray> MemoryMapModel::roleNames() const {
 }
 
 int MemoryMapModel::segmentCount() const {
-    return static_cast<int>(segments_.size());
+    return static_cast<int>(_segments.size());
 }
 
 int MemoryMapModel::currentSegment() const {
-    return currentSegment_;
+    return _current_segment;
 }
 
 void MemoryMapModel::setCurrentSegment(int index) {
-    if (index < 0 || index >= static_cast<int>(segments_.size())) {
+    if (index < 0 || index >= static_cast<int>(_segments.size())) {
         return;
     }
-    if (currentSegment_ == index) {
+    if (_current_segment == index) {
         return;
     }
-    currentSegment_ = index;
+    _current_segment = index;
     emit currentSegmentChanged();
     rebuildFilteredObjects();
 }
 
 QString MemoryMapModel::segmentLabel(int index) const {
-    if (index < 0 || index >= static_cast<int>(segments_.size())) {
+    if (index < 0 || index >= static_cast<int>(_segments.size())) {
         return {};
     }
-    const auto& seg = segments_[static_cast<size_t>(index)];
+    const auto& seg = _segments[static_cast<size_t>(index)];
     if (seg.synthetic) {
         return QStringLiteral("[derived]  [0x%1 .. 0x%2]")
             .arg(seg.address, 0, 16)
@@ -83,73 +83,73 @@ QString MemoryMapModel::segmentLabel(int index) const {
 }
 
 quint64 MemoryMapModel::viewStartAddress() const {
-    if (segments_.empty()) {
+    if (_segments.empty()) {
         return 0;
     }
-    return segments_[static_cast<size_t>(currentSegment_)].address;
+    return _segments[static_cast<size_t>(_current_segment)].address;
 }
 
 quint64 MemoryMapModel::viewEndAddress() const {
-    if (segments_.empty()) {
+    if (_segments.empty()) {
         return 0;
     }
-    const auto& seg = segments_[static_cast<size_t>(currentSegment_)];
+    const auto& seg = _segments[static_cast<size_t>(_current_segment)];
     return seg.address + seg.size;
 }
 
 int MemoryMapModel::totalRows() const {
-    if (segments_.empty()) {
+    if (_segments.empty()) {
         return 0;
     }
-    const auto& seg = segments_[static_cast<size_t>(currentSegment_)];
-    return static_cast<int>((seg.size + static_cast<uint64_t>(bytesPerRow_) - 1)
-                            / static_cast<uint64_t>(bytesPerRow_));
+    const auto& seg = _segments[static_cast<size_t>(_current_segment)];
+    return static_cast<int>((seg.size + static_cast<uint64_t>(_bytes_per_row) - 1)
+                            / static_cast<uint64_t>(_bytes_per_row));
 }
 
 int MemoryMapModel::bytesPerRow() const {
-    return bytesPerRow_;
+    return _bytes_per_row;
 }
 
 void MemoryMapModel::setBytesPerRow(int bpr) {
     if (bpr != 8 && bpr != 16 && bpr != 32) {
         return;
     }
-    if (bytesPerRow_ == bpr) {
+    if (_bytes_per_row == bpr) {
         return;
     }
-    bytesPerRow_ = bpr;
+    _bytes_per_row = bpr;
     emit bytesPerRowChanged();
     emit currentSegmentChanged(); // totalRows changed too
 }
 
 int MemoryMapModel::objectCount() const {
-    return static_cast<int>(filteredObjects_.size());
+    return static_cast<int>(_filtered_objects.size());
 }
 
 int MemoryMapModel::totalObjectCount() const {
-    return static_cast<int>(allObjects_.size());
+    return static_cast<int>(_all_objects.size());
 }
 
 int MemoryMapModel::excludedMeasurementCount() const {
-    return excludedMeasurements_;
+    return _excluded_measurements;
 }
 
 int MemoryMapModel::objectAtAddress(quint64 address) const {
     // Binary search: find the last object whose address <= target address,
     // then check if the address falls within [obj.address, obj.address + obj.size).
-    if (filteredObjects_.empty()) {
+    if (_filtered_objects.empty()) {
         return -1;
     }
 
     // Upper bound on address, then step back.
     auto it = std::upper_bound(
-        filteredObjects_.begin(), filteredObjects_.end(), address,
+        _filtered_objects.begin(), _filtered_objects.end(), address,
         [](uint64_t addr, const MemoryObject* obj) {
             return addr < obj->address;
         });
 
     // Check candidates backwards (there may be overlapping objects).
-    while (it != filteredObjects_.begin()) {
+    while (it != _filtered_objects.begin()) {
         --it;
         const MemoryObject* obj = *it;
         if (obj->address + obj->size <= address) {
@@ -157,7 +157,7 @@ int MemoryMapModel::objectAtAddress(quint64 address) const {
             break;
         }
         if (obj->address <= address && address < obj->address + obj->size) {
-            return static_cast<int>(std::distance(filteredObjects_.begin(), it));
+            return static_cast<int>(std::distance(_filtered_objects.begin(), it));
         }
     }
     return -1;
@@ -165,12 +165,12 @@ int MemoryMapModel::objectAtAddress(quint64 address) const {
 
 QVariantList MemoryMapModel::objectsInRange(quint64 startAddr, quint64 endAddr) const {
     QVariantList result;
-    if (filteredObjects_.empty() || startAddr >= endAddr) {
+    if (_filtered_objects.empty() || startAddr >= endAddr) {
         return result;
     }
 
-    for (size_t i = 0; i < filteredObjects_.size(); ++i) {
-        const MemoryObject* obj = filteredObjects_[i];
+    for (size_t i = 0; i < _filtered_objects.size(); ++i) {
+        const MemoryObject* obj = _filtered_objects[i];
         uint64_t objEnd = obj->address + obj->size;
         if (objEnd <= startAddr) {
             continue;
@@ -184,22 +184,22 @@ QVariantList MemoryMapModel::objectsInRange(quint64 startAddr, quint64 endAddr) 
 }
 
 int MemoryMapModel::rowForAddress(quint64 address) const {
-    if (segments_.empty()) {
+    if (_segments.empty()) {
         return 0;
     }
-    uint64_t start = segments_[static_cast<size_t>(currentSegment_)].address;
+    uint64_t start = _segments[static_cast<size_t>(_current_segment)].address;
     if (address < start) {
         return 0;
     }
-    return static_cast<int>((address - start) / static_cast<uint64_t>(bytesPerRow_));
+    return static_cast<int>((address - start) / static_cast<uint64_t>(_bytes_per_row));
 }
 
 int MemoryMapModel::objectIndexForNodeKey(quint64 nodeKey) const {
     if (nodeKey == 0) {
         return -1;
     }
-    for (size_t i = 0; i < filteredObjects_.size(); ++i) {
-        if (filteredObjects_[i]->nodeKey == nodeKey) {
+    for (size_t i = 0; i < _filtered_objects.size(); ++i) {
+        if (_filtered_objects[i]->nodeKey == nodeKey) {
             return static_cast<int>(i);
         }
     }
@@ -207,36 +207,36 @@ int MemoryMapModel::objectIndexForNodeKey(quint64 nodeKey) const {
 }
 
 quint64 MemoryMapModel::objectAddress(int objectIndex) const {
-    if (objectIndex < 0 || static_cast<size_t>(objectIndex) >= filteredObjects_.size()) {
+    if (objectIndex < 0 || static_cast<size_t>(objectIndex) >= _filtered_objects.size()) {
         return 0;
     }
-    return filteredObjects_[static_cast<size_t>(objectIndex)]->address;
+    return _filtered_objects[static_cast<size_t>(objectIndex)]->address;
 }
 
 void MemoryMapModel::addSegment(MemorySegmentInfo seg) {
-    segments_.push_back(std::move(seg));
+    _segments.push_back(std::move(seg));
 }
 
 void MemoryMapModel::addObject(MemoryObject obj) {
-    allObjects_.push_back(std::move(obj));
+    _all_objects.push_back(std::move(obj));
 }
 
 void MemoryMapModel::setExcludedMeasurementCount(int count) {
-    excludedMeasurements_ = count;
+    _excluded_measurements = count;
 }
 
 void MemoryMapModel::finalize() {
     // Sort all objects by address.
-    std::sort(allObjects_.begin(), allObjects_.end(),
+    std::sort(_all_objects.begin(), _all_objects.end(),
               [](const MemoryObject& a, const MemoryObject& b) {
                   return a.address < b.address;
               });
 
     // If no segments, derive a synthetic one from object extents.
-    if (segments_.empty() && !allObjects_.empty()) {
-        uint64_t minAddr = allObjects_.front().address;
+    if (_segments.empty() && !_all_objects.empty()) {
+        uint64_t minAddr = _all_objects.front().address;
         uint64_t maxAddr = 0;
-        for (const auto& obj : allObjects_) {
+        for (const auto& obj : _all_objects) {
             uint64_t end = obj.address + (obj.size > 0 ? obj.size : 1);
             if (end > maxAddr) {
                 maxAddr = end;
@@ -252,7 +252,7 @@ void MemoryMapModel::finalize() {
         synthetic.address = minAddr;
         synthetic.size = maxAddr - minAddr;
         synthetic.synthetic = true;
-        segments_.push_back(std::move(synthetic));
+        _segments.push_back(std::move(synthetic));
     }
 
     emit segmentsChanged();
@@ -261,17 +261,17 @@ void MemoryMapModel::finalize() {
 
 void MemoryMapModel::rebuildFilteredObjects() {
     beginResetModel();
-    filteredObjects_.clear();
+    _filtered_objects.clear();
 
-    if (!segments_.empty()) {
-        const auto& seg = segments_[static_cast<size_t>(currentSegment_)];
+    if (!_segments.empty()) {
+        const auto& seg = _segments[static_cast<size_t>(_current_segment)];
         uint64_t segStart = seg.address;
         uint64_t segEnd = seg.address + seg.size;
 
-        for (auto& obj : allObjects_) {
+        for (auto& obj : _all_objects) {
             uint64_t objEnd = obj.address + (obj.size > 0 ? obj.size : 1);
             if (objEnd > segStart && obj.address < segEnd) {
-                filteredObjects_.push_back(&obj);
+                _filtered_objects.push_back(&obj);
             }
         }
     }

@@ -69,15 +69,15 @@ private:
     void onLoadFinished();
     void setFileLoading(bool loading);
 
-    FormatRegistry formatRegistry_;
-    TabModel tabModel_;
-    TreeModel emptyTreeModel_;
-    DetailModel emptyDetailModel_;
-    std::vector<std::unique_ptr<QLibrary>> loadedBackends_;
-    int currentTabIndex_ = -1;
-    QString lastError_;
-    bool fileLoading_ = false;
-    QFutureWatcher<std::shared_ptr<LoadResult>> loadWatcher_;
-    bool startupLoading_ = true;
-    QString startupStatusText_ = QStringLiteral("Loading\u2026");
+    FormatRegistry _format_registry;
+    TabModel _tab_model;
+    TreeModel _empty_tree_model;
+    DetailModel _empty_detail_model;
+    std::vector<std::unique_ptr<QLibrary>> _loaded_backends;
+    int _current_tab_index = -1;
+    QString _last_error;
+    bool _file_loading = false;
+    QFutureWatcher<std::shared_ptr<LoadResult>> _load_watcher;
+    bool _startup_loading = true;
+    QString _startup_status_text = QStringLiteral("Loading\u2026");
 };

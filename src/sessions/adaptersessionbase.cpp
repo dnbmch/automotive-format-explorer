@@ -7,78 +7,78 @@ AdapterSessionBase::AdapterSessionBase(FormatId formatId,
                                        QString displayName,
                                        QString sourcePath,
                                        QList<DiagnosticMessage> diagnostics)
-    : formatId_(formatId),
-      formatName_(std::move(formatName)),
-      displayName_(std::move(displayName)),
-      sourcePath_(std::move(sourcePath)),
-      diagnostics_(std::move(diagnostics)) {
+    : _format_id(formatId),
+      _format_name(std::move(formatName)),
+      _display_name(std::move(displayName)),
+      _source_path(std::move(sourcePath)),
+      _diagnostics(std::move(diagnostics)) {
 }
 
 FormatId AdapterSessionBase::formatId() const {
-    return formatId_;
+    return _format_id;
 }
 
 QString AdapterSessionBase::formatName() const {
-    return formatName_;
+    return _format_name;
 }
 
 QString AdapterSessionBase::displayName() const {
-    return displayName_;
+    return _display_name;
 }
 
 QString AdapterSessionBase::sourcePath() const {
-    return sourcePath_;
+    return _source_path;
 }
 
 TreeModel* AdapterSessionBase::treeModel() {
-    return &treeModel_;
+    return &_tree_model;
 }
 
 DetailModel* AdapterSessionBase::detailModel() {
-    return &detailModel_;
+    return &_detail_model;
 }
 
 QList<DiagnosticMessage> AdapterSessionBase::diagnostics() const {
-    return diagnostics_;
+    return _diagnostics;
 }
 
 bool AdapterSessionBase::hasWarnings() const {
-    return ::hasWarnings(diagnostics_);
+    return ::hasWarnings(_diagnostics);
 }
 
 void AdapterSessionBase::selectNode(quint64 key) {
-    if (!detailPresenter_) {
-        detailModel_.setSections({});
-        detailModel_.setRawJsonText({});
+    if (!_detail_presenter) {
+        _detail_model.setSections({});
+        _detail_model.setRawJsonText({});
         return;
     }
 
-    const NodeBinding* binding = registry_.resolve(NodeRef{formatId_, key});
+    const NodeBinding* binding = _registry.resolve(NodeRef{_format_id, key});
     if (!binding || !binding->selectable) {
-        detailModel_.setSections({});
-        detailModel_.setRawJsonText({});
+        _detail_model.setSections({});
+        _detail_model.setRawJsonText({});
         return;
     }
 
-    detailModel_.setSections(detailPresenter_->buildDetails(*binding));
-    detailModel_.setRawJsonText(detailPresenter_->buildRawJson(*binding));
+    _detail_model.setSections(_detail_presenter->buildDetails(*binding));
+    _detail_model.setRawJsonText(_detail_presenter->buildRawJson(*binding));
 }
 
 void AdapterSessionBase::moveModelsToThread(QThread* thread) {
-    treeModel_.moveToThread(thread);
-    detailModel_.moveToThread(thread);
+    _tree_model.moveToThread(thread);
+    _detail_model.moveToThread(thread);
 }
 
 void AdapterSessionBase::setRootItem(std::unique_ptr<TreeItem> root) {
-    treeModel_.setRoot(std::move(root));
+    _tree_model.setRoot(std::move(root));
 }
 
 void AdapterSessionBase::setDetailPresenter(std::unique_ptr<DetailPresenter> presenter) {
-    detailPresenter_ = std::move(presenter);
+    _detail_presenter = std::move(presenter);
 }
 
 NodeRef AdapterSessionBase::bindNode(NodeBinding binding) {
-    return registry_.registerBinding(formatId_, std::move(binding));
+    return _registry.registerBinding(_format_id, std::move(binding));
 }
 
 TreeItem* AdapterSessionBase::appendNode(TreeItem* parent,

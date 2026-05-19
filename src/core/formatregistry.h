@@ -11,5 +11,5 @@ public:
     const FormatAdapter* adapterForPath(const QString& path) const;
 
 private:
-    std::vector<std::unique_ptr<FormatAdapter>> adapters_;
+    std::vector<std::unique_ptr<FormatAdapter>> _adapters;
 };

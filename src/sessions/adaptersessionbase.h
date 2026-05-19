@@ -40,15 +40,15 @@ protected:
                          SemanticKind semanticKind,
                          std::optional<NodeBinding> binding = std::nullopt);
 
-    NodeRegistry registry_;
-    TreeModel treeModel_;
-    DetailModel detailModel_;
+    NodeRegistry _registry;
+    TreeModel _tree_model;
+    DetailModel _detail_model;
 
 private:
-    FormatId formatId_ = FormatId::Unknown;
-    QString formatName_;
-    QString displayName_;
-    QString sourcePath_;
-    QList<DiagnosticMessage> diagnostics_;
-    std::unique_ptr<DetailPresenter> detailPresenter_;
+    FormatId _format_id = FormatId::Unknown;
+    QString _format_name;
+    QString _display_name;
+    QString _source_path;
+    QList<DiagnosticMessage> _diagnostics;
+    std::unique_ptr<DetailPresenter> _detail_presenter;
 };

@@ -85,7 +85,7 @@ See workspace [CLAUDE.md "Code Conventions"](../CLAUDE.md). Repo-specific except
 
 - Qt 6 + QML is the entire UI layer. The workspace "no Qt" rule applies to the parser/library repos, not here.
 
-Existing private members use `snake_case_` (trailing underscore); the source rewrite to `_snake_case` is tracked as BL-W1 in workspace [BACKLOG.md](../BACKLOG.md). `a2ldocumentsession.cpp` is ~2300 LOC and is queued for splitting along clear concern boundaries.
+`a2ldocumentsession.cpp` is ~2300 LOC and is queued for splitting along clear concern boundaries.
 
 ## Commits on dnbmch org
 

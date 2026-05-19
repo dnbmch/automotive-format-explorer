@@ -83,7 +83,7 @@ void pushSection(QList<DetailSection>& sections, const QString& title, QList<Det
 class LdfDetailPresenter final : public DetailPresenter {
 public:
     explicit LdfDetailPresenter(const ldf::LdfFile& document)
-        : document_(document) {
+        : _document(document) {
     }
 
     QList<DetailSection> buildDetails(const NodeBinding& binding) const override {
@@ -96,10 +96,10 @@ public:
         case LdfEntityKind::Overview:
             return overviewDetails();
         case LdfEntityKind::MasterNode:
-            return nodeDetails(document_.master(), true);
+            return nodeDetails(_document.master(), true);
         case LdfEntityKind::SlaveNode:
-            return path.primaryIndex >= 0 && path.primaryIndex < document_.slaves_size()
-                ? nodeDetails(document_.slaves(path.primaryIndex), false)
+            return path.primaryIndex >= 0 && path.primaryIndex < _document.slaves_size()
+                ? nodeDetails(_document.slaves(path.primaryIndex), false)
                 : QList<DetailSection>{};
         case LdfEntityKind::Frame:
             return frameDetails(path);
@@ -138,18 +138,18 @@ public:
 
         switch (path.kind) {
         case LdfEntityKind::Overview:          break;
-        case LdfEntityKind::MasterNode:        if (document_.has_master()) msg = &document_.master(); break;
-        case LdfEntityKind::SlaveNode:         if (i >= 0 && i < document_.slaves_size()) msg = &document_.slaves(i); break;
-        case LdfEntityKind::Frame:             if (i >= 0 && i < document_.frames_size()) msg = &document_.frames(i); break;
-        case LdfEntityKind::FrameSignal:       if (i >= 0 && i < document_.frames_size() && j >= 0 && j < document_.frames(i).signals_size()) msg = &document_.frames(i).signals(j); break;
-        case LdfEntityKind::Signal:            if (i >= 0 && i < document_.signals_size()) msg = &document_.signals(i); break;
-        case LdfEntityKind::Encoding:          if (i >= 0 && i < document_.signal_encoding_types_size()) msg = &document_.signal_encoding_types(i); break;
-        case LdfEntityKind::ScheduleTable:     if (i >= 0 && i < document_.schedule_tables_size()) msg = &document_.schedule_tables(i); break;
-        case LdfEntityKind::EventFrame:        if (i >= 0 && i < document_.event_triggered_frames_size()) msg = &document_.event_triggered_frames(i); break;
-        case LdfEntityKind::DiagnosticAddress: if (i >= 0 && i < document_.diagnostic_addresses_size()) msg = &document_.diagnostic_addresses(i); break;
-        case LdfEntityKind::SignalGroup:       if (i >= 0 && i < document_.signal_groups_size()) msg = &document_.signal_groups(i); break;
-        case LdfEntityKind::DiagnosticSignal:  if (i >= 0 && i < document_.diagnostic_signals_size()) msg = &document_.diagnostic_signals(i); break;
-        case LdfEntityKind::DiagnosticFrame:   if (i >= 0 && i < document_.diagnostic_frames_size()) msg = &document_.diagnostic_frames(i); break;
+        case LdfEntityKind::MasterNode:        if (_document.has_master()) msg = &_document.master(); break;
+        case LdfEntityKind::SlaveNode:         if (i >= 0 && i < _document.slaves_size()) msg = &_document.slaves(i); break;
+        case LdfEntityKind::Frame:             if (i >= 0 && i < _document.frames_size()) msg = &_document.frames(i); break;
+        case LdfEntityKind::FrameSignal:       if (i >= 0 && i < _document.frames_size() && j >= 0 && j < _document.frames(i).signals_size()) msg = &_document.frames(i).signals(j); break;
+        case LdfEntityKind::Signal:            if (i >= 0 && i < _document.signals_size()) msg = &_document.signals(i); break;
+        case LdfEntityKind::Encoding:          if (i >= 0 && i < _document.signal_encoding_types_size()) msg = &_document.signal_encoding_types(i); break;
+        case LdfEntityKind::ScheduleTable:     if (i >= 0 && i < _document.schedule_tables_size()) msg = &_document.schedule_tables(i); break;
+        case LdfEntityKind::EventFrame:        if (i >= 0 && i < _document.event_triggered_frames_size()) msg = &_document.event_triggered_frames(i); break;
+        case LdfEntityKind::DiagnosticAddress: if (i >= 0 && i < _document.diagnostic_addresses_size()) msg = &_document.diagnostic_addresses(i); break;
+        case LdfEntityKind::SignalGroup:       if (i >= 0 && i < _document.signal_groups_size()) msg = &_document.signal_groups(i); break;
+        case LdfEntityKind::DiagnosticSignal:  if (i >= 0 && i < _document.diagnostic_signals_size()) msg = &_document.diagnostic_signals(i); break;
+        case LdfEntityKind::DiagnosticFrame:   if (i >= 0 && i < _document.diagnostic_frames_size()) msg = &_document.diagnostic_frames(i); break;
         }
 
         if (!msg) {
@@ -168,8 +168,8 @@ public:
 
 private:
     const ldf::Signal* findSignal(const std::string& name) const {
-        for (int i = 0; i < document_.signals_size(); ++i) {
-            const auto& signal = document_.signals(i);
+        for (int i = 0; i < _document.signals_size(); ++i) {
+            const auto& signal = _document.signals(i);
             if (signal.name() == name) {
                 return &signal;
             }
@@ -182,28 +182,28 @@ private:
         pushSection(sections,
                     QStringLiteral("Header"),
                     {
-                        DetailField{QStringLiteral("LIN Protocol"), text(document_.lin_protocol_version())},
-                        DetailField{QStringLiteral("Language Version"), text(document_.lin_language_version())},
-                        DetailField{QStringLiteral("Speed (kbps)"), numberText(document_.lin_speed_kbps())},
-                        DetailField{QStringLiteral("Channel"), text(document_.channel_name())},
-                        DetailField{QStringLiteral("LDF Revision"), text(document_.ldf_file_revision())},
-                        DetailField{QStringLiteral("Big Endian Signals"), boolText(document_.big_endian_signals())},
+                        DetailField{QStringLiteral("LIN Protocol"), text(_document.lin_protocol_version())},
+                        DetailField{QStringLiteral("Language Version"), text(_document.lin_language_version())},
+                        DetailField{QStringLiteral("Speed (kbps)"), numberText(_document.lin_speed_kbps())},
+                        DetailField{QStringLiteral("Channel"), text(_document.channel_name())},
+                        DetailField{QStringLiteral("LDF Revision"), text(_document.ldf_file_revision())},
+                        DetailField{QStringLiteral("Big Endian Signals"), boolText(_document.big_endian_signals())},
                     });
 
         pushSection(sections,
                     QStringLiteral("Contents"),
                     {
-                        DetailField{QStringLiteral("Master Node"), document_.has_master() ? text(document_.master().name()) : QStringLiteral("Not defined")},
-                        DetailField{QStringLiteral("Slave Nodes"), numberText(document_.slaves_size())},
-                        DetailField{QStringLiteral("Signals"), numberText(document_.signals_size())},
-                        DetailField{QStringLiteral("Frames"), numberText(document_.frames_size())},
-                        DetailField{QStringLiteral("Signal Encodings"), numberText(document_.signal_encoding_types_size())},
-                        DetailField{QStringLiteral("Schedule Tables"), numberText(document_.schedule_tables_size())},
-                        DetailField{QStringLiteral("Event Frames"), numberText(document_.event_triggered_frames_size())},
-                        DetailField{QStringLiteral("Diagnostic Addresses"), numberText(document_.diagnostic_addresses_size())},
-                        DetailField{QStringLiteral("Signal Groups"), numberText(document_.signal_groups_size())},
-                        DetailField{QStringLiteral("Diagnostic Signals"), numberText(document_.diagnostic_signals_size())},
-                        DetailField{QStringLiteral("Diagnostic Frames"), numberText(document_.diagnostic_frames_size())},
+                        DetailField{QStringLiteral("Master Node"), _document.has_master() ? text(_document.master().name()) : QStringLiteral("Not defined")},
+                        DetailField{QStringLiteral("Slave Nodes"), numberText(_document.slaves_size())},
+                        DetailField{QStringLiteral("Signals"), numberText(_document.signals_size())},
+                        DetailField{QStringLiteral("Frames"), numberText(_document.frames_size())},
+                        DetailField{QStringLiteral("Signal Encodings"), numberText(_document.signal_encoding_types_size())},
+                        DetailField{QStringLiteral("Schedule Tables"), numberText(_document.schedule_tables_size())},
+                        DetailField{QStringLiteral("Event Frames"), numberText(_document.event_triggered_frames_size())},
+                        DetailField{QStringLiteral("Diagnostic Addresses"), numberText(_document.diagnostic_addresses_size())},
+                        DetailField{QStringLiteral("Signal Groups"), numberText(_document.signal_groups_size())},
+                        DetailField{QStringLiteral("Diagnostic Signals"), numberText(_document.diagnostic_signals_size())},
+                        DetailField{QStringLiteral("Diagnostic Frames"), numberText(_document.diagnostic_frames_size())},
                     });
         return sections;
     }
@@ -249,11 +249,11 @@ private:
 
     QList<DetailSection> frameDetails(const LdfPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.frames_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.frames_size()) {
             return sections;
         }
 
-        const auto& frame = document_.frames(path.primaryIndex);
+        const auto& frame = _document.frames(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Identity"),
                     {
@@ -294,11 +294,11 @@ private:
 
     QList<DetailSection> frameSignalDetails(const LdfPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.frames_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.frames_size()) {
             return sections;
         }
 
-        const auto& frame = document_.frames(path.primaryIndex);
+        const auto& frame = _document.frames(path.primaryIndex);
         if (path.secondaryIndex < 0 || path.secondaryIndex >= frame.signals_size()) {
             return sections;
         }
@@ -332,11 +332,11 @@ private:
 
     QList<DetailSection> signalDetails(const LdfPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.signals_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.signals_size()) {
             return sections;
         }
 
-        const auto& signal = document_.signals(path.primaryIndex);
+        const auto& signal = _document.signals(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Identity"),
                     {
@@ -366,11 +366,11 @@ private:
 
     QList<DetailSection> encodingDetails(const LdfPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.signal_encoding_types_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.signal_encoding_types_size()) {
             return sections;
         }
 
-        const auto& encoding = document_.signal_encoding_types(path.primaryIndex);
+        const auto& encoding = _document.signal_encoding_types(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Encoding"),
                     {
@@ -394,11 +394,11 @@ private:
 
     QList<DetailSection> scheduleDetails(const LdfPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.schedule_tables_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.schedule_tables_size()) {
             return sections;
         }
 
-        const auto& schedule = document_.schedule_tables(path.primaryIndex);
+        const auto& schedule = _document.schedule_tables(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Schedule"),
                     {
@@ -416,11 +416,11 @@ private:
 
     QList<DetailSection> eventFrameDetails(const LdfPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.event_triggered_frames_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.event_triggered_frames_size()) {
             return sections;
         }
 
-        const auto& frame = document_.event_triggered_frames(path.primaryIndex);
+        const auto& frame = _document.event_triggered_frames(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Event Frame"),
                     {
@@ -434,11 +434,11 @@ private:
 
     QList<DetailSection> diagnosticAddressDetails(const LdfPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.diagnostic_addresses_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.diagnostic_addresses_size()) {
             return sections;
         }
 
-        const auto& address = document_.diagnostic_addresses(path.primaryIndex);
+        const auto& address = _document.diagnostic_addresses(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Diagnostic Address"),
                     {
@@ -450,11 +450,11 @@ private:
 
     QList<DetailSection> signalGroupDetails(const LdfPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.signal_groups_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.signal_groups_size()) {
             return sections;
         }
 
-        const auto& group = document_.signal_groups(path.primaryIndex);
+        const auto& group = _document.signal_groups(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Signal Group"),
                     {
@@ -467,11 +467,11 @@ private:
 
     QList<DetailSection> diagnosticSignalDetails(const LdfPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.diagnostic_signals_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.diagnostic_signals_size()) {
             return sections;
         }
 
-        const auto& signal = document_.diagnostic_signals(path.primaryIndex);
+        const auto& signal = _document.diagnostic_signals(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Diagnostic Signal"),
                     {
@@ -484,11 +484,11 @@ private:
 
     QList<DetailSection> diagnosticFrameDetails(const LdfPath& path) const {
         QList<DetailSection> sections;
-        if (path.primaryIndex < 0 || path.primaryIndex >= document_.diagnostic_frames_size()) {
+        if (path.primaryIndex < 0 || path.primaryIndex >= _document.diagnostic_frames_size()) {
             return sections;
         }
 
-        const auto& frame = document_.diagnostic_frames(path.primaryIndex);
+        const auto& frame = _document.diagnostic_frames(path.primaryIndex);
         pushSection(sections,
                     QStringLiteral("Diagnostic Frame"),
                     {
@@ -528,8 +528,8 @@ private:
 
     void appendEncodingCrossReferences(QList<DetailSection>& sections, const std::string& encodingName) const {
         QStringList signalRefs;
-        for (int i = 0; i < document_.signals_size(); ++i) {
-            const auto& signal = document_.signals(i);
+        for (int i = 0; i < _document.signals_size(); ++i) {
+            const auto& signal = _document.signals(i);
             if (signal.has_encoding() && signal.encoding().encoding_name() == encodingName) {
                 signalRefs.push_back(text(signal.name()));
             }
@@ -549,15 +549,15 @@ private:
         QStringList publishedSignals;
         QStringList subscribedSignals;
 
-        for (int i = 0; i < document_.frames_size(); ++i) {
-            const auto& frame = document_.frames(i);
+        for (int i = 0; i < _document.frames_size(); ++i) {
+            const auto& frame = _document.frames(i);
             if (frame.publisher() == nodeName) {
                 publishedFrames.push_back(text(frame.name()));
             }
         }
 
-        for (int i = 0; i < document_.signals_size(); ++i) {
-            const auto& signal = document_.signals(i);
+        for (int i = 0; i < _document.signals_size(); ++i) {
+            const auto& signal = _document.signals(i);
             if (signal.publisher() == nodeName) {
                 publishedSignals.push_back(text(signal.name()));
             }
@@ -588,7 +588,7 @@ private:
         pushSection(sections, QStringLiteral("Referenced By"), std::move(fields));
     }
 
-    const ldf::LdfFile& document_;
+    const ldf::LdfFile& _document;
 };
 
 } // namespace
@@ -602,8 +602,8 @@ LdfDocumentSession::LdfDocumentSession(QString displayName,
                          std::move(displayName),
                          std::move(sourcePath),
                          std::move(diagnostics)),
-      document_(std::move(document)) {
-    setDetailPresenter(std::make_unique<LdfDetailPresenter>(document_));
+      _document(std::move(document)) {
+    setDetailPresenter(std::make_unique<LdfDetailPresenter>(_document));
     buildTree();
     buildSignalMap();
 }
@@ -611,20 +611,20 @@ LdfDocumentSession::LdfDocumentSession(QString displayName,
 LdfDocumentSession::~LdfDocumentSession() = default;
 
 QUrl LdfDocumentSession::centerPanelSource() const {
-    if (signalMapModel_ && signalMapModel_->messageCount() > 0) {
+    if (_signal_map_model && _signal_map_model->messageCount() > 0) {
         return QUrl(QStringLiteral("qrc:/qt/qml/ExplorerApp/qml/components/SignalMapView.qml"));
     }
     return {};
 }
 
 QAbstractListModel* LdfDocumentSession::centerPanelModel() {
-    return signalMapModel_.get();
+    return _signal_map_model.get();
 }
 
 void LdfDocumentSession::moveModelsToThread(QThread* thread) {
     AdapterSessionBase::moveModelsToThread(thread);
-    if (signalMapModel_)
-        signalMapModel_->moveToThread(thread);
+    if (_signal_map_model)
+        _signal_map_model->moveToThread(thread);
 }
 
 void LdfDocumentSession::buildTree() {
@@ -635,30 +635,30 @@ void LdfDocumentSession::buildTree() {
     appendNode(root.get(),
                QStringLiteral("Overview"),
                QStringLiteral("LIN %1  %2 kbps")
-                   .arg(text(document_.lin_protocol_version()))
-                   .arg(numberText(document_.lin_speed_kbps())),
+                   .arg(text(_document.lin_protocol_version()))
+                   .arg(numberText(_document.lin_speed_kbps())),
                QStringLiteral("overview"),
                SemanticKind::Entity,
                NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::Overview, 0, -1, -1}, true});
 
-    if (document_.has_master() || document_.slaves_size() > 0) {
+    if (_document.has_master() || _document.slaves_size() > 0) {
         TreeItem* nodes = appendNode(root.get(),
                                      QStringLiteral("Nodes"),
-                                     QString::number((document_.has_master() ? 1 : 0) + document_.slaves_size()),
+                                     QString::number((_document.has_master() ? 1 : 0) + _document.slaves_size()),
                                      QStringLiteral("nodes"),
                                      SemanticKind::Section);
 
-        if (document_.has_master()) {
+        if (_document.has_master()) {
             appendNode(nodes,
-                       text(document_.master().name()),
+                       text(_document.master().name()),
                        QStringLiteral("master"),
                        QStringLiteral("master"),
                        SemanticKind::Entity,
                        NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::MasterNode, 0, -1, -1}, true});
         }
 
-        for (int i = 0; i < document_.slaves_size(); ++i) {
-            const auto& slave = document_.slaves(i);
+        for (int i = 0; i < _document.slaves_size(); ++i) {
+            const auto& slave = _document.slaves(i);
             const QString subtitle = slave.has_attributes()
                 ? hexValue(slave.attributes().configured_nad())
                 : QStringLiteral("slave");
@@ -671,10 +671,10 @@ void LdfDocumentSession::buildTree() {
         }
     }
 
-    if (document_.signals_size() > 0) {
-        TreeItem* signals = appendNode(root.get(), QStringLiteral("Signals"), QString::number(document_.signals_size()), QStringLiteral("signals"), SemanticKind::Section);
-        for (int i = 0; i < document_.signals_size(); ++i) {
-            const auto& signal = document_.signals(i);
+    if (_document.signals_size() > 0) {
+        TreeItem* signals = appendNode(root.get(), QStringLiteral("Signals"), QString::number(_document.signals_size()), QStringLiteral("signals"), SemanticKind::Section);
+        for (int i = 0; i < _document.signals_size(); ++i) {
+            const auto& signal = _document.signals(i);
             TreeItem* sigNode = appendNode(signals,
                        text(signal.name()),
                        QStringLiteral("%1 bits").arg(signal.bit_length()),
@@ -682,22 +682,22 @@ void LdfDocumentSession::buildTree() {
                        SemanticKind::Entity,
                        NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::Signal, i, -1, -1}, true});
             if (sigNode->nodeKey) {
-                treeNodeKeys_[{static_cast<int>(LdfEntityKind::Signal), i, -1}] = sigNode->nodeKey;
+                _tree_node_keys[{static_cast<int>(LdfEntityKind::Signal), i, -1}] = sigNode->nodeKey;
             }
         }
     }
 
-    if (document_.frames_size() > 0) {
-        TreeItem* frames = appendNode(root.get(), QStringLiteral("Frames"), QString::number(document_.frames_size()), QStringLiteral("frames"), SemanticKind::Section);
-        for (int i = 0; i < document_.frames_size(); ++i) {
-            const auto& frame = document_.frames(i);
+    if (_document.frames_size() > 0) {
+        TreeItem* frames = appendNode(root.get(), QStringLiteral("Frames"), QString::number(_document.frames_size()), QStringLiteral("frames"), SemanticKind::Section);
+        for (int i = 0; i < _document.frames_size(); ++i) {
+            const auto& frame = _document.frames(i);
             TreeItem* frameItem = appendNode(frames,
                                              text(frame.name()),
                                              QStringLiteral("%1  %2B").arg(hexValue(frame.id())).arg(frame.length()),
                                              QStringLiteral("frame"),
                                              SemanticKind::Entity,
                                              NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::Frame, i, -1, -1}, true});
-            treeNodeKeys_[{static_cast<int>(LdfEntityKind::Frame), i, -1}] = frameItem->nodeKey;
+            _tree_node_keys[{static_cast<int>(LdfEntityKind::Frame), i, -1}] = frameItem->nodeKey;
 
             for (int j = 0; j < frame.signals_size(); ++j) {
                 const auto& signal = frame.signals(j);
@@ -707,15 +707,15 @@ void LdfDocumentSession::buildTree() {
                            QStringLiteral("framesignal"),
                            SemanticKind::Entity,
                            NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::FrameSignal, i, j, -1}, true});
-                treeNodeKeys_[{static_cast<int>(LdfEntityKind::FrameSignal), i, j}] = sigItem->nodeKey;
+                _tree_node_keys[{static_cast<int>(LdfEntityKind::FrameSignal), i, j}] = sigItem->nodeKey;
             }
         }
     }
 
-    if (document_.signal_encoding_types_size() > 0) {
-        TreeItem* encodings = appendNode(root.get(), QStringLiteral("Signal Encodings"), QString::number(document_.signal_encoding_types_size()), QStringLiteral("encodings"), SemanticKind::Section);
-        for (int i = 0; i < document_.signal_encoding_types_size(); ++i) {
-            const auto& encoding = document_.signal_encoding_types(i);
+    if (_document.signal_encoding_types_size() > 0) {
+        TreeItem* encodings = appendNode(root.get(), QStringLiteral("Signal Encodings"), QString::number(_document.signal_encoding_types_size()), QStringLiteral("encodings"), SemanticKind::Section);
+        for (int i = 0; i < _document.signal_encoding_types_size(); ++i) {
+            const auto& encoding = _document.signal_encoding_types(i);
             appendNode(encodings,
                        text(encoding.name()),
                        QStringLiteral("P%1 / L%2").arg(encoding.physical_values_size()).arg(encoding.logical_values_size()),
@@ -725,10 +725,10 @@ void LdfDocumentSession::buildTree() {
         }
     }
 
-    if (document_.schedule_tables_size() > 0) {
-        TreeItem* schedules = appendNode(root.get(), QStringLiteral("Schedule Tables"), QString::number(document_.schedule_tables_size()), QStringLiteral("schedules"), SemanticKind::Section);
-        for (int i = 0; i < document_.schedule_tables_size(); ++i) {
-            const auto& schedule = document_.schedule_tables(i);
+    if (_document.schedule_tables_size() > 0) {
+        TreeItem* schedules = appendNode(root.get(), QStringLiteral("Schedule Tables"), QString::number(_document.schedule_tables_size()), QStringLiteral("schedules"), SemanticKind::Section);
+        for (int i = 0; i < _document.schedule_tables_size(); ++i) {
+            const auto& schedule = _document.schedule_tables(i);
             TreeItem* scheduleItem = appendNode(schedules,
                                                 text(schedule.name()),
                                                 QStringLiteral("%1 entries").arg(schedule.entries_size()),
@@ -746,10 +746,10 @@ void LdfDocumentSession::buildTree() {
         }
     }
 
-    if (document_.event_triggered_frames_size() > 0) {
-        TreeItem* events = appendNode(root.get(), QStringLiteral("Event Triggered Frames"), QString::number(document_.event_triggered_frames_size()), QStringLiteral("events"), SemanticKind::Section);
-        for (int i = 0; i < document_.event_triggered_frames_size(); ++i) {
-            const auto& frame = document_.event_triggered_frames(i);
+    if (_document.event_triggered_frames_size() > 0) {
+        TreeItem* events = appendNode(root.get(), QStringLiteral("Event Triggered Frames"), QString::number(_document.event_triggered_frames_size()), QStringLiteral("events"), SemanticKind::Section);
+        for (int i = 0; i < _document.event_triggered_frames_size(); ++i) {
+            const auto& frame = _document.event_triggered_frames(i);
             appendNode(events,
                        text(frame.name()),
                        hexValue(frame.id()),
@@ -759,10 +759,10 @@ void LdfDocumentSession::buildTree() {
         }
     }
 
-    if (document_.signal_groups_size() > 0) {
-        TreeItem* groups = appendNode(root.get(), QStringLiteral("Signal Groups"), QString::number(document_.signal_groups_size()), QStringLiteral("groups"), SemanticKind::Section);
-        for (int i = 0; i < document_.signal_groups_size(); ++i) {
-            const auto& group = document_.signal_groups(i);
+    if (_document.signal_groups_size() > 0) {
+        TreeItem* groups = appendNode(root.get(), QStringLiteral("Signal Groups"), QString::number(_document.signal_groups_size()), QStringLiteral("groups"), SemanticKind::Section);
+        for (int i = 0; i < _document.signal_groups_size(); ++i) {
+            const auto& group = _document.signal_groups(i);
             appendNode(groups,
                        text(group.name()),
                        QStringLiteral("%1 bits").arg(group.group_size()),
@@ -772,15 +772,15 @@ void LdfDocumentSession::buildTree() {
         }
     }
 
-    if (document_.diagnostic_addresses_size() > 0 ||
-        document_.diagnostic_signals_size() > 0 ||
-        document_.diagnostic_frames_size() > 0) {
+    if (_document.diagnostic_addresses_size() > 0 ||
+        _document.diagnostic_signals_size() > 0 ||
+        _document.diagnostic_frames_size() > 0) {
         TreeItem* diagnostics = appendNode(root.get(), QStringLiteral("Diagnostics"), QString(), QStringLiteral("diagnostics"), SemanticKind::Section);
 
-        if (document_.diagnostic_addresses_size() > 0) {
-            TreeItem* addresses = appendNode(diagnostics, QStringLiteral("Addresses"), QString::number(document_.diagnostic_addresses_size()), QStringLiteral("diag-addresses"), SemanticKind::Section);
-            for (int i = 0; i < document_.diagnostic_addresses_size(); ++i) {
-                const auto& address = document_.diagnostic_addresses(i);
+        if (_document.diagnostic_addresses_size() > 0) {
+            TreeItem* addresses = appendNode(diagnostics, QStringLiteral("Addresses"), QString::number(_document.diagnostic_addresses_size()), QStringLiteral("diag-addresses"), SemanticKind::Section);
+            for (int i = 0; i < _document.diagnostic_addresses_size(); ++i) {
+                const auto& address = _document.diagnostic_addresses(i);
                 appendNode(addresses,
                            text(address.node_name()),
                            hexValue(address.nad()),
@@ -790,10 +790,10 @@ void LdfDocumentSession::buildTree() {
             }
         }
 
-        if (document_.diagnostic_signals_size() > 0) {
-            TreeItem* signals = appendNode(diagnostics, QStringLiteral("Signals"), QString::number(document_.diagnostic_signals_size()), QStringLiteral("diag-signals"), SemanticKind::Section);
-            for (int i = 0; i < document_.diagnostic_signals_size(); ++i) {
-                const auto& signal = document_.diagnostic_signals(i);
+        if (_document.diagnostic_signals_size() > 0) {
+            TreeItem* signals = appendNode(diagnostics, QStringLiteral("Signals"), QString::number(_document.diagnostic_signals_size()), QStringLiteral("diag-signals"), SemanticKind::Section);
+            for (int i = 0; i < _document.diagnostic_signals_size(); ++i) {
+                const auto& signal = _document.diagnostic_signals(i);
                 appendNode(signals,
                            text(signal.name()),
                            QStringLiteral("%1 bits").arg(signal.bit_length()),
@@ -803,10 +803,10 @@ void LdfDocumentSession::buildTree() {
             }
         }
 
-        if (document_.diagnostic_frames_size() > 0) {
-            TreeItem* frames = appendNode(diagnostics, QStringLiteral("Frames"), QString::number(document_.diagnostic_frames_size()), QStringLiteral("diag-frames"), SemanticKind::Section);
-            for (int i = 0; i < document_.diagnostic_frames_size(); ++i) {
-                const auto& frame = document_.diagnostic_frames(i);
+        if (_document.diagnostic_frames_size() > 0) {
+            TreeItem* frames = appendNode(diagnostics, QStringLiteral("Frames"), QString::number(_document.diagnostic_frames_size()), QStringLiteral("diag-frames"), SemanticKind::Section);
+            for (int i = 0; i < _document.diagnostic_frames_size(); ++i) {
+                const auto& frame = _document.diagnostic_frames(i);
                 appendNode(frames,
                            text(frame.name()),
                            hexValue(frame.id()),
@@ -821,16 +821,16 @@ void LdfDocumentSession::buildTree() {
 }
 
 void LdfDocumentSession::buildSignalMap() {
-    signalMapModel_ = std::make_unique<SignalMapModel>();
+    _signal_map_model = std::make_unique<SignalMapModel>();
 
     // Build signal lookup by name for enrichment.
     std::unordered_map<std::string, const ldf::Signal*> signalLookup;
-    for (int i = 0; i < document_.signals_size(); ++i) {
-        signalLookup[document_.signals(i).name()] = &document_.signals(i);
+    for (int i = 0; i < _document.signals_size(); ++i) {
+        signalLookup[_document.signals(i).name()] = &_document.signals(i);
     }
 
-    for (int i = 0; i < document_.frames_size(); ++i) {
-        const auto& frame = document_.frames(i);
+    for (int i = 0; i < _document.frames_size(); ++i) {
+        const auto& frame = _document.frames(i);
 
         MessageEntry entry;
         entry.name = text(frame.name());
@@ -839,8 +839,8 @@ void LdfDocumentSession::buildSignalMap() {
         entry.isExtendedId = false;
         entry.sender = text(frame.publisher());
 
-        auto keyIt = treeNodeKeys_.find({static_cast<int>(LdfEntityKind::Frame), i, -1});
-        if (keyIt != treeNodeKeys_.end()) entry.nodeKey = keyIt->second;
+        auto keyIt = _tree_node_keys.find({static_cast<int>(LdfEntityKind::Frame), i, -1});
+        if (keyIt != _tree_node_keys.end()) entry.nodeKey = keyIt->second;
 
         for (int j = 0; j < frame.signals_size(); ++j) {
             const auto& frameSig = frame.signals(j);
@@ -874,15 +874,15 @@ void LdfDocumentSession::buildSignalMap() {
             // Fallback: if bitLength is still 0, set to 1.
             if (sig.bitLength == 0) sig.bitLength = 1;
 
-            auto sigKeyIt = treeNodeKeys_.find({static_cast<int>(LdfEntityKind::FrameSignal), i, j});
-            if (sigKeyIt != treeNodeKeys_.end()) sig.nodeKey = sigKeyIt->second;
+            auto sigKeyIt = _tree_node_keys.find({static_cast<int>(LdfEntityKind::FrameSignal), i, j});
+            if (sigKeyIt != _tree_node_keys.end()) sig.nodeKey = sigKeyIt->second;
 
             // Also store standalone Signal key so clicking a Signal in
             // the tree navigates to it in the signal map.
-            for (int si = 0; si < document_.signals_size(); ++si) {
-                if (document_.signals(si).name() == frameSig.signal_name()) {
-                    auto standaloneSigKey = treeNodeKeys_.find({static_cast<int>(LdfEntityKind::Signal), si, -1});
-                    if (standaloneSigKey != treeNodeKeys_.end()) sig.signalNodeKey = standaloneSigKey->second;
+            for (int si = 0; si < _document.signals_size(); ++si) {
+                if (_document.signals(si).name() == frameSig.signal_name()) {
+                    auto standaloneSigKey = _tree_node_keys.find({static_cast<int>(LdfEntityKind::Signal), si, -1});
+                    if (standaloneSigKey != _tree_node_keys.end()) sig.signalNodeKey = standaloneSigKey->second;
                     break;
                 }
             }
@@ -902,8 +902,8 @@ void LdfDocumentSession::buildSignalMap() {
             if (maxByteUsed >= 0) entry.dlc = maxByteUsed + 1;
         }
 
-        signalMapModel_->addMessage(std::move(entry));
+        _signal_map_model->addMessage(std::move(entry));
     }
 
-    signalMapModel_->finalize();
+    _signal_map_model->finalize();
 }

@@ -29,6 +29,6 @@ signals:
     void rawJsonTextChanged();
 
 private:
-    QList<DetailSection> sections_;
-    QString rawJsonText_;
+    QList<DetailSection> _sections;
+    QString _raw_json_text;
 };

@@ -12,15 +12,15 @@ int DetailModel::rowCount(const QModelIndex& parent) const {
         return 0;
     }
 
-    return sections_.size();
+    return _sections.size();
 }
 
 QVariant DetailModel::data(const QModelIndex& index, int role) const {
-    if (!index.isValid() || index.row() < 0 || index.row() >= sections_.size()) {
+    if (!index.isValid() || index.row() < 0 || index.row() >= _sections.size()) {
         return {};
     }
 
-    const DetailSection& section = sections_.at(index.row());
+    const DetailSection& section = _sections.at(index.row());
     switch (role) {
     case TitleRole:
     case Qt::DisplayRole:
@@ -49,18 +49,18 @@ QHash<int, QByteArray> DetailModel::roleNames() const {
 
 void DetailModel::setSections(QList<DetailSection> sections) {
     beginResetModel();
-    sections_ = std::move(sections);
+    _sections = std::move(sections);
     endResetModel();
 }
 
 QString DetailModel::rawJsonText() const {
-    return rawJsonText_;
+    return _raw_json_text;
 }
 
 void DetailModel::setRawJsonText(const QString& json) {
-    if (rawJsonText_ == json) {
+    if (_raw_json_text == json) {
         return;
     }
-    rawJsonText_ = json;
+    _raw_json_text = json;
     emit rawJsonTextChanged();
 }

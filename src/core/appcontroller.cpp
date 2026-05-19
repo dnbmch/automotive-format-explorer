@@ -54,66 +54,66 @@ const BackendSpec* backendSpecForPath(const QString& path) {
 
 AppController::AppController(QObject* parent)
     : QObject(parent) {
-    connect(&loadWatcher_, &QFutureWatcher<std::shared_ptr<LoadResult>>::finished,
+    connect(&_load_watcher, &QFutureWatcher<std::shared_ptr<LoadResult>>::finished,
             this, &AppController::onLoadFinished);
 
 #ifdef BACKENDS_STATIC
-    formatRegistry_.registerAdapter(std::unique_ptr<FormatAdapter>(createA2lAdapterPlugin()));
-    formatRegistry_.registerAdapter(std::unique_ptr<FormatAdapter>(createDbcAdapterPlugin()));
-    formatRegistry_.registerAdapter(std::unique_ptr<FormatAdapter>(createLdfAdapterPlugin()));
+    _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createA2lAdapterPlugin()));
+    _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createDbcAdapterPlugin()));
+    _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createLdfAdapterPlugin()));
 #endif
 }
 
 TabModel* AppController::tabModel() {
-    return &tabModel_;
+    return &_tab_model;
 }
 
 TreeModel* AppController::currentTreeModel() {
-    DocumentSession* session = tabModel_.sessionAt(currentTabIndex_);
-    return session ? session->treeModel() : &emptyTreeModel_;
+    DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
+    return session ? session->treeModel() : &_empty_tree_model;
 }
 
 DetailModel* AppController::currentDetailModel() {
-    DocumentSession* session = tabModel_.sessionAt(currentTabIndex_);
-    return session ? session->detailModel() : &emptyDetailModel_;
+    DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
+    return session ? session->detailModel() : &_empty_detail_model;
 }
 
 QUrl AppController::centerPanelSource() {
-    DocumentSession* session = tabModel_.sessionAt(currentTabIndex_);
+    DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
     return session ? session->centerPanelSource() : QUrl();
 }
 
 QAbstractListModel* AppController::centerPanelModel() {
-    DocumentSession* session = tabModel_.sessionAt(currentTabIndex_);
+    DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
     return session ? session->centerPanelModel() : nullptr;
 }
 
 int AppController::currentTabIndex() const {
-    return currentTabIndex_;
+    return _current_tab_index;
 }
 
 void AppController::setCurrentTabIndex(int index) {
-    if (index < -1 || index >= tabModel_.rowCount()) {
+    if (index < -1 || index >= _tab_model.rowCount()) {
         return;
     }
 
-    if (currentTabIndex_ == index) {
+    if (_current_tab_index == index) {
         return;
     }
 
-    currentTabIndex_ = index;
+    _current_tab_index = index;
     emit currentTabIndexChanged();
     emit currentSessionChanged();
 }
 
 QString AppController::lastError() const {
-    return lastError_;
+    return _last_error;
 }
 
 void AppController::openFile(const QUrl& fileUrl) {
     clearLastError();
 
-    if (fileLoading_) {
+    if (_file_loading) {
         setLastError(QStringLiteral("Another file is already loading."));
         return;
     }
@@ -126,7 +126,7 @@ void AppController::openFile(const QUrl& fileUrl) {
 
     const FormatAdapter* adapter = ensureAdapterForPath(path);
     if (!adapter) {
-        if (lastError_.isEmpty()) {
+        if (_last_error.isEmpty()) {
             setLastError(QStringLiteral("No adapter is registered for %1").arg(path));
         }
         return;
@@ -141,13 +141,13 @@ void AppController::openFile(const QUrl& fileUrl) {
             r->session->moveModelsToThread(mainThread);
         return r;
     });
-    loadWatcher_.setFuture(future);
+    _load_watcher.setFuture(future);
 }
 
 void AppController::onLoadFinished() {
     setFileLoading(false);
 
-    auto result = loadWatcher_.result();
+    auto result = _load_watcher.result();
     if (!result || !result->session) {
         if (result && !result->diagnostics.isEmpty()) {
             setLastError(result->diagnostics.first().detail);
@@ -158,31 +158,31 @@ void AppController::onLoadFinished() {
     }
 
     const QString name = result->session->displayName();
-    const int newIndex = tabModel_.addSession(std::move(result->session));
+    const int newIndex = _tab_model.addSession(std::move(result->session));
     setCurrentTabIndex(newIndex);
     emit fileLoaded(name);
 }
 
 bool AppController::fileLoading() const {
-    return fileLoading_;
+    return _file_loading;
 }
 
 void AppController::setFileLoading(bool loading) {
-    if (fileLoading_ == loading) return;
-    fileLoading_ = loading;
+    if (_file_loading == loading) return;
+    _file_loading = loading;
     emit fileLoadingChanged();
 }
 
 void AppController::closeTab(int index) {
-    if (index < 0 || index >= tabModel_.rowCount()) {
+    if (index < 0 || index >= _tab_model.rowCount()) {
         return;
     }
 
-    const int previousCurrentIndex = currentTabIndex_;
-    tabModel_.closeSession(index);
-    if (tabModel_.rowCount() == 0) {
-        if (currentTabIndex_ != -1) {
-            currentTabIndex_ = -1;
+    const int previousCurrentIndex = _current_tab_index;
+    _tab_model.closeSession(index);
+    if (_tab_model.rowCount() == 0) {
+        if (_current_tab_index != -1) {
+            _current_tab_index = -1;
             emit currentTabIndexChanged();
             emit currentSessionChanged();
         }
@@ -195,9 +195,9 @@ void AppController::closeTab(int index) {
     }
 
     if (previousCurrentIndex == index) {
-        const int newIndex = qMin(index, tabModel_.rowCount() - 1);
-        if (currentTabIndex_ != newIndex) {
-            currentTabIndex_ = newIndex;
+        const int newIndex = qMin(index, _tab_model.rowCount() - 1);
+        if (_current_tab_index != newIndex) {
+            _current_tab_index = newIndex;
             emit currentTabIndexChanged();
         }
         emit currentSessionChanged();
@@ -205,7 +205,7 @@ void AppController::closeTab(int index) {
 }
 
 void AppController::selectCurrentNode(qulonglong nodeKey) {
-    DocumentSession* session = tabModel_.sessionAt(currentTabIndex_);
+    DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
     if (!session) {
         return;
     }
@@ -214,16 +214,16 @@ void AppController::selectCurrentNode(qulonglong nodeKey) {
 }
 
 void AppController::clearLastError() {
-    if (lastError_.isEmpty()) {
+    if (_last_error.isEmpty()) {
         return;
     }
 
-    lastError_.clear();
+    _last_error.clear();
     emit lastErrorChanged();
 }
 
 const FormatAdapter* AppController::ensureAdapterForPath(const QString& path) {
-    const FormatAdapter* adapter = formatRegistry_.adapterForPath(path);
+    const FormatAdapter* adapter = _format_registry.adapterForPath(path);
     if (adapter) {
         return adapter;
     }
@@ -232,7 +232,7 @@ const FormatAdapter* AppController::ensureAdapterForPath(const QString& path) {
         return nullptr;
     }
 
-    return formatRegistry_.adapterForPath(path);
+    return _format_registry.adapterForPath(path);
 }
 
 bool AppController::loadBackendForPath(const QString& path) {
@@ -243,7 +243,7 @@ bool AppController::loadBackendForPath(const QString& path) {
     }
 
     // Already loaded for this format
-    if (formatRegistry_.adapterForPath(path)) {
+    if (_format_registry.adapterForPath(path)) {
         return true;
     }
 
@@ -273,42 +273,42 @@ bool AppController::loadBackend(FormatId formatId, const QString& libraryBaseNam
         return false;
     }
 
-    formatRegistry_.registerAdapter(std::move(adapter));
-    loadedBackends_.push_back(std::move(library));
+    _format_registry.registerAdapter(std::move(adapter));
+    _loaded_backends.push_back(std::move(library));
     return true;
 }
 
 bool AppController::startupLoading() const {
-    return startupLoading_;
+    return _startup_loading;
 }
 
 void AppController::setStartupLoading(bool loading) {
-    if (startupLoading_ == loading) {
+    if (_startup_loading == loading) {
         return;
     }
 
-    startupLoading_ = loading;
+    _startup_loading = loading;
     emit startupLoadingChanged();
 }
 
 QString AppController::startupStatusText() const {
-    return startupStatusText_;
+    return _startup_status_text;
 }
 
 void AppController::setStartupStatusText(const QString& text) {
-    if (startupStatusText_ == text) {
+    if (_startup_status_text == text) {
         return;
     }
 
-    startupStatusText_ = text;
+    _startup_status_text = text;
     emit startupStatusTextChanged();
 }
 
 void AppController::setLastError(const QString& errorText) {
-    if (lastError_ == errorText) {
+    if (_last_error == errorText) {
         return;
     }
 
-    lastError_ = errorText;
+    _last_error = errorText;
     emit lastErrorChanged();
 }

@@ -302,7 +302,7 @@ QString recordLayoutComponentSummary(const a2l::RecordLayoutComponent& component
 class A2lDetailPresenter final : public DetailPresenter {
 public:
     explicit A2lDetailPresenter(const a2l::A2lFile& document)
-        : document_(document) {
+        : _document(document) {
     }
 
     QList<DetailSection> buildDetails(const NodeBinding& binding) const override {
@@ -421,10 +421,10 @@ public:
 
 private:
     const a2l::Module* moduleAt(int index) const {
-        if (index < 0 || index >= document_.modules_size()) {
+        if (index < 0 || index >= _document.modules_size()) {
             return nullptr;
         }
-        return &document_.modules(index);
+        return &_document.modules(index);
     }
 
     QString entityName(const A2lPath& path) const {
@@ -1635,7 +1635,7 @@ private:
         return sections;
     }
 
-    const a2l::A2lFile& document_;
+    const a2l::A2lFile& _document;
 };
 } // namespace
 
@@ -1648,8 +1648,8 @@ A2lDocumentSession::A2lDocumentSession(QString displayName,
                          std::move(displayName),
                          std::move(sourcePath),
                          std::move(diagnostics)),
-      document_(std::move(document)) {
-    setDetailPresenter(std::make_unique<A2lDetailPresenter>(document_));
+      _document(std::move(document)) {
+    setDetailPresenter(std::make_unique<A2lDetailPresenter>(_document));
     buildTree();
     buildMemoryMap();
 }
@@ -1657,20 +1657,20 @@ A2lDocumentSession::A2lDocumentSession(QString displayName,
 A2lDocumentSession::~A2lDocumentSession() = default;
 
 QUrl A2lDocumentSession::centerPanelSource() const {
-    if (memoryMapModel_ && memoryMapModel_->totalObjectCount() > 0) {
+    if (_memory_map_model && _memory_map_model->totalObjectCount() > 0) {
         return QUrl(QStringLiteral("qrc:/qt/qml/ExplorerApp/qml/components/MemoryView.qml"));
     }
     return {};
 }
 
 QAbstractListModel* A2lDocumentSession::centerPanelModel() {
-    return memoryMapModel_.get();
+    return _memory_map_model.get();
 }
 
 void A2lDocumentSession::moveModelsToThread(QThread* thread) {
     AdapterSessionBase::moveModelsToThread(thread);
-    if (memoryMapModel_)
-        memoryMapModel_->moveToThread(thread);
+    if (_memory_map_model)
+        _memory_map_model->moveToThread(thread);
 }
 
 namespace {
@@ -1870,12 +1870,12 @@ SizeResult computeAxisPtsSize(const a2l::AxisPts& ap,
 } // namespace (size calculation helpers)
 
 void A2lDocumentSession::buildMemoryMap() {
-    memoryMapModel_ = std::make_unique<MemoryMapModel>();
+    _memory_map_model = std::make_unique<MemoryMapModel>();
 
     // Build record layout lookup across all modules.
     std::unordered_map<std::string, const a2l::RecordLayout*> rlMap;
-    for (int m = 0; m < document_.modules_size(); ++m) {
-        const auto& module = document_.modules(m);
+    for (int m = 0; m < _document.modules_size(); ++m) {
+        const auto& module = _document.modules(m);
         for (int i = 0; i < module.record_layouts_size(); ++i) {
             rlMap[module.record_layouts(i).name()] = &module.record_layouts(i);
         }
@@ -1883,8 +1883,8 @@ void A2lDocumentSession::buildMemoryMap() {
 
     int excludedMeasurements = 0;
 
-    for (int m = 0; m < document_.modules_size(); ++m) {
-        const auto& module = document_.modules(m);
+    for (int m = 0; m < _document.modules_size(); ++m) {
+        const auto& module = _document.modules(m);
 
         // Add real memory segments.
         if (module.has_mod_par()) {
@@ -1897,7 +1897,7 @@ void A2lDocumentSession::buildMemoryMap() {
                     a2l::MemoryType_Name(seg.memory_type()));
                 info.prgType = text(
                     a2l::MemoryPrgType_Name(seg.prg_type()));
-                memoryMapModel_->addSegment(std::move(info));
+                _memory_map_model->addSegment(std::move(info));
             }
         }
 
@@ -1923,9 +1923,9 @@ void A2lDocumentSession::buildMemoryMap() {
             obj.colorIndex = characteristicColorIndex(ch.type());
             obj.recordLayoutRef = text(ch.record_layout_ref());
             obj.conversion = text(ch.conversion());
-            auto keyIt = treeNodeKeys_.find({static_cast<int>(A2lEntityKind::Characteristic), m, i});
-            if (keyIt != treeNodeKeys_.end()) obj.nodeKey = keyIt->second;
-            memoryMapModel_->addObject(std::move(obj));
+            auto keyIt = _tree_node_keys.find({static_cast<int>(A2lEntityKind::Characteristic), m, i});
+            if (keyIt != _tree_node_keys.end()) obj.nodeKey = keyIt->second;
+            _memory_map_model->addObject(std::move(obj));
         }
 
         // AxisPts.
@@ -1949,9 +1949,9 @@ void A2lDocumentSession::buildMemoryMap() {
             obj.colorIndex = 7; // AXIS_PTS color
             obj.recordLayoutRef = text(ap.record_layout_ref());
             obj.conversion = text(ap.conversion_ref());
-            auto keyIt = treeNodeKeys_.find({static_cast<int>(A2lEntityKind::AxisPts), m, i});
-            if (keyIt != treeNodeKeys_.end()) obj.nodeKey = keyIt->second;
-            memoryMapModel_->addObject(std::move(obj));
+            auto keyIt = _tree_node_keys.find({static_cast<int>(A2lEntityKind::AxisPts), m, i});
+            if (keyIt != _tree_node_keys.end()) obj.nodeKey = keyIt->second;
+            _memory_map_model->addObject(std::move(obj));
         }
 
         // Measurements (only those with ecu_address).
@@ -1981,34 +1981,34 @@ void A2lDocumentSession::buildMemoryMap() {
             obj.size = size > 0 ? size : 1;
             obj.sizeApproximate = (size == 0);
             obj.colorIndex = 6; // MEASUREMENT color
-            auto keyIt = treeNodeKeys_.find({static_cast<int>(A2lEntityKind::Measurement), m, i});
-            if (keyIt != treeNodeKeys_.end()) obj.nodeKey = keyIt->second;
-            memoryMapModel_->addObject(std::move(obj));
+            auto keyIt = _tree_node_keys.find({static_cast<int>(A2lEntityKind::Measurement), m, i});
+            if (keyIt != _tree_node_keys.end()) obj.nodeKey = keyIt->second;
+            _memory_map_model->addObject(std::move(obj));
         }
     }
 
-    memoryMapModel_->setExcludedMeasurementCount(excludedMeasurements);
-    memoryMapModel_->finalize();
+    _memory_map_model->setExcludedMeasurementCount(excludedMeasurements);
+    _memory_map_model->finalize();
 }
 
 void A2lDocumentSession::buildTree() {
     auto root = std::make_unique<TreeItem>();
     root->title = displayName();
     root->semanticKind = SemanticKind::Root;
-    if (document_.has_asap2_version_major() || document_.has_asap2_version_minor()) {
+    if (_document.has_asap2_version_major() || _document.has_asap2_version_minor()) {
         root->subtitle = QStringLiteral("ASAP2 %1.%2")
-            .arg(document_.has_asap2_version_major() ? document_.asap2_version_major() : 0)
-            .arg(document_.has_asap2_version_minor() ? document_.asap2_version_minor() : 0);
+            .arg(_document.has_asap2_version_major() ? _document.asap2_version_major() : 0)
+            .arg(_document.has_asap2_version_minor() ? _document.asap2_version_minor() : 0);
     }
 
     TreeItem* modulesSection = appendNode(root.get(),
                                           QStringLiteral("Modules"),
-                                          QString::number(document_.modules_size()),
+                                          QString::number(_document.modules_size()),
                                           QStringLiteral("modules"),
                                           SemanticKind::Section);
 
-    for (int moduleIndex = 0; moduleIndex < document_.modules_size(); ++moduleIndex) {
-        const auto& module = document_.modules(moduleIndex);
+    for (int moduleIndex = 0; moduleIndex < _document.modules_size(); ++moduleIndex) {
+        const auto& module = _document.modules(moduleIndex);
         TreeItem* moduleItem = appendNode(modulesSection,
                                           text(module.name()),
                                           text(module.long_identifier()),
@@ -2035,7 +2035,7 @@ void A2lDocumentSession::buildTree() {
                                        A2lPath{A2lEntityKind::Measurement, moduleIndex, i, -1},
                                        true});
                 if (node->nodeKey) {
-                    treeNodeKeys_[{static_cast<int>(A2lEntityKind::Measurement), moduleIndex, i}] = node->nodeKey;
+                    _tree_node_keys[{static_cast<int>(A2lEntityKind::Measurement), moduleIndex, i}] = node->nodeKey;
                 }
             }
         }
@@ -2057,7 +2057,7 @@ void A2lDocumentSession::buildTree() {
                                        A2lPath{A2lEntityKind::Characteristic, moduleIndex, i, -1},
                                        true});
                 if (node->nodeKey) {
-                    treeNodeKeys_[{static_cast<int>(A2lEntityKind::Characteristic), moduleIndex, i}] = node->nodeKey;
+                    _tree_node_keys[{static_cast<int>(A2lEntityKind::Characteristic), moduleIndex, i}] = node->nodeKey;
                 }
             }
         }
@@ -2079,7 +2079,7 @@ void A2lDocumentSession::buildTree() {
                                        A2lPath{A2lEntityKind::AxisPts, moduleIndex, i, -1},
                                        true});
                 if (node->nodeKey) {
-                    treeNodeKeys_[{static_cast<int>(A2lEntityKind::AxisPts), moduleIndex, i}] = node->nodeKey;
+                    _tree_node_keys[{static_cast<int>(A2lEntityKind::AxisPts), moduleIndex, i}] = node->nodeKey;
                 }
             }
         }

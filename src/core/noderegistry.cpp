@@ -1,8 +1,8 @@
 #include "core/noderegistry.h"
 
 NodeRef NodeRegistry::registerBinding(FormatId format, NodeBinding binding) {
-    const quint64 key = nextKey_++;
-    bindings_.insert(key, std::move(binding));
+    const quint64 key = _next_key++;
+    _bindings.insert(key, std::move(binding));
     return NodeRef{format, key};
 }
 
@@ -11,8 +11,8 @@ const NodeBinding* NodeRegistry::resolve(NodeRef ref) const {
         return nullptr;
     }
 
-    const auto it = bindings_.constFind(ref.key);
-    if (it == bindings_.cend()) {
+    const auto it = _bindings.constFind(ref.key);
+    if (it == _bindings.cend()) {
         return nullptr;
     }
 
@@ -20,6 +20,6 @@ const NodeBinding* NodeRegistry::resolve(NodeRef ref) const {
 }
 
 void NodeRegistry::clear() {
-    bindings_.clear();
-    nextKey_ = 1;
+    _bindings.clear();
+    _next_key = 1;
 }

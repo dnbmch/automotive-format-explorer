@@ -12,37 +12,37 @@ MemoryGridItem::MemoryGridItem(QQuickItem* parent)
     setAcceptedMouseButtons(Qt::LeftButton);
     setRenderTarget(QQuickPaintedItem::FramebufferObject);
 
-    highlightTimer_.setInterval(30);
-    connect(&highlightTimer_, &QTimer::timeout, this, [this]() {
-        highlightOpacity_ -= 0.04;
-        if (highlightOpacity_ <= 0.0) {
-            highlightOpacity_ = 0.0;
-            highlightObj_ = -1;
-            highlightTimer_.stop();
+    _highlight_timer.setInterval(30);
+    connect(&_highlight_timer, &QTimer::timeout, this, [this]() {
+        _highlight_opacity -= 0.04;
+        if (_highlight_opacity <= 0.0) {
+            _highlight_opacity = 0.0;
+            _highlight_obj = -1;
+            _highlight_timer.stop();
         }
         update();
     });
 }
 
 void MemoryGridItem::paint(QPainter* painter) {
-    if (!model_ || model_->segmentCount() == 0 || colorMap_.empty()) {
+    if (!_model || _model->segmentCount() == 0 || _color_map.empty()) {
         return;
     }
 
-    const int bpr = model_->bytesPerRow();
+    const int bpr = _model->bytesPerRow();
     const int rh = rowHeight();
-    const int cs = cellSize_;
-    const int cg = cellGap_;
-    const int gw = gutterWidth_;
-    const uint64_t segStart = model_->viewStartAddress();
-    const uint64_t segSize = model_->viewEndAddress() - segStart;
-    const int totalRowCount = model_->totalRows();
+    const int cs = _cell_size;
+    const int cg = _cell_gap;
+    const int gw = _gutter_width;
+    const uint64_t segStart = _model->viewStartAddress();
+    const uint64_t segSize = _model->viewEndAddress() - segStart;
+    const int totalRowCount = _model->totalRows();
 
-    const int firstRow = qMax(0, static_cast<int>(scrollY_ / rh) - 1);
+    const int firstRow = qMax(0, static_cast<int>(_scroll_y / rh) - 1);
     const int visibleRows = static_cast<int>(height() / rh) + 3;
     const int lastRow = qMin(firstRow + visibleRows, totalRowCount);
 
-    const qreal yOffset = -scrollY_;
+    const qreal yOffset = -_scroll_y;
 
     QFont monoFont(QStringLiteral("Consolas"), 0);
     monoFont.setPixelSize(11);
@@ -73,29 +73,29 @@ void MemoryGridItem::paint(QPainter* painter) {
             const qreal x = gw + col * (cs + cg);
             const auto mapIdx = static_cast<size_t>(byteOffset);
 
-            if (mapIdx < colorMap_.size()) {
-                int8_t ci = colorMap_[mapIdx];
-                if (ci >= 0 && static_cast<size_t>(ci) < palette_.size()) {
-                    painter->fillRect(QRectF(x, y, cs, cs), palette_[static_cast<size_t>(ci)]);
+            if (mapIdx < _color_map.size()) {
+                int8_t ci = _color_map[mapIdx];
+                if (ci >= 0 && static_cast<size_t>(ci) < _palette.size()) {
+                    painter->fillRect(QRectF(x, y, cs, cs), _palette[static_cast<size_t>(ci)]);
                 } else {
-                    painter->fillRect(QRectF(x, y, cs, cs), unoccupiedColor_);
+                    painter->fillRect(QRectF(x, y, cs, cs), _unoccupied_color);
                 }
             } else {
-                painter->fillRect(QRectF(x, y, cs, cs), unoccupiedColor_);
+                painter->fillRect(QRectF(x, y, cs, cs), _unoccupied_color);
             }
 
             // Persistent selection border.
-            if (selectedObj_ >= 0 && mapIdx < objectMap_.size() &&
-                objectMap_[mapIdx] == selectedObj_) {
+            if (_selected_obj >= 0 && mapIdx < _object_map.size() &&
+                _object_map[mapIdx] == _selected_obj) {
                 painter->setPen(QPen(QColor(255, 255, 255), 2));
                 painter->drawRect(QRectF(x, y, cs, cs));
                 painter->setPen(Qt::NoPen);
             }
 
             // Highlight flash overlay.
-            if (highlightObj_ >= 0 && highlightOpacity_ > 0.0 &&
-                mapIdx < objectMap_.size() && objectMap_[mapIdx] == highlightObj_) {
-                QColor hl(255, 255, 255, static_cast<int>(highlightOpacity_ * 160));
+            if (_highlight_obj >= 0 && _highlight_opacity > 0.0 &&
+                mapIdx < _object_map.size() && _object_map[mapIdx] == _highlight_obj) {
+                QColor hl(255, 255, 255, static_cast<int>(_highlight_opacity * 160));
                 painter->setPen(QPen(hl, 2));
                 painter->drawRect(QRectF(x, y, cs, cs));
                 painter->setPen(Qt::NoPen);
@@ -105,24 +105,24 @@ void MemoryGridItem::paint(QPainter* painter) {
 }
 
 MemoryMapModel* MemoryGridItem::model() const {
-    return model_;
+    return _model;
 }
 
 void MemoryGridItem::setModel(MemoryMapModel* model) {
-    if (model_ == model) {
+    if (_model == model) {
         return;
     }
 
-    if (model_) {
-        disconnect(model_, nullptr, this, nullptr);
+    if (_model) {
+        disconnect(_model, nullptr, this, nullptr);
     }
 
-    model_ = model;
+    _model = model;
 
-    if (model_) {
-        connect(model_, SIGNAL(currentSegmentChanged()), this, SLOT(onModelUpdated()));
-        connect(model_, SIGNAL(bytesPerRowChanged()), this, SLOT(onLayoutChanged()));
-        connect(model_, SIGNAL(objectsChanged()), this, SLOT(onModelUpdated()));
+    if (_model) {
+        connect(_model, SIGNAL(currentSegmentChanged()), this, SLOT(onModelUpdated()));
+        connect(_model, SIGNAL(bytesPerRowChanged()), this, SLOT(onLayoutChanged()));
+        connect(_model, SIGNAL(objectsChanged()), this, SLOT(onModelUpdated()));
         rebuildColorMap();
         updateContentHeight();
     }
@@ -132,67 +132,67 @@ void MemoryGridItem::setModel(MemoryMapModel* model) {
 }
 
 qreal MemoryGridItem::scrollY() const {
-    return scrollY_;
+    return _scroll_y;
 }
 
 void MemoryGridItem::setScrollY(qreal y) {
     y = qBound(0.0, y, qMax(0.0, contentHeight() - height()));
-    if (qFuzzyCompare(scrollY_, y)) {
+    if (qFuzzyCompare(_scroll_y, y)) {
         return;
     }
-    scrollY_ = y;
+    _scroll_y = y;
     emit scrollYChanged();
     update();
 }
 
 qreal MemoryGridItem::contentHeight() const {
-    if (!model_) {
+    if (!_model) {
         return 0;
     }
-    return model_->totalRows() * rowHeight();
+    return _model->totalRows() * rowHeight();
 }
 
-int MemoryGridItem::cellSize() const { return cellSize_; }
+int MemoryGridItem::cellSize() const { return _cell_size; }
 void MemoryGridItem::setCellSize(int size) {
-    if (cellSize_ == size) return;
-    cellSize_ = size;
+    if (_cell_size == size) return;
+    _cell_size = size;
     emit cellSizeChanged();
     updateContentHeight();
     update();
 }
 
-int MemoryGridItem::cellGap() const { return cellGap_; }
+int MemoryGridItem::cellGap() const { return _cell_gap; }
 void MemoryGridItem::setCellGap(int gap) {
-    if (cellGap_ == gap) return;
-    cellGap_ = gap;
+    if (_cell_gap == gap) return;
+    _cell_gap = gap;
     emit cellGapChanged();
     updateContentHeight();
     update();
 }
 
-int MemoryGridItem::gutterWidth() const { return gutterWidth_; }
+int MemoryGridItem::gutterWidth() const { return _gutter_width; }
 void MemoryGridItem::setGutterWidth(int w) {
-    if (gutterWidth_ == w) return;
-    gutterWidth_ = w;
+    if (_gutter_width == w) return;
+    _gutter_width = w;
     emit gutterWidthChanged();
     update();
 }
 
 int MemoryGridItem::hoveredObjectIndex() const {
-    return hoveredObj_;
+    return _hovered_obj;
 }
 
 QString MemoryGridItem::hoveredTooltip() const {
-    if (hoveredObj_ < 0 || !model_) {
+    if (_hovered_obj < 0 || !_model) {
         return {};
     }
 
-    const auto mi = model_->index(hoveredObj_, 0);
-    const QString name = model_->data(mi, MemoryMapModel::NameRole).toString();
-    const auto addr = model_->data(mi, MemoryMapModel::AddressRole).toULongLong();
-    const auto size = model_->data(mi, MemoryMapModel::SizeRole).toULongLong();
-    const QString type = model_->data(mi, MemoryMapModel::TypeNameRole).toString();
-    const bool approx = model_->data(mi, MemoryMapModel::SizeApproximateRole).toBool();
+    const auto mi = _model->index(_hovered_obj, 0);
+    const QString name = _model->data(mi, MemoryMapModel::NameRole).toString();
+    const auto addr = _model->data(mi, MemoryMapModel::AddressRole).toULongLong();
+    const auto size = _model->data(mi, MemoryMapModel::SizeRole).toULongLong();
+    const QString type = _model->data(mi, MemoryMapModel::TypeNameRole).toString();
+    const bool approx = _model->data(mi, MemoryMapModel::SizeApproximateRole).toBool();
 
     const QString addrHex = QStringLiteral("0x%1").arg(addr, 8, 16, QChar('0')).toUpper();
     const QString sizeStr = approx
@@ -203,61 +203,61 @@ QString MemoryGridItem::hoveredTooltip() const {
         .arg(name, type, addrHex, sizeStr);
 }
 
-qreal MemoryGridItem::mouseX() const { return mousePos_.x(); }
-qreal MemoryGridItem::mouseY() const { return mousePos_.y(); }
+qreal MemoryGridItem::mouseX() const { return _mouse_pos.x(); }
+qreal MemoryGridItem::mouseY() const { return _mouse_pos.y(); }
 
-int MemoryGridItem::selectedObjectIndex() const { return selectedObj_; }
+int MemoryGridItem::selectedObjectIndex() const { return _selected_obj; }
 void MemoryGridItem::setSelectedObjectIndex(int index) {
-    if (selectedObj_ == index) return;
-    selectedObj_ = index;
+    if (_selected_obj == index) return;
+    _selected_obj = index;
     emit selectedObjectChanged();
     update();
 }
 
 void MemoryGridItem::setColors(const QVariantList& colors, const QColor& unoccupied) {
-    palette_.clear();
+    _palette.clear();
     // Build 16 entries: 0-7 = normal, 16-23 (stored as 8-15) = darker shade.
-    // Index in colorMap_ uses bits 0-2 for color, bit 4 for shade.
+    // Index in _color_map uses bits 0-2 for color, bit 4 for shade.
     // We map: value & 0x0F < 8 → normal, value & 0x10 → alternate.
-    palette_.resize(32); // indexed by raw encoded value
+    _palette.resize(32); // indexed by raw encoded value
     for (int i = 0; i < colors.size() && i < 8; ++i) {
         QColor base(colors[i].toString());
-        palette_[static_cast<size_t>(i)] = base;                          // normal: 0-7
-        palette_[static_cast<size_t>(i | 0x10)] = base.darker(130);      // alternate: 16-23
+        _palette[static_cast<size_t>(i)] = base;                          // normal: 0-7
+        _palette[static_cast<size_t>(i | 0x10)] = base.darker(130);      // alternate: 16-23
     }
-    unoccupiedColor_ = unoccupied;
+    _unoccupied_color = unoccupied;
     update();
 }
 
 int MemoryGridItem::rowForAddress(quint64 address) const {
-    if (!model_) {
+    if (!_model) {
         return 0;
     }
-    return model_->rowForAddress(address);
+    return _model->rowForAddress(address);
 }
 
 void MemoryGridItem::highlightObject(int objectIndex) {
     setSelectedObjectIndex(objectIndex);
-    highlightObj_ = objectIndex;
-    highlightOpacity_ = 1.0;
-    highlightTimer_.start();
+    _highlight_obj = objectIndex;
+    _highlight_opacity = 1.0;
+    _highlight_timer.start();
     update();
 }
 
 void MemoryGridItem::hoverMoveEvent(QHoverEvent* event) {
-    mousePos_ = event->position();
+    _mouse_pos = event->position();
     emit mousePosChanged();
 
     int idx = objectIndexAtPixel(event->position().x(), event->position().y());
-    if (idx != hoveredObj_) {
-        hoveredObj_ = idx;
+    if (idx != _hovered_obj) {
+        _hovered_obj = idx;
         emit hoveredObjectChanged();
     }
 }
 
 void MemoryGridItem::hoverLeaveEvent(QHoverEvent*) {
-    if (hoveredObj_ != -1) {
-        hoveredObj_ = -1;
+    if (_hovered_obj != -1) {
+        _hovered_obj = -1;
         emit hoveredObjectChanged();
     }
 }
@@ -267,7 +267,7 @@ void MemoryGridItem::wheelEvent(QWheelEvent* event) {
         return;
     }
     const qreal delta = -event->angleDelta().y() / 120.0 * 3.0 * rowHeight();
-    setScrollY(scrollY_ + delta);
+    setScrollY(_scroll_y + delta);
     event->accept();
 }
 
@@ -279,9 +279,9 @@ void MemoryGridItem::mousePressEvent(QMouseEvent* event) {
     setSelectedObjectIndex(idx);
     if (idx >= 0) {
         emit objectClicked(idx);
-        if (model_) {
-            const auto mi = model_->index(idx, 0);
-            const auto key = model_->data(mi, MemoryMapModel::NodeKeyRole).toULongLong();
+        if (_model) {
+            const auto mi = _model->index(idx, 0);
+            const auto key = _model->data(mi, MemoryMapModel::NodeKeyRole).toULongLong();
             if (key != 0) {
                 emit nodeKeyClicked(key);
             }
@@ -302,19 +302,19 @@ void MemoryGridItem::onLayoutChanged() {
 }
 
 int MemoryGridItem::rowHeight() const {
-    return cellSize_ + cellGap_;
+    return _cell_size + _cell_gap;
 }
 
 void MemoryGridItem::rebuildColorMap() {
-    colorMap_.clear();
-    objectMap_.clear();
+    _color_map.clear();
+    _object_map.clear();
 
-    if (!model_ || model_->segmentCount() == 0) {
+    if (!_model || _model->segmentCount() == 0) {
         return;
     }
 
-    const uint64_t segStart = model_->viewStartAddress();
-    const uint64_t segEnd = model_->viewEndAddress();
+    const uint64_t segStart = _model->viewStartAddress();
+    const uint64_t segEnd = _model->viewEndAddress();
     if (segEnd <= segStart) {
         return;
     }
@@ -323,8 +323,8 @@ void MemoryGridItem::rebuildColorMap() {
 
     // Cap at 16MB to avoid absurd allocations.
     const size_t mapSize = qMin(segSize, size_t(16 * 1024 * 1024));
-    colorMap_.assign(mapSize, -1);
-    objectMap_.assign(mapSize, -1);
+    _color_map.assign(mapSize, -1);
+    _object_map.assign(mapSize, -1);
 
     // Track shade toggle per color index: flips each time a new object
     // of the same color appears, so adjacent same-color objects alternate.
@@ -333,12 +333,12 @@ void MemoryGridItem::rebuildColorMap() {
     int8_t shade[8] = {};
     int32_t lastObj[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
 
-    const int objCount = model_->rowCount();
+    const int objCount = _model->rowCount();
     for (int i = 0; i < objCount; ++i) {
-        const auto mi = model_->index(i, 0);
-        const auto addr = model_->data(mi, MemoryMapModel::AddressRole).toULongLong();
-        const auto size = model_->data(mi, MemoryMapModel::SizeRole).toULongLong();
-        const int ci = model_->data(mi, MemoryMapModel::ColorIndexRole).toInt();
+        const auto mi = _model->index(i, 0);
+        const auto addr = _model->data(mi, MemoryMapModel::AddressRole).toULongLong();
+        const auto size = _model->data(mi, MemoryMapModel::SizeRole).toULongLong();
+        const int ci = _model->data(mi, MemoryMapModel::ColorIndexRole).toInt();
 
         if (addr < segStart || size == 0 || ci < 0 || ci >= 8) {
             continue;
@@ -356,8 +356,8 @@ void MemoryGridItem::rebuildColorMap() {
         const auto endOff = qMin(startOff + static_cast<size_t>(size), mapSize);
 
         for (size_t b = startOff; b < endOff; ++b) {
-            colorMap_[b] = encoded;
-            objectMap_[b] = static_cast<int32_t>(i);
+            _color_map[b] = encoded;
+            _object_map[b] = static_cast<int32_t>(i);
         }
     }
 }
@@ -367,19 +367,19 @@ void MemoryGridItem::updateContentHeight() {
 }
 
 void MemoryGridItem::clampScrollY() {
-    setScrollY(scrollY_);
+    setScrollY(_scroll_y);
 }
 
 int MemoryGridItem::objectIndexAtPixel(qreal px, qreal py) const {
-    if (!model_ || model_->segmentCount() == 0 || objectMap_.empty()) {
+    if (!_model || _model->segmentCount() == 0 || _object_map.empty()) {
         return -1;
     }
 
-    const int bpr = model_->bytesPerRow();
+    const int bpr = _model->bytesPerRow();
     const int rh = rowHeight();
-    const int cs = cellSize_;
-    const int cg = cellGap_;
-    const int gw = gutterWidth_;
+    const int cs = _cell_size;
+    const int cg = _cell_gap;
+    const int gw = _gutter_width;
 
     if (px < gw) {
         return -1;
@@ -390,17 +390,17 @@ int MemoryGridItem::objectIndexAtPixel(qreal px, qreal py) const {
         return -1;
     }
 
-    const int row = static_cast<int>((py + scrollY_) / rh);
-    if (row < 0 || row >= model_->totalRows()) {
+    const int row = static_cast<int>((py + _scroll_y) / rh);
+    if (row < 0 || row >= _model->totalRows()) {
         return -1;
     }
 
     const auto byteOffset = static_cast<size_t>(
         static_cast<uint64_t>(row) * static_cast<uint64_t>(bpr) + static_cast<uint64_t>(col));
 
-    if (byteOffset >= objectMap_.size()) {
+    if (byteOffset >= _object_map.size()) {
         return -1;
     }
 
-    return objectMap_[byteOffset];
+    return _object_map[byteOffset];
 }

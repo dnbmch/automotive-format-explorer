@@ -9,7 +9,7 @@ int TabModel::rowCount(const QModelIndex& parent) const {
         return 0;
     }
 
-    return static_cast<int>(sessions_.size());
+    return static_cast<int>(_sessions.size());
 }
 
 QVariant TabModel::data(const QModelIndex& index, int role) const {
@@ -43,35 +43,35 @@ QHash<int, QByteArray> TabModel::roleNames() const {
 }
 
 int TabModel::addSession(std::unique_ptr<DocumentSession> session) {
-    const int row = static_cast<int>(sessions_.size());
+    const int row = static_cast<int>(_sessions.size());
     beginInsertRows({}, row, row);
-    sessions_.push_back(std::move(session));
+    _sessions.push_back(std::move(session));
     endInsertRows();
     return row;
 }
 
 void TabModel::closeSession(int index) {
-    if (index < 0 || index >= static_cast<int>(sessions_.size())) {
+    if (index < 0 || index >= static_cast<int>(_sessions.size())) {
         return;
     }
 
     beginRemoveRows({}, index, index);
-    sessions_.erase(sessions_.begin() + index);
+    _sessions.erase(_sessions.begin() + index);
     endRemoveRows();
 }
 
 DocumentSession* TabModel::sessionAt(int index) {
-    if (index < 0 || index >= static_cast<int>(sessions_.size())) {
+    if (index < 0 || index >= static_cast<int>(_sessions.size())) {
         return nullptr;
     }
 
-    return sessions_[static_cast<std::size_t>(index)].get();
+    return _sessions[static_cast<std::size_t>(index)].get();
 }
 
 const DocumentSession* TabModel::sessionAt(int index) const {
-    if (index < 0 || index >= static_cast<int>(sessions_.size())) {
+    if (index < 0 || index >= static_cast<int>(_sessions.size())) {
         return nullptr;
     }
 
-    return sessions_[static_cast<std::size_t>(index)].get();
+    return _sessions[static_cast<std::size_t>(index)].get();
 }

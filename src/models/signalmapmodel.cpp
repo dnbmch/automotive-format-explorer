@@ -8,10 +8,10 @@ SignalMapModel::SignalMapModel(QObject* parent)
 
 const std::vector<SignalEntry>& SignalMapModel::currentSignals() const {
     static const std::vector<SignalEntry> empty;
-    if (currentMessage_ < 0 || currentMessage_ >= static_cast<int>(messages_.size())) {
+    if (_current_message < 0 || _current_message >= static_cast<int>(_messages.size())) {
         return empty;
     }
-    return messages_[currentMessage_].signalEntries;
+    return _messages[_current_message].signalEntries;
 }
 
 int SignalMapModel::rowCount(const QModelIndex& parent) const {
@@ -54,20 +54,20 @@ QHash<int, QByteArray> SignalMapModel::roleNames() const {
 }
 
 int SignalMapModel::messageCount() const {
-    return static_cast<int>(messages_.size());
+    return static_cast<int>(_messages.size());
 }
 
 int SignalMapModel::currentMessage() const {
-    return currentMessage_;
+    return _current_message;
 }
 
 void SignalMapModel::setCurrentMessage(int index) {
-    if (index < 0 || index >= static_cast<int>(messages_.size()) || index == currentMessage_) {
+    if (index < 0 || index >= static_cast<int>(_messages.size()) || index == _current_message) {
         return;
     }
     beginResetModel();
-    currentMessage_ = index;
-    currentMuxGroup_ = -1;
+    _current_message = index;
+    _current_mux_group = -1;
     rebuildMuxGroups();
     rebuildBitMap();
     endResetModel();
@@ -76,10 +76,10 @@ void SignalMapModel::setCurrentMessage(int index) {
 }
 
 QString SignalMapModel::messageLabel(int index) const {
-    if (index < 0 || index >= static_cast<int>(messages_.size())) {
+    if (index < 0 || index >= static_cast<int>(_messages.size())) {
         return {};
     }
-    const auto& msg = messages_[index];
+    const auto& msg = _messages[index];
     QString idStr = msg.isExtendedId
         ? QStringLiteral("0x%1x").arg(msg.id, 0, 16).toUpper()
         : QStringLiteral("0x%1").arg(msg.id, 0, 16).toUpper();
@@ -87,10 +87,10 @@ QString SignalMapModel::messageLabel(int index) const {
 }
 
 int SignalMapModel::dlcBytes() const {
-    if (currentMessage_ < 0 || currentMessage_ >= static_cast<int>(messages_.size())) {
+    if (_current_message < 0 || _current_message >= static_cast<int>(_messages.size())) {
         return 0;
     }
-    return messages_[currentMessage_].dlc;
+    return _messages[_current_message].dlc;
 }
 
 int SignalMapModel::dlcBits() const {
@@ -102,7 +102,7 @@ int SignalMapModel::signalCount() const {
 }
 
 int SignalMapModel::visibleSignalCount() const {
-    if (currentMuxGroup_ < 0) return signalCount();
+    if (_current_mux_group < 0) return signalCount();
     int count = 0;
     for (int i = 0; i < signalCount(); ++i) {
         if (isSignalVisible(i)) ++count;
@@ -111,42 +111,42 @@ int SignalMapModel::visibleSignalCount() const {
 }
 
 int SignalMapModel::usedBits() const {
-    return usedBits_;
+    return _used_bits;
 }
 
 QString SignalMapModel::messageName() const {
-    if (currentMessage_ < 0 || currentMessage_ >= static_cast<int>(messages_.size())) {
+    if (_current_message < 0 || _current_message >= static_cast<int>(_messages.size())) {
         return {};
     }
-    return messages_[currentMessage_].name;
+    return _messages[_current_message].name;
 }
 
 QString SignalMapModel::messageSender() const {
-    if (currentMessage_ < 0 || currentMessage_ >= static_cast<int>(messages_.size())) {
+    if (_current_message < 0 || _current_message >= static_cast<int>(_messages.size())) {
         return {};
     }
-    return messages_[currentMessage_].sender;
+    return _messages[_current_message].sender;
 }
 
 // --- Mux group management ---
 
 bool SignalMapModel::hasMux() const {
-    return !muxValues_.empty();
+    return !_mux_values.empty();
 }
 
 int SignalMapModel::muxGroupCount() const {
-    return static_cast<int>(muxValues_.size());
+    return static_cast<int>(_mux_values.size());
 }
 
 int SignalMapModel::currentMuxGroup() const {
-    return currentMuxGroup_;
+    return _current_mux_group;
 }
 
 void SignalMapModel::setCurrentMuxGroup(int group) {
-    if (group == currentMuxGroup_) return;
-    // -1 = all, 0..N-1 = index into muxValues_
-    if (group < -1 || group >= static_cast<int>(muxValues_.size())) return;
-    currentMuxGroup_ = group;
+    if (group == _current_mux_group) return;
+    // -1 = all, 0..N-1 = index into _mux_values
+    if (group < -1 || group >= static_cast<int>(_mux_values.size())) return;
+    _current_mux_group = group;
     rebuildBitMap();
     emit muxGroupChanged();
     // Repaint the grid via model reset.
@@ -155,10 +155,10 @@ void SignalMapModel::setCurrentMuxGroup(int group) {
 }
 
 QString SignalMapModel::muxGroupLabel(int index) const {
-    if (index < 0 || index >= static_cast<int>(muxValues_.size())) {
+    if (index < 0 || index >= static_cast<int>(_mux_values.size())) {
         return {};
     }
-    return QStringLiteral("m%1").arg(muxValues_[index]);
+    return QStringLiteral("m%1").arg(_mux_values[index]);
 }
 
 bool SignalMapModel::isSignalVisible(int signalIndex) const {
@@ -166,30 +166,30 @@ bool SignalMapModel::isSignalVisible(int signalIndex) const {
     if (signalIndex < 0 || signalIndex >= static_cast<int>(sigs.size())) {
         return false;
     }
-    if (currentMuxGroup_ < 0) return true; // "All" mode
+    if (_current_mux_group < 0) return true; // "All" mode
 
     const auto& sig = sigs[signalIndex];
     // Static signals and multiplexor always visible.
     if (sig.multiplexType == 0 || sig.multiplexType == 1) return true;
     // Multiplexed: visible if mux value matches selected group.
-    int selectedValue = muxValues_[currentMuxGroup_];
+    int selectedValue = _mux_values[_current_mux_group];
     return sig.multiplexValue == selectedValue;
 }
 
 // --- Bit queries ---
 
 int SignalMapModel::signalAtBit(int bitPosition) const {
-    if (bitPosition < 0 || bitPosition >= static_cast<int>(bitMap_.size())) {
+    if (bitPosition < 0 || bitPosition >= static_cast<int>(_bit_map.size())) {
         return -1;
     }
-    return bitMap_[bitPosition];
+    return _bit_map[bitPosition];
 }
 
 bool SignalMapModel::isOverlap(int bitPosition) const {
-    if (bitPosition < 0 || bitPosition >= static_cast<int>(overlapMap_.size())) {
+    if (bitPosition < 0 || bitPosition >= static_cast<int>(_overlap_map.size())) {
         return false;
     }
-    return overlapMap_[bitPosition];
+    return _overlap_map[bitPosition];
 }
 
 int SignalMapModel::signalIndexForNodeKey(quint64 nodeKey) const {
@@ -203,9 +203,9 @@ int SignalMapModel::signalIndexForNodeKey(quint64 nodeKey) const {
 
 int SignalMapModel::messageIndexForNodeKey(quint64 nodeKey) const {
     if (nodeKey == 0) return -1;
-    for (int m = 0; m < static_cast<int>(messages_.size()); ++m) {
-        if (messages_[m].nodeKey == nodeKey) return m;
-        for (const auto& sig : messages_[m].signalEntries) {
+    for (int m = 0; m < static_cast<int>(_messages.size()); ++m) {
+        if (_messages[m].nodeKey == nodeKey) return m;
+        for (const auto& sig : _messages[m].signalEntries) {
             if (sig.nodeKey == nodeKey || sig.signalNodeKey == nodeKey) return m;
         }
     }
@@ -276,13 +276,13 @@ QString SignalMapModel::signalTooltip(int signalIndex) const {
 // --- Building ---
 
 void SignalMapModel::addMessage(MessageEntry msg) {
-    messages_.push_back(std::move(msg));
+    _messages.push_back(std::move(msg));
 }
 
 void SignalMapModel::finalize() {
-    if (!messages_.empty()) {
-        currentMessage_ = 0;
-        currentMuxGroup_ = -1;
+    if (!_messages.empty()) {
+        _current_message = 0;
+        _current_mux_group = -1;
         rebuildMuxGroups();
         rebuildBitMap();
     }
@@ -292,23 +292,23 @@ void SignalMapModel::finalize() {
 }
 
 void SignalMapModel::rebuildMuxGroups() {
-    muxValues_.clear();
+    _mux_values.clear();
     const auto& sigs = currentSignals();
     for (const auto& sig : sigs) {
         if ((sig.multiplexType == 2 || sig.multiplexType == 3) && sig.multiplexValue >= 0) {
-            muxValues_.push_back(sig.multiplexValue);
+            _mux_values.push_back(sig.multiplexValue);
         }
     }
     // Sort and deduplicate.
-    std::sort(muxValues_.begin(), muxValues_.end());
-    muxValues_.erase(std::unique(muxValues_.begin(), muxValues_.end()), muxValues_.end());
+    std::sort(_mux_values.begin(), _mux_values.end());
+    _mux_values.erase(std::unique(_mux_values.begin(), _mux_values.end()), _mux_values.end());
 }
 
 void SignalMapModel::rebuildBitMap() {
     const int totalBits = dlcBits();
-    bitMap_.assign(totalBits, -1);
-    overlapMap_.assign(totalBits, false);
-    usedBits_ = 0;
+    _bit_map.assign(totalBits, -1);
+    _overlap_map.assign(totalBits, false);
+    _used_bits = 0;
 
     const auto& sigs = currentSignals();
     for (int si = 0; si < static_cast<int>(sigs.size()); ++si) {
@@ -317,17 +317,17 @@ void SignalMapModel::rebuildBitMap() {
         auto positions = bitPositions(sigs[si]);
         for (int pos : positions) {
             if (pos >= 0 && pos < totalBits) {
-                if (bitMap_[pos] < 0) {
-                    bitMap_[pos] = static_cast<int16_t>(si);
-                } else if (bitMap_[pos] != si) {
-                    overlapMap_[pos] = true;
+                if (_bit_map[pos] < 0) {
+                    _bit_map[pos] = static_cast<int16_t>(si);
+                } else if (_bit_map[pos] != si) {
+                    _overlap_map[pos] = true;
                 }
             }
         }
     }
 
-    for (int16_t v : bitMap_) {
-        if (v >= 0) ++usedBits_;
+    for (int16_t v : _bit_map) {
+        if (v >= 0) ++_used_bits;
     }
 }
 
