@@ -44,3 +44,17 @@ No ctest target exists in this repo yet (`BL-E1` covers that). Any split should 
 Prefer folding the split into the next feature change that would have touched this file rather than running a standalone refactor.
 
 **Size:** L if standalone, S-M if folded into the next in-flight change.
+
+### BL-E6: `SignalGridItem` overlap stripe rendering subsection
+
+`src/ui/signalgriditem.cpp:93-103` implements the overlap-stripe pattern (and the half-filled bit-mask cells implied by it). `docs/arch/architecture.md` mentions stripes only in the high-level "Rendering" section — there is no diagram or per-color rule explaining when each stripe pattern is drawn.
+
+Add a short subsection (architecture.md or a dedicated `docs/ref/signal_grid_rendering.md`) covering the rules and one example diagram. Defer until the rendering changes again so the doc and the code land together.
+
+**Size:** XS.
+
+### BL-E7: `SignalGridItem` keyboard navigation reference
+
+Tab, arrows, Home, End, PageUp, and PageDown are handled in `src/ui/signalgriditem.cpp` but undocumented. Add a "Keyboard navigation" block to `docs/ref/signal_map.md` (and mirror in `docs/ref/memory_view.md` if `MemoryGridItem` shares the same bindings) listing each key, the focus model, and how the selection updates the detail panel.
+
+**Size:** XS.
