@@ -104,12 +104,6 @@ The parser libraries are **dual licensed: GPL-2.0 or Commercial**. See their rep
 
 ---
 
-## License
-
-This project is licensed under the [GNU General Public License v3.0](LICENSE).
-
----
-
 ## Building from Source
 
 ### Prerequisites
