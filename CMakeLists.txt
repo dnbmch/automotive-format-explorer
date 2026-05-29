@@ -62,6 +62,8 @@ endif()
 qt_add_library(explorer-a2l-backend ${_backend_lib_type}
     src/adapters/a2ladapter.cpp
     src/sessions/a2ldocumentsession.cpp
+    src/sessions/a2ldetailpresenter.cpp
+    src/sessions/a2ldetailpresenter_ifdata.cpp
 )
 
 qt_add_library(explorer-dbc-backend ${_backend_lib_type}
