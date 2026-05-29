@@ -8,7 +8,7 @@
 #       TARGET      dbcparser
 #       REPO        dnbmch/dbc-parser-lib
 #       VERSION     v0.1.0
-#       HEADER      dbcfile.h
+#       HEADER      dbc/dbcfile.h
 #   )
 
 function(fetch_parser_lib)

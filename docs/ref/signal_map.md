@@ -275,7 +275,7 @@ Q_INVOKABLE QString signalTooltip(int signalIndex) const;
 static std::vector<int> bitPositions(const SignalEntry& sig);
 ```
 
-Key internal data structure: a pre-computed **bit map** for the current message. Array of `dlcBits` entries, each storing the signal index (-1 = unoccupied). A parallel `overlapMap_` tracks bits claimed by multiple signals. Both are rebuilt when `currentMessage` or `currentMuxGroup` changes.
+Key internal data structure: a pre-computed **bit map** for the current message. Array of `dlcBits` entries, each storing the signal index (-1 = unoccupied). A parallel `_overlap_map` tracks bits claimed by multiple signals. Both are rebuilt when `currentMessage` or `currentMuxGroup` changes.
 
 For big-endian signals, `bitPositions()` resolves DBC Motorola bit numbering to physical display positions. The same method is reused by session `buildSignalMap()` for DLC derivation, guaranteeing consistency.
 
@@ -347,11 +347,11 @@ class DbcDocumentSession final : public AdapterSessionBase {
 
 private:
     void buildSignalMap();  // NEW: populate SignalMapModel from dbc::DbcFile
-    std::unique_ptr<SignalMapModel> signalMapModel_;
+    std::unique_ptr<SignalMapModel> _signal_map_model;
 };
 ```
 
-`buildSignalMap()` iterates `document_.messages()`, creates `MessageEntry` for each, populates signals with color assignment, and calls `finalize()`.
+`buildSignalMap()` iterates `_document.messages()`, creates `MessageEntry` for each, populates signals with color assignment, and calls `finalize()`.
 
 #### `LdfDocumentSession` changes
 
@@ -364,11 +364,11 @@ class LdfDocumentSession final : public AdapterSessionBase {
 
 private:
     void buildSignalMap();
-    std::unique_ptr<SignalMapModel> signalMapModel_;
+    std::unique_ptr<SignalMapModel> _signal_map_model;
 };
 ```
 
-Same model, same QML, same grid item. `buildSignalMap()` iterates `document_.frames()`, maps LDF fields to the same `SignalEntry`/`MessageEntry` structures. LDF-specific differences:
+Same model, same QML, same grid item. `buildSignalMap()` iterates `_document.frames()`, maps LDF fields to the same `SignalEntry`/`MessageEntry` structures. LDF-specific differences:
 - `bigEndian` is always `false`
 - `multiplexType` is always `0`
 - `isExtendedId` is always `false`
@@ -470,9 +470,9 @@ qml/components/SignalMapView.qml
 
 Modified files:
 ```
-src/sessions/dbcdocumentsession.h    (signalMapModel_, centerPanel overrides, treeNodeKeys_)
+src/sessions/dbcdocumentsession.h    (_signal_map_model, centerPanel overrides, _tree_node_keys)
 src/sessions/dbcdocumentsession.cpp  (buildSignalMap(), nodeKey capture in buildTree())
-src/sessions/ldfdocumentsession.h    (signalMapModel_, centerPanel overrides, treeNodeKeys_)
+src/sessions/ldfdocumentsession.h    (_signal_map_model, centerPanel overrides, _tree_node_keys)
 src/sessions/ldfdocumentsession.cpp  (buildSignalMap() with signal lookup enrichment)
 src/main.cpp                         (SignalGridItem QML type registration)
 CMakeLists.txt                       (new source files + QML)

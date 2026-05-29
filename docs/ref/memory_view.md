@@ -37,7 +37,7 @@ All three panels coexist. The vertical split handles between tree|memory and mem
 The center panel is **not** A2L-specific infrastructure — it's a generic session-provided slot. Each `DocumentSession` subclass exposes a `centerPanelSource` property:
 
 ```cpp
-Q_PROPERTY(QUrl centerPanelSource READ centerPanelSource CONSTANT)
+Q_PROPERTY(QUrl centerPanelSource READ centerPanelSource NOTIFY currentSessionChanged)
 ```
 
 - `A2lDocumentSession` returns `MemoryView.qml`

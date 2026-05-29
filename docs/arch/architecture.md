@@ -20,7 +20,7 @@ QGuiApplication
       Detail            — DetailModel (sections, fields, references)
 ```
 
-`AppController` is constructed before the QML engine in `src/main.cpp` and registered as a singleton (`qmlRegisterSingletonInstance`). The QML engine is destroyed first on app exit (relevant for BL-E2 — re-ordering the two declarations is a planned hygiene fix).
+`AppController` is constructed before the QML engine in `src/main.cpp` and registered as a singleton (`qmlRegisterSingletonInstance`). The QML engine is destroyed first on app exit.
 
 ## Startup: Splash + DWM Cloak
 
@@ -47,9 +47,9 @@ The `FormatRegistry` (`src/core/formatregistry.h`) is the single lookup point: g
 
 A backend exposes:
 
-- `FormatId` — stable enum id (A2L / DBC / LDF / …)
-- `bool canLoad(QString path)` — usually a suffix + magic check
-- `std::unique_ptr<DocumentSession> load(QString path, NodeRegistry&)` — async-friendly entry; returns the loaded session or `nullptr`
+- `FormatId formatId()` — stable enum id (A2L / DBC / LDF / …)
+- `QString formatName()` / `QStringList extensions()` — display name and the file extensions it claims (matched case-insensitively)
+- `LoadResult load(const QString& path)` — returns the loaded `DocumentSession` plus diagnostics (`session` is null on hard failure)
 
 ## DocumentSession Contract
 

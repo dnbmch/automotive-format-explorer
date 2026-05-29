@@ -33,7 +33,7 @@ struct LoadResult {
 };
 ```
 
-`load()` runs synchronously on the UI thread today — `AppController::openFile()` handles its own threading around it. Expect to be called with an absolute path; let parser-layer errors flow into `diagnostics` instead of throwing.
+`load()` runs on a worker thread — `AppController::openFile()` dispatches it via `QtConcurrent::run()` and moves the resulting models back to the main thread on completion. Expect to be called with an absolute path; let parser-layer errors flow into `diagnostics` instead of throwing.
 
 ## DocumentSession interface
 
@@ -96,8 +96,8 @@ If your format has nothing graphical to show in the middle column, leave `center
 
 | Format | `centerPanelSource()` | Model |
 |---|---|---|
-| A2L | `qrc:/qml/components/MemoryView.qml` | `MemoryMapModel` |
-| DBC, LDF | `qrc:/qml/components/SignalMapView.qml` | `SignalMapModel` |
+| A2L | `qrc:/qt/qml/ExplorerApp/qml/components/MemoryView.qml` | `MemoryMapModel` |
+| DBC, LDF | `qrc:/qt/qml/ExplorerApp/qml/components/SignalMapView.qml` | `SignalMapModel` |
 
 Both views are `QQuickPaintedItem` C++ renderers driven by pre-computed flat arrays — adding a new view means another component in [qml/components/](../../qml/components/) plus a `QQuickPaintedItem` subclass in [src/ui/](../../src/ui/).
 
@@ -111,4 +111,4 @@ Both views are `QQuickPaintedItem` C++ renderers driven by pre-computed flat arr
 6. Register the create-function in `AppController::AppController()` under `#ifdef BACKENDS_STATIC`.
 7. Run the app, drag in a sample file, verify the tab opens and the tree populates.
 
-The format's own parser library (under `dnbmch/<fmt>-parser-lib`) must publish a `v*` release with the renamed `<fmt>parser-*` artifact name before the explorer can fetch it. See the workspace `BL-W13` note.
+The format's own parser library (under `dnbmch/<fmt>-parser-lib`) must publish a `v*` release with the renamed `<fmt>parser-*` artifact name before the explorer can fetch it.
