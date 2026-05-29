@@ -25,7 +25,7 @@ function(deploy_msys2_deps target)
 
     # Collect all msys2 DLLs needed by protobuf + abseil.
     # This list was derived from objdump -p on the dependency chain.
-    file(GLOB _absl_dlls "${_msys2_bin}/libabsl_*-2508.0.0.dll")
+    file(GLOB _absl_dlls "${_msys2_bin}/libabsl_*.dll")
     set(_dlls
         "${_msys2_bin}/libprotobuf.dll"
         "${_msys2_bin}/libutf8_validity.dll"

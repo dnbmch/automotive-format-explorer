@@ -142,9 +142,6 @@ void SignalGridItem::paint(QPainter* painter) {
         labelFont.setPixelSize(9);
         painter->setFont(labelFont);
 
-        const auto& sigs = _model->data(_model->index(0, 0), SignalMapModel::NameRole);
-        Q_UNUSED(sigs);
-
         for (int si = 0; si < _model->signalCount(); ++si) {
             const auto mi = _model->index(si, 0);
             const QString name = _model->data(mi, SignalMapModel::NameRole).toString();

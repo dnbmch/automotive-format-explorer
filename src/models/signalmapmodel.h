@@ -149,7 +149,7 @@ private:
     int _current_message = 0;
 
     // Pre-computed bit map for current message + mux filter.
-    std::vector<int16_t> _bit_map;
+    std::vector<int32_t> _bit_map;
     std::vector<bool> _overlap_map; // true if multiple signals claim this bit
     int _used_bits = 0;
 

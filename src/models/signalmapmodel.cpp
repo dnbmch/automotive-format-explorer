@@ -318,7 +318,7 @@ void SignalMapModel::rebuildBitMap() {
         for (int pos : positions) {
             if (pos >= 0 && pos < totalBits) {
                 if (_bit_map[pos] < 0) {
-                    _bit_map[pos] = static_cast<int16_t>(si);
+                    _bit_map[pos] = si;
                 } else if (_bit_map[pos] != si) {
                     _overlap_map[pos] = true;
                 }
@@ -326,7 +326,7 @@ void SignalMapModel::rebuildBitMap() {
         }
     }
 
-    for (int16_t v : _bit_map) {
+    for (int32_t v : _bit_map) {
         if (v >= 0) ++_used_bits;
     }
 }

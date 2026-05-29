@@ -148,14 +148,12 @@ int MemoryMapModel::objectAtAddress(quint64 address) const {
             return addr < obj->address;
         });
 
-    // Check candidates backwards (there may be overlapping objects).
+    // Check candidates backwards. Objects are sorted by start address only, so
+    // an earlier-starting object with a larger footprint can still cover the
+    // address — scan every candidate rather than stopping at the first miss.
     while (it != _filtered_objects.begin()) {
         --it;
         const MemoryObject* obj = *it;
-        if (obj->address + obj->size <= address) {
-            // Past this object and all earlier ones are even further left.
-            break;
-        }
         if (obj->address <= address && address < obj->address + obj->size) {
             return static_cast<int>(std::distance(_filtered_objects.begin(), it));
         }

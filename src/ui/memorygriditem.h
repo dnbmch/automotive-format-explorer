@@ -98,7 +98,8 @@ private:
     QPointF _mouse_pos;
 
     // Pre-computed flat color map: one int8 per byte in the segment.
-    // -1 = unoccupied, 0-7 = color index.
+    // -1 = unoccupied; otherwise (colorIndex | 0x10 alternate-shade bit), so
+    // stored values span 0-7 and 0x10-0x17, indexing the 32-entry _palette.
     std::vector<int8_t> _color_map;
     // Parallel map: object index per byte (-1 = none).
     std::vector<int32_t> _object_map;
