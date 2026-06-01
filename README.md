@@ -139,6 +139,8 @@ cmake -B build -DA2L_PARSER_VERSION=v0.2.0 -DDBC_PARSER_VERSION=v0.2.0 -DLDF_PAR
 - [docs/ref/signal_map.md](docs/ref/signal_map.md) — DBC/LDF signal grid visual + interaction reference.
 - [docs/ref/keyboard.md](docs/ref/keyboard.md) — application + grid keyboard shortcuts.
 - [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — `fetch_parser_lib` mechanics, MSYS2 deploy, shared-vs-static backend model.
+- [roadmap.md](roadmap.md) — direction and planned work.
+- [project_status.md](project_status.md) — current state of play.
 - [docs/backlog.md](docs/backlog.md) — known issues / planned changes.
 
 ## License
