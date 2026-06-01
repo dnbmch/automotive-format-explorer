@@ -213,8 +213,6 @@ See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-works
 
 - Qt 6 + QML is the entire UI layer. The workspace "no Qt" rule applies to the parser/library repos, not here
 
-`a2ldocumentsession.cpp` is ~2300 LOC and is queued for splitting along clear concern boundaries.
-
 ### CI / Release
 
 - `ci.yml` runs on push to master: Windows MinGW + Ubuntu 24.04

@@ -35,15 +35,13 @@ Move the aspirational sections out of `docs/ref/` (which is for current behaviou
 
 ## Refactor
 
-### BL-E5: Split `src/sessions/a2ldocumentsession.cpp` (~2300 LOC)
+### BL-E5: Split `src/sessions/a2ldocumentsession.cpp` ✅ DONE
 
-The file accreted construction, query, and rendering-helper responsibilities and is by a wide margin the largest source file in the repo. Split into 2-3 files along clear concern seams (e.g. construction vs query vs rendering helpers).
-
-No ctest target exists in this repo yet (`BL-E1` covers that). Any split should be paired with at least a smoke build plus a manual run-through of the existing A2L fixtures to catch regressions, since there is no automated safety net.
-
-Prefer folding the split into the next feature change that would have touched this file rather than running a standalone refactor.
-
-**Size:** L if standalone, S-M if folded into the next in-flight change.
+The detail-rendering logic was extracted into a `DetailPresenter` subclass:
+`a2ldetailpresenter.{h,cpp}` + `a2ldetailpresenter_ifdata.cpp`, holding a
+`const a2l::A2lFile&`. `a2ldocumentsession.cpp` is now 707 LOC and no source
+file exceeds the soft cap. Committed; local build-verify pending with the rest
+of the static-remediation work.
 
 ### BL-E6: `SignalGridItem` overlap stripe rendering subsection
 
