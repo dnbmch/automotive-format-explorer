@@ -30,7 +30,7 @@ Defined in [src/ui/signalgriditem.cpp](../../src/ui/signalgriditem.cpp). The gri
 
 ## Memory grid (A2L)
 
-Defined in [src/ui/memorygriditem.cpp](../../src/ui/memorygriditem.cpp). The grid currently responds to mouse input only (single click to select a byte); no keyboard handler is wired up. A keyboard navigation block matching the signal grid is tracked under `BL-E6` in [docs/backlog.md](../backlog.md).
+Defined in [src/ui/memorygriditem.cpp](../../src/ui/memorygriditem.cpp). The grid currently responds to mouse input only (single click to select a byte); no keyboard handler is wired up. A keyboard navigation block matching the signal grid is a planned enhancement — see [docs/plans/memory_view_planned.md](../plans/memory_view_planned.md).
 
 ## Tree (NavPanel)
 

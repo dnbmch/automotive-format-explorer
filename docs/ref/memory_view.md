@@ -93,17 +93,16 @@ Each row = 16 bytes (configurable: 8, 16, 32). Left gutter shows absolute addres
 | Unoccupied (in segment) | Dark gray | Allocated but not assigned |
 | Outside segment | Background | No data |
 
-Overlapping objects (e.g. measurement aliasing a characteristic address) get a hatched/striped pattern. Byte-level precision — partial bytes from bit_mask show as half-filled.
+Overlapping objects (e.g. a measurement aliasing a characteristic address) and sub-byte `bit_mask` footprints are not yet visually distinguished on the memory grid — see [planned enhancements](../plans/memory_view_planned.md).
 
 ### Hover tooltip
 
-On hover over a colored cell, show a floating tooltip:
+On hover over a colored cell, a floating tooltip shows name, type, address, and size:
 ```
 CHARACTERISTIC "KfAIRCTL_tTransDly"
 Type: CURVE  |  Address: 0x80100  |  Size: 24 bytes
-Record Layout: RL_CURVE_FLOAT32
-Conversion: CM_KfAIRCTL_tTransDly
 ```
+Record-layout and conversion fields in the tooltip are a [planned enhancement](../plans/memory_view_planned.md).
 
 ### Segment selector
 
@@ -133,11 +132,11 @@ Click a Characteristic, Measurement, or AxisPts in the tree. The memory view scr
 
 ### Memory → tree/detail
 
-Click a colored cell in the memory view. The tree auto-scrolls to and selects the owning object. The detail panel updates to show its properties. If the byte is shared by multiple objects, show a disambiguation popup.
+Click a colored cell in the memory view. The tree auto-scrolls to and selects the owning object. The detail panel updates to show its properties. When a byte is shared by multiple objects the owning object is selected; a disambiguation popup is a [planned enhancement](../plans/memory_view_planned.md).
 
 ### Memory → memory
 
-Click-drag to select a byte range. Status bar shows: `Selected: 0x80100 — 0x8010F (16 bytes) | 3 objects in range`. The detail panel lists all objects overlapping the selection.
+Click-drag byte-range selection (with a range status readout and multi-object detail listing) is a [planned enhancement](../plans/memory_view_planned.md). The grid currently supports single-click selection only.
 
 ## Size Calculation
 
@@ -175,7 +174,7 @@ This avoids the cascading visual error problem: an incorrect size for one object
 
 ### Measurement sub-byte precision
 
-For Measurements with `bit_mask`, the footprint is the byte(s) containing the masked bits. Display as a partially-filled cell. Multiple measurements sharing the same byte(s) via different bit_masks are shown as subdivided cells.
+For Measurements with `bit_mask`, the footprint is the byte(s) containing the masked bits. The current grid colors the whole containing byte(s); subdivided/partially-filled cells for sub-byte footprints are a [planned enhancement](../plans/memory_view_planned.md).
 
 ## Implementation Status
 
@@ -196,14 +195,12 @@ For Measurements with `bit_mask`, the footprint is the byte(s) containing the ma
 - Status bar: address range, object count, excluded measurement count
 - Shade alternation for adjacent same-color objects
 
-### Backlog
+### Planned
 
-- Full RecordLayout interpretation (alignment, index modes, deposit modes) — Tier 3 sizes
-- Gap detection (unassigned bytes between objects)
-- Overlap detection (two objects claiming same bytes)
-- Segment utilization percentage in header
-- Export: segment map as CSV or HTML report
-- Keyboard navigation within the grid
+Tier 3 sizing, overlap/gap detection and visualization, richer tooltips,
+byte-range selection, the disambiguation popup, segment utilization, export, and
+grid keyboard navigation are designed in
+[docs/plans/memory_view_planned.md](../plans/memory_view_planned.md).
 
 ## Technical Notes
 

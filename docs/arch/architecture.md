@@ -106,6 +106,18 @@ Center panel (memory grid / signal grid click)
 
 The grid items emit `hoveredTooltip` (string) and `nodeKeyClicked(int)` signals; the QML layer is responsible only for placement and signal routing.
 
+### Overlap stripes
+
+`SignalGridItem` marks bits claimed by more than one signal. After filling a cell with its signal color, if `SignalMapModel::isOverlap(bit)` is true it draws diagonal red hatching (`rgba(255,60,60,180)`, 1px pen) clipped to the cell — parallel lines stepped every 6px — over the base fill, so an overlapped bit reads as "colored, with red diagonal lines". The stripe is drawn *before* the selection border and highlight-flash overlay, so those keep visual priority.
+
+```
++-----+-----+-----+
+| sig | sig⟍| sig |   ⟍ = red diagonal hatch on an overlapped bit
++-----+-----+-----+
+```
+
+`MemoryGridItem` does not draw overlap stripes: A2L objects sit at distinct addresses, so overlap visualization on the memory grid is a planned enhancement (see [../plans/memory_view_planned.md](../plans/memory_view_planned.md)).
+
 ## Project Structure
 
 ```
@@ -113,7 +125,8 @@ src/
   core/         appcontroller, formatregistry, noderegistry, detailpresenter,
                 detailsection, treeitem, formatid, diagnostics
   models/       treemodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel
-  sessions/     documentsession (interface), adaptersessionbase, a2l/dbc/ldf sessions
+  sessions/     documentsession (interface), adaptersessionbase, a2l/dbc/ldf
+                sessions, a2l detail presenter (+ ifdata helpers)
   adapters/     a2l/dbc/ldf adapter + factory (extern "C" plugin entry points)
   ui/           memorygriditem, signalgriditem (QQuickPaintedItem renderers)
 qml/
@@ -122,7 +135,7 @@ qml/
 cmake/          FetchParserLib, DeployMsys2Deps
 ```
 
-`a2ldocumentsession.cpp` is currently the largest file (~2300 LOC) and is queued for splitting along clear concern boundaries (construction vs query vs render-helpers).
+A2L detail rendering lives in `a2ldetailpresenter.{h,cpp}` (+ `a2ldetailpresenter_ifdata.cpp`), a `DetailPresenter` subclass split out of `a2ldocumentsession.cpp` so no session file carries both construction/query and the bulk of the detail-building helpers.
 
 ## Memory Ownership
 

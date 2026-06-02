@@ -20,18 +20,14 @@ Items deliberately deferred or pending. Each entry says **what**, **where**, and
 
 ## Documentation
 
-### BL-E4: `docs/ref/memory_view.md` mixes current behaviour with unbuilt design
+### BL-E4: `docs/ref/memory_view.md` mixes current behaviour with unbuilt design ✅ DONE
 
-Several sections describe features that are not implemented:
-
-- Lines 96, 99-106: hatched/striped overlap pattern + half-filled bit-mask cells in the memory grid. Only `SignalGridItem::paint` (`src/ui/signalgriditem.cpp:93-103`) implements stripes; `MemoryGridItem` does not.
-- Lines 135-140: click-drag byte-range selection + "Selected: 0x… N objects in range" status. `MemoryGridItem` (`src/ui/memorygriditem.cpp:274-291`) implements single-click selection only.
-- Lines 136-137: disambiguation popup — no UI exists in `qml/components/NavPanel.qml` or anywhere else.
-- Lines 99-106: tooltip mock with "Record Layout / Conversion" fields. Actual `MemoryGridItem::hoveredTooltip` (`src/ui/memorygriditem.cpp:185-203`) emits name / type / address / size only.
-
-Move the aspirational sections out of `docs/ref/` (which is for current behaviour) to either a new `docs/spec/memory_view_planned.md` or directly into this backlog entry so `docs/ref/memory_view.md` describes only what exists today.
-
-**Size:** S — doc-only, no code changes.
+The unbuilt design (memory-grid overlap stripes + half-filled bit-mask cells,
+rich tooltip record-layout/conversion fields, click-drag byte-range selection,
+disambiguation popup, sub-byte subdivided cells, Tier 3 sizing, gap/overlap
+detection, utilization, export, grid keyboard nav) moved to
+[docs/plans/memory_view_planned.md](memory_view_planned.md). `docs/ref/memory_view.md`
+now describes only current behaviour and links to the plan for the rest.
 
 ## Refactor
 
@@ -43,10 +39,9 @@ The detail-rendering logic was extracted into a `DetailPresenter` subclass:
 file exceeds the soft cap. Committed; local build-verify pending with the rest
 of the static-remediation work.
 
-### BL-E6: `SignalGridItem` overlap stripe rendering subsection
+### BL-E6: `SignalGridItem` overlap stripe rendering subsection ✅ DONE
 
-`src/ui/signalgriditem.cpp:93-103` implements the overlap-stripe pattern (and the half-filled bit-mask cells implied by it). `docs/arch/architecture.md` mentions stripes only in the high-level "Rendering" section — there is no diagram or per-color rule explaining when each stripe pattern is drawn.
-
-Add a short subsection (architecture.md or a dedicated `docs/ref/signal_grid_rendering.md`) covering the rules and one example diagram. Defer until the rendering changes again so the doc and the code land together.
-
-**Size:** XS.
+`docs/arch/architecture.md` "Rendering" now has an "Overlap stripes" subsection
+documenting the `SignalMapModel::isOverlap(bit)` red diagonal hatch
+(`src/ui/signalgriditem.cpp:93-103`), with an example diagram and a note that
+`MemoryGridItem` does not draw stripes (planned).
