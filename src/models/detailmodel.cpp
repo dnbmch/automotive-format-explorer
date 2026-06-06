@@ -16,7 +16,7 @@ int DetailModel::rowCount(const QModelIndex& parent) const {
 }
 
 QVariant DetailModel::data(const QModelIndex& index, int role) const {
-    if (!index.isValid() || index.row() < 0 || index.row() >= _sections.size()) {
+    if (!index.isValid() || index.row() >= _sections.size()) {
         return {};
     }
 

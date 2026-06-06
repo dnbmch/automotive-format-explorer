@@ -212,34 +212,34 @@ int SignalMapModel::messageIndexForNodeKey(quint64 nodeKey) const {
     return -1;
 }
 
-quint64 SignalMapModel::signalNodeKey(int signalIndex) const {
+bool SignalMapModel::isValidSignalIndex(int index) const {
     const auto& sigs = currentSignals();
-    if (signalIndex < 0 || signalIndex >= static_cast<int>(sigs.size())) return 0;
-    return sigs[signalIndex].nodeKey;
+    return index >= 0 && index < static_cast<int>(sigs.size());
+}
+
+quint64 SignalMapModel::signalNodeKey(int signalIndex) const {
+    if (!isValidSignalIndex(signalIndex)) return 0;
+    return currentSignals()[signalIndex].nodeKey;
 }
 
 QString SignalMapModel::signalName(int signalIndex) const {
-    const auto& sigs = currentSignals();
-    if (signalIndex < 0 || signalIndex >= static_cast<int>(sigs.size())) return {};
-    return sigs[signalIndex].name;
+    if (!isValidSignalIndex(signalIndex)) return {};
+    return currentSignals()[signalIndex].name;
 }
 
 int SignalMapModel::signalColorIndex(int signalIndex) const {
-    const auto& sigs = currentSignals();
-    if (signalIndex < 0 || signalIndex >= static_cast<int>(sigs.size())) return 0;
-    return sigs[signalIndex].colorIndex;
+    if (!isValidSignalIndex(signalIndex)) return 0;
+    return currentSignals()[signalIndex].colorIndex;
 }
 
 int SignalMapModel::signalMuxType(int signalIndex) const {
-    const auto& sigs = currentSignals();
-    if (signalIndex < 0 || signalIndex >= static_cast<int>(sigs.size())) return 0;
-    return sigs[signalIndex].multiplexType;
+    if (!isValidSignalIndex(signalIndex)) return 0;
+    return currentSignals()[signalIndex].multiplexType;
 }
 
 QString SignalMapModel::signalTooltip(int signalIndex) const {
-    const auto& sigs = currentSignals();
-    if (signalIndex < 0 || signalIndex >= static_cast<int>(sigs.size())) return {};
-    const auto& sig = sigs[signalIndex];
+    if (!isValidSignalIndex(signalIndex)) return {};
+    const auto& sig = currentSignals()[signalIndex];
 
     QString orderStr = sig.bigEndian ? QStringLiteral("big-endian") : QStringLiteral("little-endian");
     QString tip = QStringLiteral("%1\nBits: [%2..%3] (%4-bit, %5)")

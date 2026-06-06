@@ -205,7 +205,7 @@ int MemoryMapModel::objectIndexForNodeKey(quint64 nodeKey) const {
 }
 
 quint64 MemoryMapModel::objectAddress(int objectIndex) const {
-    if (objectIndex < 0 || static_cast<size_t>(objectIndex) >= _filtered_objects.size()) {
+    if (static_cast<size_t>(objectIndex) >= _filtered_objects.size()) {
         return 0;
     }
     return _filtered_objects[static_cast<size_t>(objectIndex)]->address;

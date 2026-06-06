@@ -144,6 +144,7 @@ private:
     void rebuildMuxGroups();
 
     const std::vector<SignalEntry>& currentSignals() const;
+    bool isValidSignalIndex(int index) const;
 
     std::vector<MessageEntry> _messages;
     int _current_message = 0;
