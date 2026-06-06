@@ -22,9 +22,8 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - **Detail-presenter split committed, build-verify pending** — the large
   `a2ldocumentsession.cpp` had its detail-rendering logic extracted into
   `a2ldetailpresenter.{h,cpp}` + `a2ldetailpresenter_ifdata.cpp`. Committed but
-  not yet compiled locally; static review clean. (`docs/backlog.md` BL-E5 and
-  the CLAUDE.md "~2300 LOC queued" note describe the pre-split state and need
-  reconciling.)
+  not yet compiled locally; static review clean. (`docs/backlog.md` BL-E5
+  tracks this work.)
 - **Release-artifact fetch blocked (BL-W13)** — configure fetches renamed
   `*parser-*` release assets that do not exist until each parser is re-tagged.
 
