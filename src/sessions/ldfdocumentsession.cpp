@@ -5,10 +5,9 @@
 #include <algorithm>
 #include <unordered_map>
 
-#pragma push_macro("signals")
 #undef signals
+
 #include <google/protobuf/util/json_util.h>
-#pragma pop_macro("signals")
 
 namespace {
 
