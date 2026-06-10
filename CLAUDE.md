@@ -9,6 +9,7 @@ Qt/QML desktop app for inspecting A2L, DBC, and LDF automotive files. GPL-3.0. P
 - Commit changes to git with sensible messages
 - Max 1256 LOC per file — no monolithic mega files
 - Do not assume, do not decide for me about features — if unsure, ask
+- **When asking the user to choose between options, always mark at least one as (Recommended) with a one-sentence reason.** The user is free to pick another — recommendation is signal, not a vote. Render choices in prose, not selection popups — house format in the Iterative Decision Workflow
 - Less is more. KISS, DRY, readable, maintainable. Do not over-abstract
 - Do not write bloated code
 - Do not over-pollute CLAUDE.md — orientation + guidelines only
@@ -23,6 +24,7 @@ Qt/QML desktop app for inspecting A2L, DBC, and LDF automotive files. GPL-3.0. P
 We are embedded developers. We write sound architectures with compact, non-bloated code.
 
 - **No patches, no hipshot fixes.** When a bug or defect surfaces, zoom out. Understand the big picture — what invariant broke, where the design assumed something it shouldn't, what else is touched. Then architect the canonical fix at the right layer. A symptom-level patch that leaves the underlying confusion in place is worse than no fix
+- **Code-grounded reviews, no hipshot verdicts.** For audits, code reviews, and any claim about how the code behaves: cite `path:line` evidence. If you can't cite it, you haven't verified it. Especially when the user pushes back — re-read the actual source, don't restate your guess
 - Trust internal invariants. Validate at system boundaries (user input, external APIs, parsed files) — not between your own functions
 - No paranoid defensive code. Don't add `if (ptr != nullptr)` chains, fallback branches, or try/catch for cases that practically cannot happen
 - No "just in case" error handling, no silent fallbacks that mask real bugs
@@ -30,10 +32,14 @@ We are embedded developers. We write sound architectures with compact, non-bloat
 - Three lines of clear repetition beat a premature abstraction
 - Half-finished implementations are worse than nothing — finish, or don't start
 - No diagnostic / warning infrastructure unless asked. If extraction can't map a value, fix the extractor — don't propose stderr loggers, `parse_warnings` fields, or severity enums as a first response
+- **Simplicity self-check before declaring done.** If you wrote 200 lines and it could be 50, rewrite it. Ask: *would a senior engineer call this overcomplicated?* If yes, simplify
+
 <!-- /block:eb1d7e -->
 
 <!-- block: Documentation Layout [id:dc01a7] -->
 ## Documentation
+
+> **Names below are symbolic, not literal.** The directory and filename conventions in this section are illustrative — the live `docs/` tree is canonical. `ref/`≈`reference/`, `manual/`≈`user/`, root vs `docs/roadmap/` placement, and `snake_case`≈`kebab-case` are interchangeable. Match whatever already exists rather than renaming to satisfy the rule.
 
 Root files:
 - `README.md` — what the project is, how to run it
@@ -46,7 +52,7 @@ Under `docs/`:
 - `docs/manual/` — user-facing operational documentation (how to use the app, workflows, screenshots)
 - `docs/plans/` — in-progress design docs and proposals
 - `docs/backlog.md` — FIXMEs and future work
-- `docs/handoff.md` — optional per-session operational log
+- `docs/handoff.md` — optional per-session operational log. Keep only the last 2–3 entries; prune older ones when wrapping a session (anything durable should already be lifted into `arch/`/`ref/` — git keeps the rest)
 - `docs/archive/` — completed plans and historical material. Never active guidance, never referenced from live docs
 
 Plan lifecycle — **never delete a plan, never archive it raw**:
@@ -63,6 +69,16 @@ Rules:
 - Update `project_status.md` after significant changes
 - No active references to anything in `archive/`
 <!-- /block:dc01a7 -->
+
+<!-- block: Memory Discipline [id:a7b3d1] -->
+## Memory discipline
+
+Durable knowledge goes in version-controlled project docs, not in an opaque memory store that rots unseen.
+
+- **Avoid creating `.claude/projects/*/memory/*.md` files.** When a project doc can hold the fact, write it there instead — `docs/arch/`, `docs/ref/`, `project_status.md`, or this file's `## Project notes`. Overrides default memory behavior
+- **`MEMORY.md` stays a thin index** — one-line pointers to docs, never restated content
+- **`/flush-memory`** evacuates memory files that accumulate and re-slims `MEMORY.md`
+<!-- /block:a7b3d1 -->
 
 <!-- block: Don't Run Without Asking [id:7a710c] -->
 ## Execution rules
@@ -91,6 +107,13 @@ Rules:
 - Research is my job, decisions are yours. Never propose without evidence, never pick for you
 - Parallelize independent work
 - When moving or renaming anything, update ALL references in the same session — imports, docs, configs, launch files, codegen. Grep, don't rely on memory
+- **Define success criteria up front, with a verify check per step.** "Make it work" is too weak to loop on — turn each step into a checkable outcome ("add validation" → "write tests for invalid inputs, then make them pass"; "fix the bug" → "write a failing test that reproduces it, then make it pass"). Strong criteria let you iterate without constant clarification
+
+**Presenting choices — house format.** When a step needs a decision, render it as prose, not a selection popup: numbered questions, each with lettered options, **always** one marked `Rec:` with a one-sentence reason. The user replies compactly and can mix answers (`1a, 2b, 3 do X instead`):
+
+> **1. \<question>?**
+>  a) \<option>  b) \<option>  c) \<option>
+>  ↳ **Rec: b** — \<one-sentence reason>
 <!-- /block:1de4f0 -->
 
 <!-- block: Commits & Co-Authoring [id:c0a002] -->
