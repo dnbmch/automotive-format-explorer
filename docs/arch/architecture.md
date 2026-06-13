@@ -38,7 +38,7 @@ Non-Windows builds skip the DWMWA dance and call `window->show()` directly.
 
 Each parser (a2l, dbc, ldf) is exposed to the explorer as a "backend" via a small C-ABI factory:
 
-- **Windows** — backends are shared libraries (`.dll`) loaded at runtime via `QLibrary`. Each DLL exports `extern "C"` entry points that the explorer resolves to construct the backend's `FormatAdapter`. Backends ship under `plugins/<format>/`.
+- **Windows** — backends are shared libraries (`.dll`) loaded at runtime via `QLibrary`. Each DLL exports `extern "C"` entry points that the explorer resolves to construct the backend's `FormatAdapter`. Each backend DLL (`explorer-<fmt>-backend.dll`) is deployed next to the executable and loaded by exact name from `QCoreApplication::applicationDirPath()` (`src/core/appcontroller.cpp:254-255`) — there is no `plugins/<format>/` subdirectory.
 - **Linux** — backends are static libraries linked into the executable. Each backend self-registers in a constructor; the `FormatRegistry` collects registrations on startup. Built with `-DBACKENDS_STATIC`.
 
 The `FormatRegistry` (`src/core/formatregistry.h`) is the single lookup point: given a `FormatId`, return the `FormatAdapter*` that can load files of that type. The platform difference is invisible above this layer.

@@ -168,9 +168,9 @@ These require full RecordLayout interpretation:
 
 ### Visual treatment of approximate sizes
 
-Objects with Tier 1/2 sizes render with solid color blocks. Objects with Tier 3 layouts (where we can't compute exact size) render with a **dashed border** and use a best-guess size estimate (sum of component sizes without alignment). Tooltip shows `"Size: ~48 bytes (approximate — complex layout)"`.
+All objects render with solid color blocks. Objects with Tier 3 layouts (where we can't compute exact size) use a best-guess size estimate (sum of component sizes without alignment) and the tooltip marks the size approximate, e.g. `"Size: ~48 bytes (approx)"`. A distinct **dashed border** for approximate-size blocks is a [planned enhancement](../plans/memory_view_planned.md).
 
-This avoids the cascading visual error problem: an incorrect size for one object doesn't shift subsequent blocks because each object is placed at its own known address. Gaps and overlaps between objects are real (or indicate our size estimate is wrong, which the dashed border communicates).
+This avoids the cascading visual error problem: an incorrect size for one object doesn't shift subsequent blocks because each object is placed at its own known address. Gaps and overlaps between objects are real (or indicate our size estimate is wrong).
 
 ### Measurement sub-byte precision
 

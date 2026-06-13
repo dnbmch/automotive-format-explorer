@@ -19,13 +19,10 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 
 ## In flight
 
-- **Detail-presenter split committed, build-verify pending** — the large
-  `a2ldocumentsession.cpp` had its detail-rendering logic extracted into
-  `a2ldetailpresenter.{h,cpp}` + `a2ldetailpresenter_ifdata.cpp`. Committed but
-  not yet compiled locally; static review clean. (`docs/backlog.md` BL-E5
-  tracks this work.)
-- **Release-artifact fetch blocked (BL-W13)** — configure fetches renamed
-  `*parser-*` release assets that do not exist until each parser is re-tagged.
+- **Release-artifact fetch resolved, build-verify pending (BL-W13)** — the
+  `CMakeLists.txt` pins point at the published `v0.3.0` / `v0.3.0` / `v0.4.0`
+  `-lib` releases that carry the renamed `parser-*` assets, so configure fetches
+  existing artifacts. Not yet compiled locally with the new pins.
 
 ## Deferred
 

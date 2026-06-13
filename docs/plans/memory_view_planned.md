@@ -46,6 +46,14 @@ For measurements with a `bit_mask`, render the footprint byte as a subdivided
 cell, so multiple measurements sharing a byte through different masks are
 distinguishable.
 
+## Dashed border for approximate-size blocks
+
+Objects whose size is only approximate (Tier 3 layouts, where exact size needs
+full `RecordLayout` interpretation) currently render as solid blocks like every
+other object; the tooltip is the only signal that the size is a best guess.
+Planned: draw approximate-size blocks with a **dashed border** so the
+approximation reads visually, not just in the tooltip.
+
 ## Other backlog items
 
 - Full `RecordLayout` interpretation for exact sizes (Tier 3): alignment padding

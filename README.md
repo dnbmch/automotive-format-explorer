@@ -145,6 +145,6 @@ cmake -B build -DA2L_PARSER_VERSION=v0.2.0 -DDBC_PARSER_VERSION=v0.2.0 -DLDF_PAR
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE.md](LICENSE.md).
+GPL-3.0-or-later. See [LICENSE](LICENSE).
 
 The parser libraries this app loads are dual-licensed (GPL-2.0 or Commercial); they are linked via their public release artifacts, not via source dependency.
