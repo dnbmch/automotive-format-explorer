@@ -28,26 +28,15 @@ What it does, step by step:
 Versions are pinned in the top-level [CMakeLists.txt](../../CMakeLists.txt) (`A2L_PARSER_VERSION`, `DBC_PARSER_VERSION`, `LDF_PARSER_VERSION`). Override at configure time:
 
 ```bash
-cmake -B build -DA2L_PARSER_VERSION=v0.2.0 -DDBC_PARSER_VERSION=v0.2.0 -DLDF_PARSER_VERSION=v0.3.0
+cmake -B build -DA2L_PARSER_VERSION=v0.3.0 -DDBC_PARSER_VERSION=v0.3.0 -DLDF_PARSER_VERSION=v0.4.0
 ```
 
 ### Failure modes
 
-- **HTTP error on download:** the release does not exist yet (most common after a parser CMake target rename — see workspace `BL-W13`), the repo is private and the host has no token, or the network is unreachable. The configure aborts with the failing URL.
+- **HTTP error on download:** the release does not exist yet, the repo is private and the host has no token, or the network is unreachable. The configure aborts with the failing URL.
 - **`Header not found after extraction`:** the release was published with a different layout than the macro expects. Update the `HEADER` argument or fix the parser's release packaging.
 - **`Library not found after extraction`:** same as above for the platform-specific binary tarball.
 - **`protoc not found`:** local protobuf install is missing `protoc`. On msys2 install `mingw-w64-x86_64-protobuf-c++`; on Ubuntu install `protobuf-compiler`.
-
-### Local-cache workaround
-
-If a parser repo renames its CMake target (as in BL-W12 `*extract` → `*parser`) but the release artifact is still named the old way, you can rename the cached files to bypass the download:
-
-```bash
-cp -r build/_parser_deps/a2lextract-v0.2.0 build/_parser_deps/a2lparser-v0.2.0
-mv build/_parser_deps/a2lparser-v0.2.0/lib/liba2lextract.a build/_parser_deps/a2lparser-v0.2.0/lib/liba2lparser.a
-```
-
-Configure will see the sentinel files and skip the (failing) network fetch. This is a stopgap — the real fix is to tag fresh parser releases under the new name.
 
 ## Windows DLL deploy (`deploy_msys2_deps`)
 
@@ -63,7 +52,7 @@ Two assembly paths, selected at configure time via the `BACKENDS_STATIC` define.
 
 | Model | Platform | What ships |
 |---|---|---|
-| Shared (default on Windows) | Windows MinGW | The three adapter sources become individual `.dll` plugins, discovered at runtime by `QLibrary` scanning the executable directory for `*adapter*.dll`. The main `.exe` does not link against the parser libraries directly. |
+| Shared (default on Windows) | Windows MinGW | The three adapter sources become individual `.dll` backends (`explorer-<fmt>-backend.dll`) deployed next to the `.exe`. On the first open of a format, `AppController` constructs that backend's exact DLL name and loads it via `QLibrary`, resolving the `create<Fmt>AdapterPlugin` factory — lazy per format, no eager directory scan. The main `.exe` does not link against the parser libraries directly. |
 | Static (default on Linux) | Linux | All adapter sources are added to the main executable's `target_sources()`. The parser libraries are linked into the executable directly. `BACKENDS_STATIC` is defined as a compile-flag, and [src/core/appcontroller.cpp](../../src/core/appcontroller.cpp) registers the three `extern "C" create<Fmt>AdapterPlugin()` factories at startup instead of scanning for DLLs. |
 
 Adding a fourth format adapter requires updating both branches — see [docs/arch/adapter_contract.md](../arch/adapter_contract.md).

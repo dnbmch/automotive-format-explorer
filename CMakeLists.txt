@@ -15,9 +15,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(FetchParserLib)
 include(DeployMsys2Deps)
 
-set(A2L_PARSER_VERSION "v0.2.0" CACHE STRING "a2l-parser-lib release tag")
-set(DBC_PARSER_VERSION "v0.2.0" CACHE STRING "dbc-parser-lib release tag")
-set(LDF_PARSER_VERSION "v0.3.0" CACHE STRING "ldf-parser-lib release tag")
+set(A2L_PARSER_VERSION "v0.3.0" CACHE STRING "a2l-parser-lib release tag")
+set(DBC_PARSER_VERSION "v0.3.0" CACHE STRING "dbc-parser-lib release tag")
+set(LDF_PARSER_VERSION "v0.4.0" CACHE STRING "ldf-parser-lib release tag")
 
 fetch_parser_lib(
     TARGET  a2lparser
