@@ -19,10 +19,8 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 
 ## In flight
 
-- **Release-artifact fetch resolved, build-verify pending (BL-W13)** — the
-  `CMakeLists.txt` pins point at the published `v0.3.0` / `v0.3.0` / `v0.4.0`
-  `-lib` releases that carry the renamed `parser-*` assets, so configure fetches
-  existing artifacts. Not yet compiled locally with the new pins.
+None. The `CMakeLists.txt` parser pins (`v0.3.0` / `v0.3.0` / `v0.4.0`) fetch the
+renamed `-lib` assets and a clean configure + build is green (`BL-W13` resolved).
 
 ## Deferred
 
