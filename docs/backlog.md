@@ -12,11 +12,15 @@ Items deliberately deferred or pending. Each entry says **what**, **where**, and
 
 ## Lifecycle hygiene
 
-### BL-E2: QML engine vs controller declaration order
+### BL-E2: QML engine vs controller declaration order ✅ DONE — no change needed
 
-`src/main.cpp:33` registers `&controller` as a singleton instance with the QML engine. Engine teardown order on `QGuiApplication::exec()` return depends on declaration order in main; the controller currently survives the engine, which works today but is brittle. Move `QQmlApplicationEngine engine;` above `AppController controller;` so the engine is destroyed first.
-
-**Size:** XS.
+`src/main.cpp` already declares `AppController controller;` before
+`QQmlApplicationEngine engine;`, so reverse-order destruction tears the engine
+down first — exactly what the singleton registration (`&controller` outlives the
+engine) requires. This matches [docs/arch/architecture.md](arch/architecture.md)
+"The QML engine is destroyed first on app exit." No reorder needed; a one-line
+comment in `main.cpp` noting the order is load-bearing is the only optional
+follow-up.
 
 ## Documentation
 
@@ -26,7 +30,7 @@ The unbuilt design (memory-grid overlap stripes + half-filled bit-mask cells,
 rich tooltip record-layout/conversion fields, click-drag byte-range selection,
 disambiguation popup, sub-byte subdivided cells, Tier 3 sizing, gap/overlap
 detection, utilization, export, grid keyboard nav) moved to
-[docs/plans/memory_view_planned.md](memory_view_planned.md). `docs/ref/memory_view.md`
+[docs/plans/memory_view_planned.md](plans/memory_view_planned.md). `docs/ref/memory_view.md`
 now describes only current behaviour and links to the plan for the rest.
 
 ## Refactor

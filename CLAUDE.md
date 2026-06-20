@@ -109,11 +109,14 @@ Rules:
 - When moving or renaming anything, update ALL references in the same session — imports, docs, configs, launch files, codegen. Grep, don't rely on memory
 - **Define success criteria up front, with a verify check per step.** "Make it work" is too weak to loop on — turn each step into a checkable outcome ("add validation" → "write tests for invalid inputs, then make them pass"; "fix the bug" → "write a failing test that reproduces it, then make it pass"). Strong criteria let you iterate without constant clarification
 
-**Presenting choices — house format.** When a step needs a decision, render it as prose, not a selection popup: numbered questions, each with lettered options, **always** one marked `Rec:` with a one-sentence reason. The user replies compactly and can mix answers (`1a, 2b, 3 do X instead`):
+**Presenting choices — house format.** When a step needs a decision, render it as prose, not a selection popup: numbered questions, **each option on its own line** (never crammed onto one line — that's unreadable), **always** one marked `Rec:` with a one-sentence reason. The user replies compactly and can mix answers (`1a, 2b, 3 do X instead`):
 
 > **1. \<question>?**
->  a) \<option>  b) \<option>  c) \<option>
->  ↳ **Rec: b** — \<one-sentence reason>
+> - a) \<option>
+> - b) \<option>
+> - c) \<option>
+>
+> ↳ **Rec: b** — \<one-sentence reason>
 <!-- /block:1de4f0 -->
 
 <!-- block: Commits & Co-Authoring [id:c0a002] -->
@@ -143,9 +146,10 @@ This project has no external consumers yet. Act accordingly:
 <!-- /block:9e7f1d -->
 
 <!-- block: File-Path Link Convention [id:f11e7a] -->
-## File references
+## Referencing code & IDs
 
-When referencing code in chat or docs, use `path:line` so the user can click through. Example: `src/MapPoint.h:42`.
+- **Code → `path:line`.** When referencing code in chat or docs, use `path:line` so the user can click through. Example: `src/MapPoint.h:42`.
+- **IDs are never bare.** Whenever you name a ticket / task / backlog / issue ID (`RB-94`, JIRA keys, item numbers) — in chat or in a handoff/status summary — gloss it inline on **every** mention: `RB-94 (proximity-sensor calibration drift)`. The user must never open a doc to decode an ID, nor remember a code from earlier in the conversation. Bare strings like "Close RB-94 + RB-88 via the proof sign-off" are banned.
 <!-- /block:f11e7a -->
 
 ## Project notes

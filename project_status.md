@@ -24,8 +24,6 @@ renamed `-lib` assets and a clean configure + build is green (`BL-W13` resolved)
 
 ## Deferred
 
-Tracked in [docs/backlog.md](docs/backlog.md): ctest/QTest scaffolding (BL-E1),
-engine/controller teardown ordering (BL-E2), trimming aspirational sections out
-of `docs/ref/memory_view.md` (BL-E4), and the signal-grid stripe-rendering
-documentation (BL-E6). Memory-grid view-richness and new-format backends are in
+Tracked in [docs/backlog.md](docs/backlog.md): ctest/QTest scaffolding (BL-E1) is
+the only open item. Memory-grid view-richness and new-format backends are in
 [roadmap.md](roadmap.md).

@@ -42,9 +42,11 @@ cmake -B build -DA2L_PARSER_VERSION=v0.3.0 -DDBC_PARSER_VERSION=v0.3.0 -DLDF_PAR
 
 Defined in [cmake/DeployMsys2Deps.cmake](../../cmake/DeployMsys2Deps.cmake) and used in the top-level `CMakeLists.txt` under the `WIN32` branch.
 
-Copies Qt and toolchain runtime DLLs (`Qt6Core.dll`, `Qt6Quick.dll`, `libgcc_s_seh-1.dll`, `libwinpthread-1.dll`, `libstdc++-6.dll`, protobuf DLLs, etc.) plus QML modules from the host MSYS2 install (`C:\msys64\mingw64\bin` and `C:\msys64\mingw64\share/qt6/qml/...`) into the build output directory next to the explorer `.exe`. Without this, the built binary fails to launch with a missing-DLL error.
+This is a **local-build convenience only**. It copies the protobuf/abseil dependency chain and the MinGW runtime — `libprotobuf.dll`, `libutf8_validity.dll`, `libutf8_range.dll`, `zlib1.dll`, `libgcc_s_seh-1.dll`, `libstdc++-6.dll`, `libwinpthread-1.dll`, and the `libabsl_*.dll` glob — from the host MSYS2 `bin` (`C:\msys64\mingw64\bin`) into the build output directory next to the explorer `.exe`, so a developer can run the freshly built binary without MSYS2 on `PATH`. It does **not** copy any Qt6 DLLs or QML modules.
 
 The deploy step uses `cmake -E copy_if_different` for each known dependency. To add a new dependency, append it to the list in `DeployMsys2Deps.cmake`. The deploy runs at build time as a `POST_BUILD` step on the `automotive-format-explorer` target.
+
+Release packaging is separate: [.github/workflows/release.yml](../../.github/workflows/release.yml) assembles the redistributable Windows zip and bundles the Qt6 DLLs, platform/style/imageformat/TLS plugins, and the imported QML modules itself. The local helper does not produce a distributable bundle.
 
 ## Backend linking model — shared vs static
 

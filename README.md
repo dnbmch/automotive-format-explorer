@@ -123,7 +123,7 @@ cmake --build build
 Parser library versions are pinned in `CMakeLists.txt`. To override:
 
 ```bash
-cmake -B build -DA2L_PARSER_VERSION=v0.2.0 -DDBC_PARSER_VERSION=v0.2.0 -DLDF_PARSER_VERSION=v0.3.0
+cmake -B build -DA2L_PARSER_VERSION=v0.3.0 -DDBC_PARSER_VERSION=v0.3.0 -DLDF_PARSER_VERSION=v0.4.0
 ```
 
 ### Platform Notes

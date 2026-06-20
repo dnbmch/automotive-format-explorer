@@ -76,19 +76,46 @@ On Windows (`.dll` plugin discovery) `QLibrary::resolve()` looks up this exact s
 
 ## CMake wiring
 
-```cmake
-# CMakeLists.txt — call once per parser dependency
-fetch_parser_lib(
-    TARGET <fmt>parser
-    VERSION ${<FMT>_PARSER_VERSION}   # e.g. v0.2.0
-)
-target_link_libraries(automotive-format-explorer PRIVATE <fmt>parser)
+Each format compiles into its own backend library — `explorer-<fmt>-backend`, built `SHARED` on Windows and `STATIC` on Linux via `${_backend_lib_type}`. The parser lib links **into that backend**, never into the `automotive-format-explorer` exe directly. The exe pulls backends in differently per platform: `add_dependencies` on Windows (the `.dll` is loaded at runtime by `QLibrary`), a direct static link on Linux.
 
-# add the new source files to target_sources(automotive-format-explorer ...)
-# under both Windows (SHARED) and Linux (BACKENDS_STATIC) branches
+```cmake
+# CMakeLists.txt — fetch the parser dependency (once per format)
+fetch_parser_lib(
+    TARGET  <fmt>parser
+    REPO    dnbmch/<fmt>-parser-lib
+    VERSION "${<FMT>_PARSER_VERSION}"   # match CMakeLists.txt
+    HEADER  <fmt>/<fmt>file.h
+)
+
+# Per-format backend library — built SHARED (Windows) or STATIC (Linux)
+qt_add_library(explorer-<fmt>-backend ${_backend_lib_type}
+    src/adapters/<fmt>adapter.cpp
+    src/sessions/<fmt>documentsession.cpp
+)
+target_include_directories(explorer-<fmt>-backend PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+target_link_libraries(explorer-<fmt>-backend
+    PRIVATE
+        Qt6::Core
+        protobuf::libprotobuf
+        explorer-core
+        <fmt>parser          # parser links INTO the backend, not the exe
+)
+set_target_properties(explorer-<fmt>-backend PROPERTIES
+    AUTOMOC OFF
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+)
+
+# Wire the backend into the exe — per platform
+if(WIN32)
+    add_dependencies(automotive-format-explorer explorer-<fmt>-backend)
+else()
+    target_link_libraries(automotive-format-explorer PRIVATE explorer-<fmt>-backend)
+endif()
 ```
 
-`fetch_parser_lib` is implemented in [cmake/FetchParserLib.cmake](../../cmake/FetchParserLib.cmake). It downloads the renamed `<fmt>parser-*` release artifact from the public `-lib` repo's GitHub Releases at configure time.
+`fetch_parser_lib` is implemented in [cmake/FetchParserLib.cmake](../../cmake/FetchParserLib.cmake). It downloads the renamed `<fmt>parser-*` release artifact from the public `-lib` repo's GitHub Releases at configure time. On Linux, `BACKENDS_STATIC` is defined on the exe and the `create<Fmt>AdapterPlugin()` factory is registered at startup; on Windows the backend `.dll` is discovered and loaded lazily on first open.
 
 ## Center panel
 
@@ -106,8 +133,8 @@ Both views are `QQuickPaintedItem` C++ renderers driven by pre-computed flat arr
 1. Add `FormatId::<FMT>` to `src/core/formatid.h`.
 2. Write the adapter pair: `src/adapters/<fmt>adapter.{h,cpp}` with the `extern "C"` factory.
 3. Write the session: `src/sessions/<fmt>documentsession.{h,cpp}` extending `AdapterSessionBase`. Implement `treeModel()`, `selectNode()`, and either a center-panel pair or leave the defaults.
-4. Call `fetch_parser_lib(TARGET <fmt>parser ...)` in `CMakeLists.txt` and link it.
-5. Add the new source files to `target_sources(automotive-format-explorer ...)` for both Windows shared-library and Linux `BACKENDS_STATIC` branches.
+4. Call `fetch_parser_lib(TARGET <fmt>parser ...)` in `CMakeLists.txt`.
+5. Add an `explorer-<fmt>-backend` library (`qt_add_library(... ${_backend_lib_type})`) carrying the new adapter/session sources, link the parser plus `explorer-core` into it, then wire it to the exe — `add_dependencies` on Windows, `target_link_libraries` on Linux.
 6. Register the create-function in `AppController::AppController()` under `#ifdef BACKENDS_STATIC`.
 7. Run the app, drag in a sample file, verify the tab opens and the tree populates.
 
