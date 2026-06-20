@@ -176,6 +176,22 @@ bool SignalMapModel::isSignalVisible(int signalIndex) const {
     return sig.multiplexValue == selectedValue;
 }
 
+int SignalMapModel::muxGroupForSignal(int signalIndex) const {
+    const auto& sigs = currentSignals();
+    if (signalIndex < 0 || signalIndex >= static_cast<int>(sigs.size())) {
+        return -1;
+    }
+    const auto& sig = sigs[signalIndex];
+    if (sig.multiplexType != 2 && sig.multiplexType != 3) {
+        return -1;
+    }
+    auto it = std::find(_mux_values.begin(), _mux_values.end(), sig.multiplexValue);
+    if (it == _mux_values.end()) {
+        return -1;
+    }
+    return static_cast<int>(std::distance(_mux_values.begin(), it));
+}
+
 // --- Bit queries ---
 
 int SignalMapModel::signalAtBit(int bitPosition) const {

@@ -69,11 +69,13 @@ qt_add_library(explorer-a2l-backend ${_backend_lib_type}
 qt_add_library(explorer-dbc-backend ${_backend_lib_type}
     src/adapters/dbcadapter.cpp
     src/sessions/dbcdocumentsession.cpp
+    src/sessions/dbcdetailpresenter.cpp
 )
 
 qt_add_library(explorer-ldf-backend ${_backend_lib_type}
     src/adapters/ldfadapter.cpp
     src/sessions/ldfdocumentsession.cpp
+    src/sessions/ldfdetailpresenter.cpp
 )
 
 qt_add_executable(automotive-format-explorer

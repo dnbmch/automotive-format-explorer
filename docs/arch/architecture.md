@@ -64,15 +64,13 @@ A `DocumentSession` (interface in `src/sessions/documentsession.h`) is the per-d
 | `treeModel()` | `TreeModel*` for the nav panel |
 | `detailModel()` | `DetailModel*` — the detail panel's section/field model |
 | `diagnostics()` | `QList<DiagnosticMessage>` — diagnostics gathered during load |
-| `hasWarnings()` | `bool` — drives the ⚠ indicator on the tab strip |
+| `hasWarnings()` | `bool` — true when a load produced warning-severity diagnostics (none are emitted yet) |
 | `selectNode(quint64 key)` | selects the entity with the given node key |
 | `centerPanelSource()` | `QUrl` — QML component URL; empty means the layout collapses to two columns |
 | `centerPanelModel()` | `QAbstractListModel*` for the center panel; null when there is no center panel |
 | `moveModelsToThread(QThread*)` | moves the session's models to the given thread |
 
-`AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides the common machinery (NodeRegistry hookup, tree construction skeleton, warning aggregation). The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`) inherit from it and supply format-specific tree building, detail sections, and center-panel choice.
-
-`hasWarnings()` returns true when extraction surfaced raw-fallback content or unmapped enum values that the consumer should review — the indicator is informational, not blocking. Source-of-truth lives in each session's diagnostics collector.
+`AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides the common machinery (NodeRegistry hookup, tree construction skeleton, diagnostics collection). The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`) inherit from it and supply format-specific tree building, detail sections, and center-panel choice.
 
 ## NodeRegistry and node keys
 

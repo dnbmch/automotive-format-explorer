@@ -29,6 +29,11 @@ Item {
         let sigIdx = mapModel.signalIndexForNodeKey(nodeKey)
         if (sigIdx >= 0) {
             gridItem.selectedSignalIndex = sigIdx
+            if (!mapModel.isSignalVisible(sigIdx)) {
+                let g = mapModel.muxGroupForSignal(sigIdx)
+                mapModel.currentMuxGroup = g
+                muxCombo.currentIndex = g + 1
+            }
             gridItem.highlightSignal(sigIdx)
         }
     }

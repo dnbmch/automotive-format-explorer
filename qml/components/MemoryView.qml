@@ -21,6 +21,9 @@ Item {
 
     function scrollToNodeKey(nodeKey) {
         if (!mapModel) return
+        let seg = mapModel.segmentIndexForNodeKey(nodeKey)
+        if (seg >= 0 && seg !== mapModel.currentSegment)
+            mapModel.currentSegment = seg
         let objIdx = mapModel.objectIndexForNodeKey(nodeKey)
         if (objIdx < 0) return
         let addr = mapModel.objectAddress(objIdx)

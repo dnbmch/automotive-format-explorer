@@ -12,7 +12,7 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - A2L memory-map view and DBC/LDF signal-map view via `QQuickPaintedItem`
   C++ renderers (`MemoryGridItem`, `SignalGridItem`) with FBO scrolling.
 - Bidirectional selection (tree ↔ detail ↔ center) keyed by `NodeRegistry`.
-- Splash overlay + DWM cloak startup; tab warning indicator.
+- Splash overlay + DWM cloak startup.
 - Statically links the three parser libraries (fetched from GitHub releases at
   configure time). GPL-3.0.
 - CI (Windows MinGW + Ubuntu) + `release.yml` (Windows zip + Linux AppImage).

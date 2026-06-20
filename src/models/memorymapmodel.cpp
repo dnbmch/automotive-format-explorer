@@ -204,6 +204,28 @@ int MemoryMapModel::objectIndexForNodeKey(quint64 nodeKey) const {
     return -1;
 }
 
+int MemoryMapModel::segmentIndexForNodeKey(quint64 nodeKey) const {
+    if (nodeKey == 0) {
+        return -1;
+    }
+    for (const auto& obj : _all_objects) {
+        if (obj.nodeKey != nodeKey) {
+            continue;
+        }
+        uint64_t objEnd = obj.address + (obj.size > 0 ? obj.size : 1);
+        for (size_t s = 0; s < _segments.size(); ++s) {
+            const auto& seg = _segments[s];
+            uint64_t segStart = seg.address;
+            uint64_t segEnd = seg.address + seg.size;
+            if (objEnd > segStart && obj.address < segEnd) {
+                return static_cast<int>(s);
+            }
+        }
+        return -1;
+    }
+    return -1;
+}
+
 quint64 MemoryMapModel::objectAddress(int objectIndex) const {
     if (static_cast<size_t>(objectIndex) >= _filtered_objects.size()) {
         return 0;

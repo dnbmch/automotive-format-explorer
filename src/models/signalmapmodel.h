@@ -112,6 +112,11 @@ public:
     // Is signal visible with current mux filter?
     Q_INVOKABLE bool isSignalVisible(int signalIndex) const;
 
+    // Mux group index (into _mux_values) for a multiplexed signal, or -1 for
+    // static/multiplexor signals. Used to select the hidden group a signal
+    // belongs to during tree->grid navigation.
+    Q_INVOKABLE int muxGroupForSignal(int signalIndex) const;
+
     // Is a bit position overlapped by multiple signals?
     Q_INVOKABLE bool isOverlap(int bitPosition) const;
 

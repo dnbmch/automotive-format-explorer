@@ -355,6 +355,9 @@ ApplicationWindow {
                         color: Theme.bg
 
                         property bool showRawJson: false
+                        readonly property bool _rawAvailable: AppController.currentDetailModel
+                                                              && AppController.currentDetailModel.rawJsonText.length > 0
+                        readonly property bool _rawEffective: showRawJson && _rawAvailable
 
                         ColumnLayout {
                             anchors.fill: parent
@@ -390,8 +393,7 @@ ApplicationWindow {
                                         color: rawToggleMa.containsMouse
                                                ? Theme.bgButtonHov
                                                : (detailPanel.showRawJson ? Theme.bgActive : Theme.bgButton)
-                                        visible: AppController.currentDetailModel
-                                                 && AppController.currentDetailModel.rawJsonText.length > 0
+                                        visible: detailPanel._rawAvailable
                                         ToolTip.text: detailPanel.showRawJson ? "Show formatted view" : "Show raw proto JSON"
                                         ToolTip.visible: rawToggleMa.containsMouse
                                         ToolTip.delay: 300
@@ -439,7 +441,7 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.margins: Theme.sp8
-                                visible: !detailPanel.showRawJson
+                                visible: !detailPanel._rawEffective
 
                                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
                                 ScrollBar.vertical.background: Rectangle { color: "transparent" }
@@ -530,7 +532,7 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 Layout.margins: Theme.sp8
-                                visible: detailPanel.showRawJson
+                                visible: detailPanel._rawEffective
 
                                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
                                 ScrollBar.vertical.background: Rectangle { color: "transparent" }

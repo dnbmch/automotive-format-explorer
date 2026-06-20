@@ -48,7 +48,7 @@ public:
     virtual TreeModel* treeModel() = 0;               // left NavPanel
     virtual DetailModel* detailModel() = 0;           // right Detail panel
     virtual QList<DiagnosticMessage> diagnostics() const = 0;
-    virtual bool hasWarnings() const = 0;             // drives the tab ⚠ indicator
+    virtual bool hasWarnings() const = 0;             // reserved: true when warning-severity diagnostics exist (none emitted yet)
     virtual void selectNode(quint64 key) = 0;         // refresh DetailModel for a NodeRegistry key
 
     // Optional center panel (memory view / signal map / blank)
@@ -136,6 +136,6 @@ Both views are `QQuickPaintedItem` C++ renderers driven by pre-computed flat arr
 4. Call `fetch_parser_lib(TARGET <fmt>parser ...)` in `CMakeLists.txt`.
 5. Add an `explorer-<fmt>-backend` library (`qt_add_library(... ${_backend_lib_type})`) carrying the new adapter/session sources, link the parser plus `explorer-core` into it, then wire it to the exe — `add_dependencies` on Windows, `target_link_libraries` on Linux.
 6. Register the create-function in `AppController::AppController()` under `#ifdef BACKENDS_STATIC`.
-7. Run the app, drag in a sample file, verify the tab opens and the tree populates.
+7. Run the app, open a sample file (Ctrl+O or the NavPanel Open button), verify the tab opens and the tree populates.
 
 The format's own parser library (under `dnbmch/<fmt>-parser-lib`) must publish a `v*` release with the renamed `<fmt>parser-*` artifact name before the explorer can fetch it.

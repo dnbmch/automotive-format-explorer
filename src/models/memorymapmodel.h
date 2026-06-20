@@ -101,6 +101,11 @@ public:
     // Lookup object by tree nodeKey. Returns model row index or -1.
     Q_INVOKABLE int objectIndexForNodeKey(quint64 nodeKey) const;
 
+    // Segment containing the object with this nodeKey. Scans all objects (not
+    // just the filtered set) so cross-segment tree navigation can switch first.
+    // Returns segment index or -1 if none.
+    Q_INVOKABLE int segmentIndexForNodeKey(quint64 nodeKey) const;
+
     // Address of an object by model row index. Returns 0 if invalid.
     Q_INVOKABLE quint64 objectAddress(int objectIndex) const;
 
