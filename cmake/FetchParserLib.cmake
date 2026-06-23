@@ -69,6 +69,7 @@ function(fetch_parser_lib)
             "${headers_tarball}"
             STATUS download_status
             TIMEOUT 60
+            TLS_VERIFY ON
         )
         list(GET download_status 0 status_code)
         if(NOT status_code EQUAL 0)
@@ -98,6 +99,7 @@ function(fetch_parser_lib)
             "${binary_tarball}"
             STATUS download_status
             TIMEOUT 120
+            TLS_VERIFY ON
         )
         list(GET download_status 0 status_code)
         if(NOT status_code EQUAL 0)

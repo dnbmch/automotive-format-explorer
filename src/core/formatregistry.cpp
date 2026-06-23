@@ -1,8 +1,17 @@
 #include "core/formatregistry.h"
 
+#include <QDebug>
 #include <QFileInfo>
 
 void FormatRegistry::registerAdapter(std::unique_ptr<FormatAdapter> adapter) {
+    const FormatId formatId = adapter->formatId();
+    for (const auto& existing : _adapters) {
+        if (existing->formatId() == formatId) {
+            qWarning() << "FormatRegistry: ignoring duplicate adapter for format"
+                       << formatDisplayName(formatId);
+            return;
+        }
+    }
     _adapters.push_back(std::move(adapter));
 }
 
