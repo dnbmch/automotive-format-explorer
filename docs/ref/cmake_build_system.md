@@ -28,7 +28,7 @@ What it does, step by step:
 Versions are pinned in the top-level [CMakeLists.txt](../../CMakeLists.txt) (`A2L_PARSER_VERSION`, `DBC_PARSER_VERSION`, `LDF_PARSER_VERSION`). Override at configure time:
 
 ```bash
-cmake -B build -DA2L_PARSER_VERSION=v0.3.0 -DDBC_PARSER_VERSION=v0.3.0 -DLDF_PARSER_VERSION=v0.4.0
+cmake -B build -DA2L_PARSER_VERSION=v0.4.0 -DDBC_PARSER_VERSION=v0.4.0 -DLDF_PARSER_VERSION=v0.5.0
 ```
 
 ### Failure modes

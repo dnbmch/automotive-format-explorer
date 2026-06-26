@@ -15,15 +15,33 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(FetchParserLib)
 include(DeployMsys2Deps)
 
-set(A2L_PARSER_VERSION "v0.3.0" CACHE STRING "a2l-parser-lib release tag")
-set(DBC_PARSER_VERSION "v0.3.0" CACHE STRING "dbc-parser-lib release tag")
-set(LDF_PARSER_VERSION "v0.4.0" CACHE STRING "ldf-parser-lib release tag")
+# Parser -lib release tags. Bumped in lockstep with the re-cut republish releases
+# (the proto contracts changed). Override at configure time if the operator cuts
+# different tags.
+set(A2L_PARSER_VERSION "v0.4.0" CACHE STRING "a2l-parser-lib release tag")
+set(DBC_PARSER_VERSION "v0.4.0" CACHE STRING "dbc-parser-lib release tag")
+set(LDF_PARSER_VERSION "v0.5.0" CACHE STRING "ldf-parser-lib release tag")
+
+# Optional integrity pins for the fetched -lib release assets. Empty = no check
+# (current behaviour). Fill after the re-cut release publishes, e.g.:
+#   gh release download <tag> --repo dnbmch/a2l-parser-lib \
+#     --pattern 'a2lparser-headers-<tag>.tar.gz' && sha256sum a2lparser-headers-<tag>.tar.gz
+# The headers archive hash is platform-independent; the binary archive hash is
+# per-platform, so only pin BINARY_SHA256 for the platform you build on.
+set(A2L_HEADERS_SHA256 "" CACHE STRING "sha256 of a2lparser-headers-<tag>.tar.gz")
+set(A2L_BINARY_SHA256  "" CACHE STRING "sha256 of the a2lparser binary archive for this platform")
+set(DBC_HEADERS_SHA256 "" CACHE STRING "sha256 of dbcparser-headers-<tag>.tar.gz")
+set(DBC_BINARY_SHA256  "" CACHE STRING "sha256 of the dbcparser binary archive for this platform")
+set(LDF_HEADERS_SHA256 "" CACHE STRING "sha256 of ldfparser-headers-<tag>.tar.gz")
+set(LDF_BINARY_SHA256  "" CACHE STRING "sha256 of the ldfparser binary archive for this platform")
 
 fetch_parser_lib(
     TARGET  a2lparser
     REPO    dnbmch/a2l-parser-lib
     VERSION "${A2L_PARSER_VERSION}"
     HEADER  a2l/a2lfile.h
+    HEADERS_SHA256 "${A2L_HEADERS_SHA256}"
+    BINARY_SHA256  "${A2L_BINARY_SHA256}"
 )
 
 fetch_parser_lib(
@@ -31,6 +49,8 @@ fetch_parser_lib(
     REPO    dnbmch/dbc-parser-lib
     VERSION "${DBC_PARSER_VERSION}"
     HEADER  dbc/dbcfile.h
+    HEADERS_SHA256 "${DBC_HEADERS_SHA256}"
+    BINARY_SHA256  "${DBC_BINARY_SHA256}"
 )
 
 fetch_parser_lib(
@@ -38,6 +58,8 @@ fetch_parser_lib(
     REPO    dnbmch/ldf-parser-lib
     VERSION "${LDF_PARSER_VERSION}"
     HEADER  ldf/ldffile.h
+    HEADERS_SHA256 "${LDF_HEADERS_SHA256}"
+    BINARY_SHA256  "${LDF_BINARY_SHA256}"
 )
 
 qt_standard_project_setup(REQUIRES 6.5)

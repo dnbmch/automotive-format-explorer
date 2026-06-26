@@ -36,7 +36,32 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
             if (pl.optional_level1_cmds_size() > 0) {
                 addField(fields, QStringLiteral("Optional L1 Commands"), joinNumbers(pl.optional_level1_cmds()));
             }
-            addOptionalNumber(fields, QStringLiteral("Comm Mode Supported"), pl.has_communication_mode_supported(), pl.communication_mode_supported());
+            if (pl.has_communication_mode_supported()) {
+                const auto& cms = pl.communication_mode_supported();
+                switch (cms.mode_case()) {
+                case a2l::XcpCommunicationModeSupported::kBlock: {
+                    const auto& block = cms.block();
+                    QString desc = QStringLiteral("Block");
+                    if (block.slave()) {
+                        desc += QStringLiteral(", slave");
+                    }
+                    if (block.has_master()) {
+                        desc += QStringLiteral(", master (MAX_BS=%1, MIN_ST=%2)")
+                                    .arg(block.master().max_bs())
+                                    .arg(block.master().min_st());
+                    }
+                    addField(fields, QStringLiteral("Comm Mode Supported"), desc);
+                    break;
+                }
+                case a2l::XcpCommunicationModeSupported::kInterleavedQueueSize:
+                    addField(fields, QStringLiteral("Comm Mode Supported"),
+                             QStringLiteral("Interleaved (queue size %1)").arg(cms.interleaved_queue_size()));
+                    break;
+                case a2l::XcpCommunicationModeSupported::MODE_NOT_SET:
+                    addField(fields, QStringLiteral("Comm Mode Supported"), QStringLiteral("Supported"));
+                    break;
+                }
+            }
             addOptionalString(fields, QStringLiteral("Seed & Key Function"), pl.has_seed_and_key_external_function(), pl.seed_and_key_external_function());
             addOptionalNumber(fields, QStringLiteral("MAX_DTO_STIM"), pl.has_max_dto_stim(), pl.max_dto_stim());
             pushSection(sections, QStringLiteral("Protocol Layer"), std::move(fields));
@@ -89,7 +114,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
                 const auto& list = daq.daq_lists(i);
                 QList<DetailField> listFields;
                 addNumberField(listFields, QStringLiteral("DAQ List Number"), list.daq_list_number());
-                addNumberField(listFields, QStringLiteral("DAQ List Type"), list.daq_list_type());
+                addField(listFields, QStringLiteral("DAQ List Type"), text(a2l::DaqListType_Name(list.daq_list_type())));
                 addNumberField(listFields, QStringLiteral("MAX_ODT"), list.max_odt());
                 addNumberField(listFields, QStringLiteral("MAX_ODT_ENTRIES"), list.max_odt_entries());
                 addOptionalNumber(listFields, QStringLiteral("First PID"), list.has_first_pid(), list.first_pid());
@@ -104,12 +129,12 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
                 addField(evFields, QStringLiteral("Name"), text(ev.name()));
                 addField(evFields, QStringLiteral("Short Name"), text(ev.short_name()));
                 addNumberField(evFields, QStringLiteral("Channel Number"), ev.event_channel_number());
-                addNumberField(evFields, QStringLiteral("DAQ List Type"), ev.daq_list_type());
+                addField(evFields, QStringLiteral("DAQ List Type"), text(a2l::DaqListType_Name(ev.daq_list_type())));
                 addNumberField(evFields, QStringLiteral("MAX_DAQ_LIST"), ev.max_daq_list());
                 addNumberField(evFields, QStringLiteral("Time Cycle"), ev.time_cycle());
                 addNumberField(evFields, QStringLiteral("Time Unit"), ev.time_unit());
                 addNumberField(evFields, QStringLiteral("Priority"), ev.priority());
-                addOptionalNumber(evFields, QStringLiteral("Consistency"), ev.has_consistency(), ev.consistency());
+                addField(evFields, QStringLiteral("Consistency"), text(a2l::DaqConsistency_Name(ev.consistency())));
                 pushSection(sections, QStringLiteral("Event \"%1\" (#%2)").arg(text(ev.short_name())).arg(ev.event_channel_number()), std::move(evFields));
             }
         }
@@ -169,7 +194,9 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
             if (ip.has_ipv6()) addField(fields, QStringLiteral("IPv6"), text(ip.ipv6()));
             addOptionalNumber(fields, QStringLiteral("MAX_BUS_LOAD"), ip.has_max_bus_load(), ip.max_bus_load());
             addOptionalNumber(fields, QStringLiteral("MAX_BIT_RATE"), ip.has_max_bit_rate(), ip.max_bit_rate());
-            addOptionalNumber(fields, QStringLiteral("Packet Alignment"), ip.has_packet_alignment(), ip.packet_alignment());
+            if (ip.has_packet_alignment()) {
+                addField(fields, QStringLiteral("Packet Alignment"), text(a2l::PacketAlignment_Name(ip.packet_alignment())));
+            }
             addOptionalString(fields, QStringLiteral("Transport Layer Instance"), ip.has_transport_layer_instance(), ip.transport_layer_instance());
             pushSection(sections, QStringLiteral("XCP on TCP/IP"), std::move(fields));
         }
@@ -185,7 +212,9 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
             if (ip.has_ipv6()) addField(fields, QStringLiteral("IPv6"), text(ip.ipv6()));
             addOptionalNumber(fields, QStringLiteral("MAX_BUS_LOAD"), ip.has_max_bus_load(), ip.max_bus_load());
             addOptionalNumber(fields, QStringLiteral("MAX_BIT_RATE"), ip.has_max_bit_rate(), ip.max_bit_rate());
-            addOptionalNumber(fields, QStringLiteral("Packet Alignment"), ip.has_packet_alignment(), ip.packet_alignment());
+            if (ip.has_packet_alignment()) {
+                addField(fields, QStringLiteral("Packet Alignment"), text(a2l::PacketAlignment_Name(ip.packet_alignment())));
+            }
             addOptionalString(fields, QStringLiteral("Transport Layer Instance"), ip.has_transport_layer_instance(), ip.transport_layer_instance());
             pushSection(sections, QStringLiteral("XCP on UDP/IP"), std::move(fields));
         }
@@ -397,11 +426,20 @@ QList<DetailSection> A2lDetailPresenter::ccpSummaryDetails(const A2lPath& path) 
             pushSection(sections, QStringLiteral("KP_BLOB"), std::move(fields));
         }
 
+        // DP_BLOB
+        if (ccp.has_dp_blob()) {
+            const auto& dp = ccp.dp_blob();
+            QList<DetailField> fields;
+            addNumberField(fields, QStringLiteral("Address Extension"), dp.address_extension());
+            addField(fields, QStringLiteral("Address"), hex64(dp.address()));
+            addNumberField(fields, QStringLiteral("Size"), dp.size());
+            pushSection(sections, QStringLiteral("DP_BLOB"), std::move(fields));
+        }
+
         // Raw fallback blocks
         QList<DetailField> rawFields;
         addOptionalString(rawFields, QStringLiteral("Seed & Key"), ccp.has_seed_key_raw(), ccp.seed_key_raw());
         addOptionalString(rawFields, QStringLiteral("Checksum"), ccp.has_checksum_raw(), ccp.checksum_raw());
-        addOptionalString(rawFields, QStringLiteral("DP_BLOB"), ccp.has_dp_blob_raw(), ccp.dp_blob_raw());
         addOptionalString(rawFields, QStringLiteral("Address Mapping"), ccp.has_addr_mapping_raw(), ccp.addr_mapping_raw());
         for (int i = 0; i < ccp.raw_blocks_size(); ++i) {
             addField(rawFields, QStringLiteral("Raw Block %1").arg(i), text(ccp.raw_blocks(i)));

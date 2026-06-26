@@ -31,6 +31,19 @@ QString hexValue(quint32 value) {
     return QStringLiteral("0x%1").arg(value, 0, 16).toUpper();
 }
 
+// A schedule entry is a frame reference or a typed diagnostic command.
+QString scheduleEntryLabel(const ldf::ScheduleEntry& entry) {
+    switch (entry.command_case()) {
+    case ldf::ScheduleEntry::kFrameName:
+        return text(entry.frame_name());
+    case ldf::ScheduleEntry::kDiagnosticCommand:
+        return text(ldf::DiagnosticCommand_Type_Name(entry.diagnostic_command().type()));
+    case ldf::ScheduleEntry::COMMAND_NOT_SET:
+        break;
+    }
+    return {};
+}
+
 } // namespace
 
 LdfDocumentSession::LdfDocumentSession(QString displayName,
@@ -178,7 +191,7 @@ void LdfDocumentSession::buildTree() {
 
             for (const auto& entry : schedule.entries()) {
                 appendNode(scheduleItem,
-                           text(entry.command()),
+                           scheduleEntryLabel(entry),
                            QStringLiteral("%1 ms").arg(numberText(entry.delay_ms())),
                            QStringLiteral("scheduleentry"),
                            SemanticKind::Attribute);

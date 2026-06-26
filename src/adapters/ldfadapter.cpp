@@ -9,6 +9,19 @@
 
 #include <QFileInfo>
 
+namespace {
+DiagnosticMessage toDiagnostic(const ldf::Diagnostic& d) {
+    DiagnosticMessage message;
+    message.severity = d.severity() == ldf::DROPPED ? DiagnosticSeverity::Error
+                                                    : DiagnosticSeverity::Warning;
+    message.title = QString::fromStdString(d.message());
+    if (!d.location().empty()) {
+        message.detail = QStringLiteral("at %1").arg(QString::fromStdString(d.location()));
+    }
+    return message;
+}
+} // namespace
+
 FormatId LdfAdapter::formatId() const {
     return FormatId::LDF;
 }
@@ -34,7 +47,11 @@ LoadResult LdfAdapter::load(const QString& path) const {
         return LoadResult{nullptr, diagnostics};
     }
 
-    ldf::LdfFile document = ldf::extract::extractFile(raw.get());
+    ldf::LdfFile document = ldf::extract::extractFile(*raw);
+    for (const ldf::Diagnostic& d : document.diagnostics()) {
+        diagnostics.push_back(toDiagnostic(d));
+    }
+
     auto session = std::make_unique<LdfDocumentSession>(
         QFileInfo(path).fileName(),
         path,

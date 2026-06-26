@@ -13,7 +13,7 @@
 
 function(fetch_parser_lib)
     set(options "")
-    set(oneValueArgs TARGET REPO VERSION HEADER)
+    set(oneValueArgs TARGET REPO VERSION HEADER HEADERS_SHA256 BINARY_SHA256)
     set(multiValueArgs "")
     cmake_parse_arguments(FPL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -64,12 +64,17 @@ function(fetch_parser_lib)
     if(NOT EXISTS "${headers_dir}/${FPL_HEADER}")
         message(STATUS "Fetching ${headers_archive} ...")
         set(headers_tarball "${cache_dir}/${headers_archive}")
+        set(headers_hash_arg "")
+        if(FPL_HEADERS_SHA256)
+            set(headers_hash_arg EXPECTED_HASH SHA256=${FPL_HEADERS_SHA256})
+        endif()
         file(DOWNLOAD
             "${base_url}/${headers_archive}"
             "${headers_tarball}"
             STATUS download_status
             TIMEOUT 60
             TLS_VERIFY ON
+            ${headers_hash_arg}
         )
         list(GET download_status 0 status_code)
         if(NOT status_code EQUAL 0)
@@ -94,12 +99,17 @@ function(fetch_parser_lib)
     if(NOT EXISTS "${lib_dir}/${lib_filename}")
         message(STATUS "Fetching ${binary_archive} ...")
         set(binary_tarball "${cache_dir}/${binary_archive}")
+        set(binary_hash_arg "")
+        if(FPL_BINARY_SHA256)
+            set(binary_hash_arg EXPECTED_HASH SHA256=${FPL_BINARY_SHA256})
+        endif()
         file(DOWNLOAD
             "${base_url}/${binary_archive}"
             "${binary_tarball}"
             STATUS download_status
             TIMEOUT 120
             TLS_VERIFY ON
+            ${binary_hash_arg}
         )
         list(GET download_status 0 status_code)
         if(NOT status_code EQUAL 0)

@@ -77,6 +77,33 @@ void pushSection(QList<DetailSection>& sections, const QString& title, QList<Det
     }
 }
 
+// A signal carries one init value when scalar, several when an array; render the
+// single value bare and the array braced.
+QString initValueText(const ldf::Signal& signal) {
+    if (signal.init_values_size() == 0) {
+        return {};
+    }
+    QStringList parts;
+    for (int v = 0; v < signal.init_values_size(); ++v) {
+        parts.push_back(numberText(signal.init_values(v)));
+    }
+    return parts.size() == 1 ? parts.front()
+                             : QStringLiteral("{%1}").arg(parts.join(QStringLiteral(", ")));
+}
+
+// A schedule entry is a frame reference or a typed diagnostic command.
+QString scheduleEntryLabel(const ldf::ScheduleEntry& entry) {
+    switch (entry.command_case()) {
+    case ldf::ScheduleEntry::kFrameName:
+        return text(entry.frame_name());
+    case ldf::ScheduleEntry::kDiagnosticCommand:
+        return text(ldf::DiagnosticCommand_Type_Name(entry.diagnostic_command().type()));
+    case ldf::ScheduleEntry::COMMAND_NOT_SET:
+        break;
+    }
+    return {};
+}
+
 } // namespace
 
 QList<DetailSection> LdfDetailPresenter::buildDetails(const NodeBinding& binding) const {
@@ -263,7 +290,7 @@ QList<DetailSection> LdfDetailPresenter::frameDetails(const LdfPath& path) const
 
         if (const ldf::Signal* sig = findSignal(fs.signal_name())) {
             addNumberField(sigFields, QStringLiteral("Bit Length"), sig->bit_length());
-            addNumberField(sigFields, QStringLiteral("Init Value"), sig->init_value());
+            addField(sigFields, QStringLiteral("Init Value"), initValueText(*sig));
             addField(sigFields, QStringLiteral("Publisher"), text(sig->publisher()));
             if (sig->has_encoding()) {
                 addField(sigFields, QStringLiteral("Encoding"), text(sig->encoding().encoding_name()));
@@ -306,7 +333,7 @@ QList<DetailSection> LdfDetailPresenter::frameSignalDetails(const LdfPath& path)
     if (const ldf::Signal* signal = findSignal(frameSignal.signal_name())) {
         QList<DetailField> signalFields;
         addNumberField(signalFields, QStringLiteral("Bit Length"), signal->bit_length());
-        addNumberField(signalFields, QStringLiteral("Init Value"), signal->init_value());
+        addField(signalFields, QStringLiteral("Init Value"), initValueText(*signal));
         addField(signalFields, QStringLiteral("Publisher"), text(signal->publisher()));
         addField(signalFields, QStringLiteral("Subscribers"), joinStrings(signal->subscribers()));
         if (signal->has_encoding()) {
@@ -334,16 +361,16 @@ QList<DetailSection> LdfDetailPresenter::signalDetails(const LdfPath& path) cons
                 {
                     DetailField{QStringLiteral("Name"), text(signal.name())},
                     DetailField{QStringLiteral("Bit Length"), numberText(signal.bit_length())},
-                    DetailField{QStringLiteral("Init Value"), numberText(signal.init_value())},
+                    DetailField{QStringLiteral("Init Value"), initValueText(signal)},
                     DetailField{QStringLiteral("Publisher"), text(signal.publisher())},
                     DetailField{QStringLiteral("Subscribers"), joinStrings(signal.subscribers())},
                 });
 
     QList<DetailField> mapping;
-    addField(mapping, QStringLiteral("Frame"), text(signal.frame_name()));
-    if (signal.frame_id() != 0 || !signal.frame_name().empty()) {
-        addField(mapping, QStringLiteral("Frame ID"), hexAndDecimal(signal.frame_id()));
-        addNumberField(mapping, QStringLiteral("Start Bit"), signal.start_bit());
+    for (const auto& fm : signal.frame_memberships()) {
+        addField(mapping, QStringLiteral("Frame"), text(fm.frame_name()));
+        addField(mapping, QStringLiteral("Frame ID"), hexAndDecimal(fm.frame_id()));
+        addNumberField(mapping, QStringLiteral("Start Bit"), fm.start_bit());
     }
     if (signal.has_encoding()) {
         addField(mapping, QStringLiteral("Encoding"), text(signal.encoding().encoding_name()));
@@ -400,7 +427,7 @@ QList<DetailSection> LdfDetailPresenter::scheduleDetails(const LdfPath& path) co
 
     QList<DetailField> entries;
     for (const auto& entry : schedule.entries()) {
-        addField(entries, text(entry.command()), QStringLiteral("%1 ms").arg(numberText(entry.delay_ms())));
+        addField(entries, scheduleEntryLabel(entry), QStringLiteral("%1 ms").arg(numberText(entry.delay_ms())));
     }
     pushSection(sections, QStringLiteral("Entries"), std::move(entries));
     return sections;

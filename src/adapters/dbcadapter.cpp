@@ -13,6 +13,19 @@ namespace dbc::extract {
 dbc::DbcFile extractFile(dbcfile::DbcFile* file);
 }
 
+namespace {
+DiagnosticMessage toDiagnostic(const dbc::Diagnostic& d) {
+    DiagnosticMessage message;
+    message.severity = d.severity() == dbc::DROPPED ? DiagnosticSeverity::Error
+                                                    : DiagnosticSeverity::Warning;
+    message.title = QString::fromStdString(d.message());
+    if (!d.location().empty()) {
+        message.detail = QStringLiteral("at %1").arg(QString::fromStdString(d.location()));
+    }
+    return message;
+}
+} // namespace
+
 FormatId DbcAdapter::formatId() const {
     return FormatId::DBC;
 }
@@ -39,6 +52,10 @@ LoadResult DbcAdapter::load(const QString& path) const {
     }
 
     dbc::DbcFile document = dbc::extract::extractFile(raw.get());
+    for (const dbc::Diagnostic& d : document.diagnostics()) {
+        diagnostics.push_back(toDiagnostic(d));
+    }
+
     auto session = std::make_unique<DbcDocumentSession>(
         QFileInfo(path).fileName(),
         path,

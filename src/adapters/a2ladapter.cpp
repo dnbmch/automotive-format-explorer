@@ -13,6 +13,19 @@ namespace a2l::extract {
 a2l::A2lFile extractFile(a2lfile::A2lFile* file);
 }
 
+namespace {
+DiagnosticMessage toDiagnostic(const a2l::Diagnostic& d) {
+    DiagnosticMessage message;
+    message.severity = d.severity() == a2l::DROPPED ? DiagnosticSeverity::Error
+                                                    : DiagnosticSeverity::Warning;
+    message.title = QString::fromStdString(d.message());
+    if (!d.location().empty()) {
+        message.detail = QStringLiteral("at %1").arg(QString::fromStdString(d.location()));
+    }
+    return message;
+}
+} // namespace
+
 FormatId A2lAdapter::formatId() const {
     return FormatId::A2L;
 }
@@ -39,6 +52,10 @@ LoadResult A2lAdapter::load(const QString& path) const {
     }
 
     a2l::A2lFile document = a2l::extract::extractFile(raw.get());
+    for (const a2l::Diagnostic& d : document.diagnostics()) {
+        diagnostics.push_back(toDiagnostic(d));
+    }
+
     auto session = std::make_unique<A2lDocumentSession>(
         QFileInfo(path).fileName(),
         path,
