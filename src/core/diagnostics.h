@@ -23,12 +23,3 @@ inline bool hasWarnings(const QList<DiagnosticMessage>& diagnostics) {
     }
     return false;
 }
-
-inline bool hasErrors(const QList<DiagnosticMessage>& diagnostics) {
-    for (const DiagnosticMessage& message : diagnostics) {
-        if (message.severity == DiagnosticSeverity::Error) {
-            return true;
-        }
-    }
-    return false;
-}
