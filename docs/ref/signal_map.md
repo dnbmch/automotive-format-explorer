@@ -221,11 +221,9 @@ Default: "All (overlay)" so the user sees the full picture, then can filter.
 
 ## Architecture
 
-### New C++ classes
+### `SignalMapModel` (`src/models/signalmapmodel.h`)
 
-#### `SignalMapModel` (`src/models/signalmapmodel.h`)
-
-The data model, analogous to `MemoryMapModel` but for bit-level signal layout.
+The data model, analogous to `MemoryMapModel` but for bit-level signal layout. It carries a list of `MessageEntry`, each holding a `std::vector<SignalEntry>`:
 
 ```cpp
 struct SignalEntry {
@@ -240,7 +238,8 @@ struct SignalEntry {
     double maximum = 0.0;
     QString unit;
     int colorIndex = 0;
-    quint64 nodeKey = 0;       // key into NodeRegistry
+    quint64 nodeKey = 0;        // FrameSignal tree key
+    quint64 signalNodeKey = 0;  // standalone Signal tree key
     int multiplexType = 0;     // 0=none, 1=multiplexor, 2=multiplexed, 3=both
     int multiplexValue = -1;   // mux switch value (-1 = N/A)
     QString sender;
@@ -258,131 +257,29 @@ struct MessageEntry {
 };
 ```
 
-Key methods on `SignalMapModel`:
+Query surface (`Q_INVOKABLE`): `signalAtBit(bit)` returns the signal index at a display bit position (-1 = unoccupied); `isSignalVisible(idx)` applies the current mux filter; `isOverlap(bit)` reports bits claimed by more than one signal; `signalTooltip(idx)` builds the rich tooltip with scaling, mux info, and sender/receivers. `bitPositions(sig)` is a public static converter from DBC bit numbering to physical display positions.
 
-```cpp
-// Bit query: returns signal index at a display bit position, or -1.
-Q_INVOKABLE int signalAtBit(int bitPosition) const;
+Internal data structure: a pre-computed **bit map** for the current message — `_bit_map`, one entry per `dlcBits` storing the signal index (-1 = unoccupied) — with a parallel `_overlap_map` flagging multiply-claimed bits. Both are rebuilt when `currentMessage` or `currentMuxGroup` changes.
 
-// Mux filtering: -1 = all, 0..N-1 = index into sorted mux values.
-Q_INVOKABLE bool isSignalVisible(int signalIndex) const;
-Q_INVOKABLE bool isOverlap(int bitPosition) const;
+For big-endian signals, `bitPositions()` resolves DBC Motorola bit numbering to physical display positions. Sessions reuse the same static method for DLC derivation, so a DLC=0 message and the grid agree on the effective length.
 
-// Rich tooltip with scaling, mux info, sender/receivers.
-Q_INVOKABLE QString signalTooltip(int signalIndex) const;
+### `SignalGridItem` (`src/ui/signalgriditem.h`)
 
-// DBC bit numbering resolution (public static for DLC derivation reuse).
-static std::vector<int> bitPositions(const SignalEntry& sig);
-```
+A `QQuickPaintedItem` that renders the bit-level grid. The data is small (max 512 bits for CAN FD, typically 64), so it fully repaints the visible region. Per byte row it draws the byte-index gutter, then each bit cell (7 down to 0): palette fill or unoccupied gray, red diagonal overlap stripes, the selection border, and the highlight-flash overlay; then the byte separator line and the signal-name labels spanning each signal's first byte row. DLC=0 renders a "no payload" message.
 
-Key internal data structure: a pre-computed **bit map** for the current message. Array of `dlcBits` entries, each storing the signal index (-1 = unoccupied). A parallel `_overlap_map` tracks bits claimed by multiple signals. Both are rebuilt when `currentMessage` or `currentMuxGroup` changes.
+Keyboard: arrows/Tab cycle visible signals, PgUp/PgDn switch messages, Home/End jump to first/last, Enter/Space select in tree. CAN FD (DLC > 8) scrolls via Flickable + ScrollBar.
 
-For big-endian signals, `bitPositions()` resolves DBC Motorola bit numbering to physical display positions. The same method is reused by session `buildSignalMap()` for DLC derivation, guaranteeing consistency.
+### `SignalMapView.qml` (`qml/components/SignalMapView.qml`)
 
-#### `SignalGridItem` (`src/ui/signalgriditem.h`)
+The QML wrapper, analogous to `MemoryView.qml`: a toolbar (message selector ComboBox; mux-group ComboBox shown only when `muxGroupCount > 0`), the grid area (`SignalGridItem` + optional CAN FD scrollbar + tooltip overlay), a wrapping legend of color swatches, and a status bar (`"DLC: 8 bytes (64 bits) | 5 signals | 48/64 bits used (75%)"`).
 
-QQuickPaintedItem that renders the bit-level grid. Simpler than MemoryGridItem because the data is small (max 512 bits for CAN FD, typically 64).
-
-Paint logic:
-1. Draw column headers (bit 7..0)
-2. For each byte row (0..dlcBytes-1):
-   a. Draw byte index in left gutter
-   b. For each bit (7 down to 0):
-      - Fill cell with palette color (or unoccupied gray)
-      - Draw red diagonal stripes for overlapping bits
-      - Draw selection border for selected signal
-      - Draw highlight flash overlay
-   c. Draw byte separator line
-3. Draw signal name labels in the first byte row of each signal's span
-4. Handle DLC=0 with "no payload" text
-
-Keyboard: arrows/Tab cycle visible signals, PgUp/PgDn switch messages, Home/End jump to first/last, Enter/Space select in tree. Scrolling via Flickable + ScrollBar for CAN FD (DLC > 8).
-
-### New QML component
-
-#### `SignalMapView.qml` (`qml/components/SignalMapView.qml`)
-
-Analogous to `MemoryView.qml`. Structure:
-
-```
-ColumnLayout:
-  ┌─ Toolbar (32px)
-  │   Message selector ComboBox
-  │   [Mux group selector ComboBox — visible only when muxGroupCount > 0]
-  │
-  ├─ Grid area (fill)
-  │   SignalGridItem + optional scrollbar (CAN FD only)
-  │   Tooltip overlay
-  │
-  ├─ Legend (24px)
-  │   Color swatches with signal names for current message
-  │
-  └─ Status bar (22px)
-      "DLC: 8 bytes (64 bits) | 5 signals | 48/64 bits used (75%)"
-```
-
-Properties:
-```qml
-required property var mapModel  // SignalMapModel instance
-signal signalClicked(int signalIndex)
-signal nodeKeyClicked(var nodeKey)
-
-function scrollToNodeKey(nodeKey) {
-    // Find signal, select message if needed, highlight signal
-}
-```
-
-The `scrollToNodeKey` function must handle cross-message navigation: if the nodeKey belongs to a signal in a different message than currently displayed, switch the message selector first, then highlight.
+It exposes a `mapModel` property (the `SignalMapModel`) and a `nodeKeyClicked(var)` signal, matching `MemoryView.qml` so the generic center-panel Loader binds it without special-casing. `scrollToNodeKey(nodeKey)` handles cross-message navigation: if the node belongs to a signal in a different message, it switches the message selector first, then highlights.
 
 ### Session wiring
 
-#### `DbcDocumentSession` changes
+`DbcDocumentSession` and `LdfDocumentSession` each own a `std::unique_ptr<SignalMapModel>`, override `centerPanelSource()` (returns `SignalMapView.qml`) and `centerPanelModel()` (returns the model), and populate it via a private `buildSignalMap()` that calls `finalize()` when done. DBC iterates `_document.messages()`; LDF iterates `_document.frames()`, mapping LDF fields onto the same `SignalEntry`/`MessageEntry` shapes with `bigEndian`/`multiplexType`/`isExtendedId` fixed to false/0/false, `sender` from the frame publisher, and the signal's `init_value` carried through.
 
-```cpp
-class DbcDocumentSession final : public AdapterSessionBase {
-    // ...existing...
-
-    QUrl centerPanelSource() const override;    // returns SignalMapView.qml
-    QAbstractListModel* centerPanelModel() override;  // returns SignalMapModel*
-
-private:
-    void buildSignalMap();  // NEW: populate SignalMapModel from dbc::DbcFile
-    std::unique_ptr<SignalMapModel> _signal_map_model;
-};
-```
-
-`buildSignalMap()` iterates `_document.messages()`, creates `MessageEntry` for each, populates signals with color assignment, and calls `finalize()`.
-
-#### `LdfDocumentSession` changes
-
-```cpp
-class LdfDocumentSession final : public AdapterSessionBase {
-    // ...existing...
-
-    QUrl centerPanelSource() const override;    // returns SignalMapView.qml
-    QAbstractListModel* centerPanelModel() override;  // returns SignalMapModel*
-
-private:
-    void buildSignalMap();
-    std::unique_ptr<SignalMapModel> _signal_map_model;
-};
-```
-
-Same model, same QML, same grid item. `buildSignalMap()` iterates `_document.frames()`, maps LDF fields to the same `SignalEntry`/`MessageEntry` structures. LDF-specific differences:
-- `bigEndian` is always `false`
-- `multiplexType` is always `0`
-- `isExtendedId` is always `false`
-- `publisher` is populated from frame's publisher field
-- `initValue` is populated from signal's init_value
-
-### Loader integration (Main.qml)
-
-No changes needed to Main.qml. The existing `centerPanelLoader` pattern works as-is:
-- Session returns `centerPanelSource()` → Loader loads the QML
-- Session returns `centerPanelModel()` → Loader passes it as `mapModel` property
-- `nodeKeyClicked` signal connection already wired generically
-
-The only requirement: `SignalMapView.qml` must expose the same interface as `MemoryView.qml` — a `mapModel` property and `nodeKeyClicked(var)` signal. (It can also expose `signalClicked` for format-specific use.)
+The generic center-panel Loader in Main.qml needs no format-specific wiring: it reads `centerPanelSource()`, passes `centerPanelModel()` as `mapModel`, and routes `nodeKeyClicked` the same way it does for the memory view.
 
 ## Bidirectional Selection
 
@@ -409,21 +306,7 @@ Click a colored bit cell:
 
 When the user changes the message dropdown, optionally select the message node in the tree (debatable — may be annoying). Probably don't auto-select on dropdown change, only on explicit grid click.
 
-## What's shared vs. new
-
-| Component | Reuse from A2L | New for DBC/LDF |
-|---|---|---|
-| Center panel slot (Main.qml) | 100% reused | Nothing |
-| `DocumentSession` interface | 100% reused | Nothing |
-| `NodeRegistry` / bidirectional selection | 100% reused | Nothing |
-| Theme colors / palette | Reused (same 8-color palette) | Nothing |
-| `MemoryMapModel` | Not reused | `SignalMapModel` (different data model) |
-| `MemoryGridItem` | Not reused (byte-oriented) | `SignalGridItem` (bit-oriented) |
-| `MemoryView.qml` | Not reused | `SignalMapView.qml` (similar structure) |
-| Tooltip pattern | Pattern reused | New content |
-| Legend pattern | Pattern reused | Dynamic (signal names, not fixed types) |
-
-The infrastructure (center panel slot, NodeRegistry, bidirectional selection, Theme) is fully reusable. The model and renderer are new because the data structure is fundamentally different (bit-level signal packing vs. byte-level address space).
+The center-panel slot, `DocumentSession` interface, `NodeRegistry`-keyed bidirectional selection, and the Theme palette are shared with the A2L memory view. The model (`SignalMapModel`) and renderer (`SignalGridItem`) are signal-specific because the data is bit-level signal packing rather than a byte-level address space; the tooltip and legend reuse the memory view's patterns with signal-specific content (the legend is dynamic, showing the current message's signal names).
 
 ## Implementation Status
 
@@ -456,26 +339,3 @@ Fully implemented. Export/print is backlog.
 - Color assignment: signals within a message get colors in declaration order (index mod 8). Shade alternation distinguishes adjacent same-color signals.
 - The legend is dynamic (shows signal names for the current message) and wraps to multiple lines via Flow layout. Mux-filtered signals are hidden from the legend.
 - DLC=0 messages derive their effective DLC from signal bit positions rather than being hidden.
-
-## File inventory
-
-New files:
-```
-src/models/signalmapmodel.h
-src/models/signalmapmodel.cpp
-src/ui/signalgriditem.h
-src/ui/signalgriditem.cpp
-qml/components/SignalMapView.qml
-```
-
-Modified files:
-```
-src/sessions/dbcdocumentsession.h    (_signal_map_model, centerPanel overrides, _tree_node_keys)
-src/sessions/dbcdocumentsession.cpp  (buildSignalMap(), nodeKey capture in buildTree())
-src/sessions/ldfdocumentsession.h    (_signal_map_model, centerPanel overrides, _tree_node_keys)
-src/sessions/ldfdocumentsession.cpp  (buildSignalMap() with signal lookup enrichment)
-src/main.cpp                         (SignalGridItem QML type registration)
-CMakeLists.txt                       (new source files + QML)
-qml/components/Theme.qml            (signalColors palette)
-qml/components/NavPanel.qml         (signal map keyboard shortcuts in help popup)
-```

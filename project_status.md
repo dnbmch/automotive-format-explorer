@@ -19,8 +19,8 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 
 ## In flight
 
-None. The `CMakeLists.txt` parser pins (`v0.3.0` / `v0.3.0` / `v0.4.0`) fetch the
-renamed `-lib` assets and a clean configure + build is green (`BL-W13` resolved).
+None. The `CMakeLists.txt` parser pins fetch the renamed `-lib` assets and a
+clean configure + build is green.
 
 ## Deferred
 

@@ -43,4 +43,4 @@ the signal grid:
 CI (Windows MinGW + Ubuntu) and `release.yml` (Windows zip + Linux AppImage)
 already exist. Release builds depend on the parser `-lib` artifacts being
 published under their renamed `*parser-*` names — see workspace `BACKLOG.md`
-`BL-W13`.
+`BL-W13` (explorer fetch of the renamed parser `-lib` release assets).

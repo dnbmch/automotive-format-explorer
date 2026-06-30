@@ -130,7 +130,8 @@ src/
                 detailsection, treeitem, formatid, diagnostics
   models/       treemodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel
   sessions/     documentsession (interface), adaptersessionbase, a2l/dbc/ldf
-                sessions, a2l detail presenter (+ ifdata helpers)
+                sessions, a2l/dbc/ldf detail presenters (a2l splits ifdata
+                helpers into a2ldetailpresenter_ifdata.cpp)
   adapters/     a2l/dbc/ldf adapter + factory (extern "C" plugin entry points)
   ui/           memorygriditem, signalgriditem (QQuickPaintedItem renderers)
 qml/
@@ -139,7 +140,7 @@ qml/
 cmake/          FetchParserLib, DeployMsys2Deps
 ```
 
-A2L detail rendering lives in `a2ldetailpresenter.{h,cpp}` (+ `a2ldetailpresenter_ifdata.cpp`), a `DetailPresenter` subclass split out of `a2ldocumentsession.cpp` so no session file carries both construction/query and the bulk of the detail-building helpers.
+Each format's detail rendering lives in its own `DetailPresenter` subclass — `a2ldetailpresenter.{h,cpp}`, `dbcdetailpresenter.{h,cpp}`, `ldfdetailpresenter.{h,cpp}` — kept separate from the session files so no session carries both construction/query and the bulk of the detail-building helpers. A2L additionally splits its IF_DATA helpers into `a2ldetailpresenter_ifdata.cpp`.
 
 ## Memory Ownership
 

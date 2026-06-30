@@ -46,6 +46,6 @@ of the static-remediation work.
 ### BL-E6: `SignalGridItem` overlap stripe rendering subsection ✅ DONE
 
 `docs/arch/architecture.md` "Rendering" now has an "Overlap stripes" subsection
-documenting the `SignalMapModel::isOverlap(bit)` red diagonal hatch
-(`src/ui/signalgriditem.cpp:93-103`), with an example diagram and a note that
+documenting the `SignalMapModel::isOverlap(bit)` red diagonal hatch in
+`src/ui/signalgriditem.cpp`, with an example diagram and a note that
 `MemoryGridItem` does not draw stripes (planned).
