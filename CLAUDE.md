@@ -154,7 +154,7 @@ This project has no external consumers yet. Act accordingly:
 
 ## Project notes
 
-**Exception to Greenfield:** the app is published as a GPL-3.0 release on GitHub. Plugin ABI (FormatAdapter, DocumentSession, DetailPresenter interfaces) must stay backward-compatible within a release line — bump major version on changes.
+**Release is on-demand; there are no active users.** The app ships as a GPL-3.0 GitHub release, but we release only to exercise the current build against fresh parser artifacts — not on every change. With no users there is no cross-release backward-compat obligation; keep the plugin ABI (FormatAdapter / DocumentSession / DetailPresenter) internally coherent and change it when the design improves. See workspace [CLAUDE.md](../CLAUDE.md) "Release cadence".
 
 ### Architecture
 
