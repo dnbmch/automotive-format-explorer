@@ -45,7 +45,6 @@ signals:
     void hoveredSignalChanged();
     void mousePosChanged();
     void selectedSignalChanged();
-    void signalClicked(int signalIndex);
     void nodeKeyClicked(qulonglong nodeKey);
 
 protected:

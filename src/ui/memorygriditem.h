@@ -68,7 +68,6 @@ signals:
     void hoveredObjectChanged();
     void mousePosChanged();
     void selectedObjectChanged();
-    void objectClicked(int objectIndex);
     void nodeKeyClicked(qulonglong nodeKey);
 
 protected:

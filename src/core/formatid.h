@@ -7,6 +7,8 @@ enum class FormatId {
     A2L,
     DBC,
     LDF,
+    // Reserved for planned explorer read-back of workspace-written files
+    // (mdf4-writer / tdms-writer output); no backend yet.
     MDF4,
     TDMS
 };

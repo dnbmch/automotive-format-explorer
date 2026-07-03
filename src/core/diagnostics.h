@@ -4,13 +4,12 @@
 #include <QList>
 
 enum class DiagnosticSeverity {
-    Info,
     Warning,
     Error
 };
 
 struct DiagnosticMessage {
-    DiagnosticSeverity severity = DiagnosticSeverity::Info;
+    DiagnosticSeverity severity = DiagnosticSeverity::Warning;
     QString title;
     QString detail;
 };

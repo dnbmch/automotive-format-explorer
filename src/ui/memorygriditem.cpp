@@ -278,7 +278,6 @@ void MemoryGridItem::mousePressEvent(QMouseEvent* event) {
     int idx = objectIndexAtPixel(event->position().x(), event->position().y());
     setSelectedObjectIndex(idx);
     if (idx >= 0) {
-        emit objectClicked(idx);
         if (_model) {
             const auto mi = _model->index(idx, 0);
             const auto key = _model->data(mi, MemoryMapModel::NodeKeyRole).toULongLong();

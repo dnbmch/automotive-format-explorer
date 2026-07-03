@@ -278,7 +278,6 @@ void SignalGridItem::mousePressEvent(QMouseEvent* event) {
     int idx = signalIndexAtPixel(event->position().x(), event->position().y());
     if (idx >= 0) {
         setSelectedSignalIndex(idx);
-        emit signalClicked(idx);
         if (_model) {
             quint64 key = _model->signalNodeKey(idx);
             if (key != 0) {
@@ -401,7 +400,6 @@ void SignalGridItem::keyPressEvent(QKeyEvent* event) {
     case Qt::Key_Space:
         // Select/click the current signal.
         if (_selected_sig >= 0) {
-            emit signalClicked(_selected_sig);
             quint64 key = _model->signalNodeKey(_selected_sig);
             if (key != 0) emit nodeKeyClicked(key);
         }
@@ -428,7 +426,6 @@ void SignalGridItem::selectNextSignal(int direction) {
         if (_model->isSignalVisible(start)) {
             setSelectedSignalIndex(start);
             highlightSignal(start);
-            emit signalClicked(start);
             quint64 key = _model->signalNodeKey(start);
             if (key != 0) emit nodeKeyClicked(key);
             return;

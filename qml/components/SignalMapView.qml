@@ -12,7 +12,6 @@ Item {
 
     required property var mapModel  // SignalMapModel instance
 
-    signal signalClicked(int signalIndex)
     signal nodeKeyClicked(var nodeKey)
 
     function scrollToNodeKey(nodeKey) {
@@ -136,9 +135,6 @@ Item {
                         setColors(Theme.signalColors, Theme.memoryUnoccupied)
                     }
 
-                    onSignalClicked: function(signalIndex) {
-                        sigView.signalClicked(signalIndex)
-                    }
                     onNodeKeyClicked: function(nodeKey) {
                         sigView.nodeKeyClicked(nodeKey)
                     }

@@ -36,7 +36,7 @@ A desktop tool for inspecting **A2L**, **DBC**, and **LDF** automotive files. Bu
 
 ### Tree Navigation
 
-Browse every parsed entity in a structured tree with expand/collapse, keyboard shortcuts, and search-by-click. Supported entity types include:
+Browse every parsed entity in a structured tree with expand/collapse and keyboard shortcuts. Supported entity types include:
 
 - **A2L**: Modules, Measurements, Characteristics, Axis Points, Compu Methods, Record Layouts, Units, Functions, Groups, Typedef Characteristics/Structures/Axes, Instances, Variant Coding, XCP and CCP protocol summaries
 - **DBC**: Messages, Signals, Nodes, Value Tables, Attribute Definitions, Environment Variables, Signal Groups

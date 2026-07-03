@@ -12,9 +12,6 @@ Item {
 
     required property var mapModel  // MemoryMapModel instance
 
-    // Emitted when user clicks an object in the grid. Parent wires this
-    // to AppController for tree/detail selection.
-    signal objectClicked(int objectIndex)
     signal nodeKeyClicked(var nodeKey)
 
     readonly property int bpr: mapModel ? mapModel.bytesPerRow : 16
@@ -168,9 +165,6 @@ Item {
                     setColors(Theme.memoryColors, Theme.memoryUnoccupied)
                 }
 
-                onObjectClicked: function(objectIndex) {
-                    memView.objectClicked(objectIndex)
-                }
                 onNodeKeyClicked: function(nodeKey) {
                     memView.nodeKeyClicked(nodeKey)
                 }
