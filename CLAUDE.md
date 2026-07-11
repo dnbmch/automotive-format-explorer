@@ -88,6 +88,7 @@ Durable knowledge goes in version-controlled project docs, not in an opaque memo
 - Do not deploy, push tags, or trigger CI/release workflows without explicit instruction
 - Read-only checks are fine: `git status`, `git diff`, `git log`, syntax checks (`python -m py_compile`), tests when the user has asked for verification
 - If unsure whether a command is read-only, ask first
+- **Deliver code, not process.** No unrequested verification ceremony — risk gates, probe harnesses, screenshot rigs, staged checklists, sign-off theater. Write the feature, commit it, state plainly what is untested. Verification runs when the user asks for it, on the user's terms
 <!-- /block:7a710c -->
 
 <!-- block: Iterative Decision Workflow [id:1de4f0] -->
@@ -143,6 +144,7 @@ This project has no external consumers yet. Act accordingly:
 - Do not add deprecation shims, compatibility flags, or "for backward compat" fields
 - Do not version messages defensively
 - If a change makes the contract better, just make it — and update every callsite in the same commit
+- **There are no existing installs.** No migration notes, no reseed/upgrade instructions, no "users of the old format" landmines in docs or handoffs. When real users exist, the user will say so — until then compat thinking is banned unless explicitly requested
 <!-- /block:9e7f1d -->
 
 <!-- block: File-Path Link Convention [id:f11e7a] -->
