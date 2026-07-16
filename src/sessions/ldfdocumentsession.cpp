@@ -240,10 +240,10 @@ void LdfDocumentSession::buildTree() {
 void LdfDocumentSession::buildSignalMap() {
     _signal_map_model = std::make_unique<SignalMapModel>();
 
-    // Build signal lookup by name for enrichment.
-    std::unordered_map<std::string, const ldf::Signal*> signalLookup;
+    // Build signal index by name; recovers both the definition and its tree node key.
+    std::unordered_map<std::string, int> signalLookup;
     for (int i = 0; i < _document.signals_size(); ++i) {
-        signalLookup[_document.signals(i).name()] = &_document.signals(i);
+        signalLookup[_document.signals(i).name()] = i;
     }
 
     for (int i = 0; i < _document.frames_size(); ++i) {
@@ -271,12 +271,12 @@ void LdfDocumentSession::buildSignalMap() {
             // Enrich from top-level signal definition.
             auto it = signalLookup.find(frameSig.signal_name());
             if (it != signalLookup.end()) {
-                const ldf::Signal* fullSig = it->second;
-                sig.bitLength = static_cast<int>(fullSig->bit_length());
-                sig.sender = text(fullSig->publisher());
+                const ldf::Signal& fullSig = _document.signals(it->second);
+                sig.bitLength = static_cast<int>(fullSig.bit_length());
+                sig.sender = text(fullSig.publisher());
 
-                if (fullSig->has_encoding()) {
-                    const auto& enc = fullSig->encoding();
+                if (fullSig.has_encoding()) {
+                    const auto& enc = fullSig.encoding();
                     if (enc.physical_values_size() > 0) {
                         const auto& pv = enc.physical_values(0);
                         sig.factor = pv.factor();
@@ -286,6 +286,11 @@ void LdfDocumentSession::buildSignalMap() {
                         sig.unit = text(pv.unit());
                     }
                 }
+
+                // Store the standalone Signal key so clicking a Signal in
+                // the tree navigates to it in the signal map.
+                auto standaloneSigKey = _tree_node_keys.find({static_cast<int>(LdfEntityKind::Signal), it->second, -1});
+                if (standaloneSigKey != _tree_node_keys.end()) sig.signalNodeKey = standaloneSigKey->second;
             }
 
             // Fallback: if bitLength is still 0, set to 1.
@@ -293,16 +298,6 @@ void LdfDocumentSession::buildSignalMap() {
 
             auto sigKeyIt = _tree_node_keys.find({static_cast<int>(LdfEntityKind::FrameSignal), i, j});
             if (sigKeyIt != _tree_node_keys.end()) sig.nodeKey = sigKeyIt->second;
-
-            // Also store standalone Signal key so clicking a Signal in
-            // the tree navigates to it in the signal map.
-            for (int si = 0; si < _document.signals_size(); ++si) {
-                if (_document.signals(si).name() == frameSig.signal_name()) {
-                    auto standaloneSigKey = _tree_node_keys.find({static_cast<int>(LdfEntityKind::Signal), si, -1});
-                    if (standaloneSigKey != _tree_node_keys.end()) sig.signalNodeKey = standaloneSigKey->second;
-                    break;
-                }
-            }
 
             entry.signalEntries.push_back(std::move(sig));
         }

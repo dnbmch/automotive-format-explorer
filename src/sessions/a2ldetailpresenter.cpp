@@ -195,7 +195,7 @@ void A2lDetailPresenter::appendConversionSummary(QList<DetailSection>& sections,
         if (i >= 0 && i < module->measurements_size()) {
             const auto& m = module->measurements(i);
             convRef = m.conversion();
-            sizeBytes = dataTypeSizeBytes(m.datatype());
+            sizeBytes = static_cast<int>(dataTypeSize(m.datatype()));
         }
     } else if (path.kind == A2lEntityKind::Characteristic) {
         int i = path.secondaryIndex;

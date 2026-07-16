@@ -14,6 +14,7 @@
 #include <QString>
 #include <QStringList>
 
+#include <cstdint>
 #include <type_traits>
 
 #include <google/protobuf/repeated_field.h>
@@ -156,7 +157,8 @@ inline QString a2lSectionName(A2lEntityKind kind) {
     return {};
 }
 
-inline int dataTypeSizeBytes(a2l::DataType dt) {
+// DataType -> byte size lookup.
+inline uint64_t dataTypeSize(a2l::DataType dt) {
     switch (dt) {
     case a2l::DATA_TYPE_UBYTE:
     case a2l::DATA_TYPE_SBYTE:        return 1;

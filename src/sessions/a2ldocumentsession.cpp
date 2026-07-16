@@ -55,29 +55,6 @@ static uint64_t mulSat(uint64_t a, uint64_t b) {
     return a * b;
 }
 
-// DataType -> byte size lookup.
-uint64_t dataTypeSize(a2l::DataType dt) {
-    switch (dt) {
-    case a2l::DATA_TYPE_UBYTE:
-    case a2l::DATA_TYPE_SBYTE:
-        return 1;
-    case a2l::DATA_TYPE_UWORD:
-    case a2l::DATA_TYPE_SWORD:
-    case a2l::DATA_TYPE_FLOAT16_IEEE:
-        return 2;
-    case a2l::DATA_TYPE_ULONG:
-    case a2l::DATA_TYPE_SLONG:
-    case a2l::DATA_TYPE_FLOAT32_IEEE:
-        return 4;
-    case a2l::DATA_TYPE_A_UINT64:
-    case a2l::DATA_TYPE_A_INT64:
-    case a2l::DATA_TYPE_FLOAT64_IEEE:
-        return 8;
-    default:
-        return 0;
-    }
-}
-
 // Color index mapping for object types.
 // 0=VALUE, 1=CURVE, 2=MAP, 3=CUBOID+, 4=ASCII, 5=VAL_BLK, 6=MEASUREMENT, 7=AXIS_PTS
 int characteristicColorIndex(a2l::CharacteristicType type) {
@@ -173,7 +150,7 @@ SizeResult computeCharacteristicSize(const a2l::Characteristic& ch,
 
     case a2l::CHARACTERISTIC_TYPE_CURVE: {
         if (rlInfo.hasAlternateMode) {
-            // Tier 3: deferred.
+            // Alternate index mode not modeled exactly — estimate, flagged approximate.
             uint32_t axisCount = 0;
             if (ch.axis_descrs_size() > 0) {
                 axisCount = ch.axis_descrs(0).max_axis_points();
@@ -219,12 +196,12 @@ SizeResult computeCharacteristicSize(const a2l::Characteristic& ch,
     case a2l::CHARACTERISTIC_TYPE_CUBOID:
     case a2l::CHARACTERISTIC_TYPE_CUBE_4:
     case a2l::CHARACTERISTIC_TYPE_CUBE_5: {
-        // Tier 3: approximate.
+        // N-D layout approximated as product of axis points.
         uint64_t count = 1;
         for (int i = 0; i < ch.axis_descrs_size(); ++i) {
-            count *= ch.axis_descrs(i).max_axis_points();
+            count = mulSat(count, ch.axis_descrs(i).max_axis_points());
         }
-        return {count * fvSize, true};
+        return {mulSat(count, fvSize), true};
     }
 
     default:
@@ -344,13 +321,13 @@ void A2lDocumentSession::buildMemoryMap() {
 
             uint64_t size = dataTypeSize(meas.datatype());
             if (meas.has_array_size() && meas.array_size() > 1) {
-                size *= meas.array_size();
+                size = mulSat(size, meas.array_size());
             } else if (meas.matrix_dim_size() > 0) {
                 uint64_t count = 1;
                 for (int d = 0; d < meas.matrix_dim_size(); ++d) {
-                    count *= meas.matrix_dim(d);
+                    count = mulSat(count, meas.matrix_dim(d));
                 }
-                size *= count;
+                size = mulSat(size, count);
             }
 
             MemoryObject obj;
