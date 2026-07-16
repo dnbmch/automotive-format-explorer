@@ -4,6 +4,8 @@
 
 #undef signals  // ldf proto's repeated `signals` field vs Qt's `signals` keyword macro
 
+using namespace ldfdetail;
+
 namespace {
 
 QString hexAndDecimal(quint32 value) {
@@ -46,7 +48,7 @@ QString initValueText(const ldf::Signal& signal) {
 
 } // namespace
 
-QString scheduleEntryLabel(const ldf::ScheduleEntry& entry) {
+QString ldfdetail::scheduleEntryLabel(const ldf::ScheduleEntry& entry) {
     switch (entry.command_case()) {
     case ldf::ScheduleEntry::kFrameName:
         return text(entry.frame_name());

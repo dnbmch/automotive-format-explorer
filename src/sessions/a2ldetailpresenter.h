@@ -18,6 +18,11 @@
 
 #include <google/protobuf/repeated_field.h>
 
+// Format-specific helpers live in a2ldetail so they don't collide with other
+// backends' same-named global helpers (e.g. LDF's differently-defined
+// numberText) when all backends link statically into one executable.
+namespace a2ldetail {
+
 constexpr int kTypedefCharacteristicCategory = 0;
 constexpr int kTypedefStructureCategory = 1;
 constexpr int kTypedefAxisCategory = 2;
@@ -275,6 +280,8 @@ inline QString recordLayoutComponentSummary(const a2l::RecordLayoutComponent& co
     }
     return QStringLiteral("Component");
 }
+
+} // namespace a2ldetail
 
 class A2lDetailPresenter final : public DetailPresenter {
 public:

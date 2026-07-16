@@ -8,6 +8,8 @@
 
 #undef signals  // ldf proto's repeated `signals` field vs Qt's `signals` keyword macro
 
+using namespace ldfdetail;
+
 LdfDocumentSession::LdfDocumentSession(QString displayName,
                                        QString sourcePath,
                                        ldf::LdfFile document,

@@ -16,7 +16,7 @@ Popup {
     }
 
     anchors.centerIn: Overlay.overlay
-    width: Math.min((parent ? parent.width : 640) - 64, 560)
+    width: Math.min(parent.width - 64, 560)
     height: contentColumn.implicitHeight + 32
     modal: true
     padding: 16

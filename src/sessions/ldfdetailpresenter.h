@@ -8,6 +8,11 @@
 #include "ldf/ldf.pb.h"
 #pragma pop_macro("signals")
 
+// Format-specific helpers live in ldfdetail so they don't collide with other
+// backends' same-named global helpers (e.g. A2L's differently-defined
+// numberText) when all backends link statically into one executable.
+namespace ldfdetail {
+
 // LDF renders doubles at full precision; the parser reports frame IDs and NADs
 // as small unsigned values, so the integer path casts straight to qlonglong.
 inline QString numberText(double value) {
@@ -22,6 +27,8 @@ QString numberText(T value) {
 // A schedule entry is a frame reference or a typed diagnostic command. Needs
 // LDF proto types, so it lives here rather than in the cross-format header.
 QString scheduleEntryLabel(const ldf::ScheduleEntry& entry);
+
+} // namespace ldfdetail
 
 class LdfDetailPresenter final : public DetailPresenter {
 public:

@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <unordered_map>
 
+using namespace a2ldetail;
+
 A2lDocumentSession::A2lDocumentSession(QString displayName,
                                        QString sourcePath,
                                        a2l::A2lFile document,

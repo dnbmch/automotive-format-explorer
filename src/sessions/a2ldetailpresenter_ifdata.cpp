@@ -1,5 +1,7 @@
 #include "sessions/a2ldetailpresenter.h"
 
+using namespace a2ldetail;
+
 QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) const {
     QList<DetailSection> sections;
     const auto* module = moduleAt(path.primaryIndex);

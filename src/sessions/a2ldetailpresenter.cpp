@@ -3,6 +3,8 @@
 #include <QStringList>
 #include <variant>
 
+using namespace a2ldetail;
+
 QList<DetailSection> A2lDetailPresenter::buildDetails(const NodeBinding& binding) const {
     if (!std::holds_alternative<A2lPath>(binding.payload)) {
         return {};

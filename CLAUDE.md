@@ -217,12 +217,14 @@ Both `MemoryGridItem` and `SignalGridItem` extend `QQuickPaintedItem`:
 src/
   core/           appcontroller, noderegistry, formatid, detailsection, detailpresenter
   models/         treemodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel
-  sessions/       documentsession (interface), adaptersessionbase, a2l/dbc/ldf sessions
+  sessions/       documentsession (interface), adaptersessionbase, presentertext
+                  (shared text/detail helpers), a2l/dbc/ldf sessions
   adapters/       a2l/dbc/ldf adapter + factory (extern "C" plugin entry points)
   ui/             memorygriditem, signalgriditem (QQuickPaintedItem renderers)
 qml/
   Main.qml        root layout with SplitView, tabs, Loader
-  components/     NavPanel, MemoryView, SignalMapView, Theme, Toast, SplashOverlay
+  components/     NavPanel, MemoryView, SignalMapView, Theme, Toast, SplashOverlay,
+                  DiagnosticsPopup
 docs/             design docs, screenshots
 cmake/            FetchParserLib, DeployMsys2Deps
 ```
