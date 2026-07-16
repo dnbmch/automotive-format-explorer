@@ -25,10 +25,7 @@ ApplicationWindow {
     Timer {
         interval: 100
         running: true
-        onTriggered: {
-            splashOverlay.showTime = Date.now()
-            splashOverlay.dismiss()
-        }
+        onTriggered: splashOverlay.dismiss()
     }
 
     Component.onCompleted: _ready = true

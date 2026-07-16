@@ -7,7 +7,6 @@ Rectangle {
 
     property bool loading: true
     property string statusText: "Loading\u2026"
-    property real showTime: 0
 
     signal dismissed()
 
@@ -15,14 +14,12 @@ Rectangle {
     z: 100
 
     function dismiss() {
-        let elapsed = Date.now() - showTime
-        let remaining = Math.max(0, 600 - elapsed)
-        dismissTimer.interval = remaining
         dismissTimer.start()
     }
 
     Timer {
         id: dismissTimer
+        interval: 600
         onTriggered: fadeOut.start()
     }
 

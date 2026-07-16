@@ -89,9 +89,6 @@ QHash<int, QByteArray> TreeModel::roleNames() const {
 void TreeModel::setRoot(std::unique_ptr<TreeItem> root) {
     beginResetModel();
     _root = std::move(root);
-    if (!_root) {
-        _root = std::make_unique<TreeItem>();
-    }
     endResetModel();
 }
 
@@ -104,7 +101,7 @@ const TreeItem* TreeModel::rootItem() const {
 }
 
 QModelIndex TreeModel::indexForNodeKey(qulonglong nodeKey) const {
-    if (nodeKey == 0 || !_root) {
+    if (nodeKey == 0) {
         return {};
     }
 

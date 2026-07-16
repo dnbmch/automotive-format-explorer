@@ -278,11 +278,9 @@ void SignalGridItem::mousePressEvent(QMouseEvent* event) {
     int idx = signalIndexAtPixel(event->position().x(), event->position().y());
     if (idx >= 0) {
         setSelectedSignalIndex(idx);
-        if (_model) {
-            quint64 key = _model->signalNodeKey(idx);
-            if (key != 0) {
-                emit nodeKeyClicked(key);
-            }
+        quint64 key = _model->signalNodeKey(idx);
+        if (key != 0) {
+            emit nodeKeyClicked(key);
         }
     }
     event->accept();
