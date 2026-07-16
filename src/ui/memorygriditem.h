@@ -55,7 +55,6 @@ public:
     void setSelectedObjectIndex(int index);
 
     Q_INVOKABLE void setColors(const QVariantList& colors, const QColor& unoccupied);
-    Q_INVOKABLE int rowForAddress(quint64 address) const;
     Q_INVOKABLE void highlightObject(int objectIndex);
 
 signals:
@@ -85,7 +84,6 @@ private:
     void rebuildColorMap();
     void updateContentHeight();
     int objectIndexAtPixel(qreal px, qreal py) const;
-    void clampScrollY();
 
     MemoryMapModel* _model = nullptr;
     qreal _scroll_y = 0;

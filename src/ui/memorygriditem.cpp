@@ -229,13 +229,6 @@ void MemoryGridItem::setColors(const QVariantList& colors, const QColor& unoccup
     update();
 }
 
-int MemoryGridItem::rowForAddress(quint64 address) const {
-    if (!_model) {
-        return 0;
-    }
-    return _model->rowForAddress(address);
-}
-
 void MemoryGridItem::highlightObject(int objectIndex) {
     setSelectedObjectIndex(objectIndex);
     _highlight_obj = objectIndex;
@@ -278,12 +271,10 @@ void MemoryGridItem::mousePressEvent(QMouseEvent* event) {
     int idx = objectIndexAtPixel(event->position().x(), event->position().y());
     setSelectedObjectIndex(idx);
     if (idx >= 0) {
-        if (_model) {
-            const auto mi = _model->index(idx, 0);
-            const auto key = _model->data(mi, MemoryMapModel::NodeKeyRole).toULongLong();
-            if (key != 0) {
-                emit nodeKeyClicked(key);
-            }
+        const auto mi = _model->index(idx, 0);
+        const auto key = _model->data(mi, MemoryMapModel::NodeKeyRole).toULongLong();
+        if (key != 0) {
+            emit nodeKeyClicked(key);
         }
     }
     event->accept();
@@ -363,10 +354,6 @@ void MemoryGridItem::rebuildColorMap() {
 
 void MemoryGridItem::updateContentHeight() {
     emit contentHeightChanged();
-}
-
-void MemoryGridItem::clampScrollY() {
-    setScrollY(_scroll_y);
 }
 
 int MemoryGridItem::objectIndexAtPixel(qreal px, qreal py) const {

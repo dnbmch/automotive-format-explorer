@@ -25,7 +25,7 @@ Item {
         if (objIdx < 0) return
         let addr = mapModel.objectAddress(objIdx)
 
-        let row = gridItem.rowForAddress(addr)
+        let row = mapModel.rowForAddress(addr)
         let rh = gridItem.cellSize + gridItem.cellGap
         // Center the object vertically.
         gridItem.scrollY = Math.max(0, row * rh - gridItem.height / 2)
@@ -106,10 +106,10 @@ Item {
                         radius: Theme.radius
                     }
                     onAccepted: {
-                        if (!gridItem.model) return
+                        if (!mapModel) return
                         let addr = parseInt(text, 16)
                         if (!isNaN(addr)) {
-                            let row = gridItem.rowForAddress(addr)
+                            let row = mapModel.rowForAddress(addr)
                             let rh = gridItem.cellSize + gridItem.cellGap
                             gridItem.scrollY = row * rh
                         }

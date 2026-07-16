@@ -138,10 +138,6 @@ TreeItem* TreeModel::itemForIndex(const QModelIndex& index) const {
 }
 
 int TreeModel::rowForItem(const TreeItem* item) const {
-    if (!item || !item->parent) {
-        return 0;
-    }
-
     const auto& siblings = item->parent->children;
     for (std::size_t i = 0; i < siblings.size(); ++i) {
         if (siblings[i].get() == item) {

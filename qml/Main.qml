@@ -348,12 +348,10 @@ ApplicationWindow {
                         }
 
                         onLoaded: {
-                            if (item) {
-                                item.nodeKeyClicked.connect(function(nodeKey) {
-                                    AppController.selectCurrentNode(nodeKey)
-                                    navPanel.selectAndScrollTo(nodeKey)
-                                })
-                            }
+                            item.nodeKeyClicked.connect(function(nodeKey) {
+                                AppController.selectCurrentNode(nodeKey)
+                                navPanel.selectAndScrollTo(nodeKey)
+                            })
                         }
 
                         Connections {
@@ -372,8 +370,7 @@ ApplicationWindow {
                         color: Theme.bg
 
                         property bool showRawJson: false
-                        readonly property bool _rawAvailable: AppController.currentDetailModel
-                                                              && AppController.currentDetailModel.rawJsonText.length > 0
+                        readonly property bool _rawAvailable: AppController.currentDetailModel.rawJsonText.length > 0
                         readonly property bool _rawEffective: showRawJson && _rawAvailable
 
                         ColumnLayout {
@@ -570,9 +567,7 @@ ApplicationWindow {
                                     color: Theme.textPrimary
                                     selectionColor: Theme.bgSelection
                                     selectedTextColor: Theme.textWhite
-                                    text: AppController.currentDetailModel
-                                          ? AppController.currentDetailModel.rawJsonText
-                                          : ""
+                                    text: AppController.currentDetailModel.rawJsonText
 
                                     background: Rectangle {
                                         color: Theme.bgCard
