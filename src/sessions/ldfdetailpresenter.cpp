@@ -2,47 +2,12 @@
 
 #include <QStringList>
 
-#include <google/protobuf/util/json_util.h>
-
 #undef signals  // ldf proto's repeated `signals` field vs Qt's `signals` keyword macro
 
 namespace {
 
-QString text(const std::string& value) {
-    auto utf8 = QString::fromUtf8(value.data(), static_cast<int>(value.size()));
-    if (utf8.contains(QChar::ReplacementCharacter)) {
-        return QString::fromLatin1(value.data(), static_cast<int>(value.size()));
-    }
-    return utf8;
-}
-
-QString boolText(bool value) {
-    return value ? QStringLiteral("Yes") : QStringLiteral("No");
-}
-
-QString numberText(double value) {
-    return QString::number(value, 'g', 12);
-}
-
-template<typename T>
-QString numberText(T value) {
-    return QString::number(static_cast<qlonglong>(value));
-}
-
-QString hexValue(quint32 value) {
-    return QStringLiteral("0x%1").arg(value, 0, 16).toUpper();
-}
-
 QString hexAndDecimal(quint32 value) {
     return QStringLiteral("%1 (%2)").arg(hexValue(value)).arg(value);
-}
-
-QString joinStrings(const google::protobuf::RepeatedPtrField<std::string>& values) {
-    QStringList items;
-    for (const std::string& value : values) {
-        items.push_back(text(value));
-    }
-    return items.join(QStringLiteral(", "));
 }
 
 QString joinNumbers(const google::protobuf::RepeatedField<google::protobuf::uint32>& values) {
@@ -51,12 +16,6 @@ QString joinNumbers(const google::protobuf::RepeatedField<google::protobuf::uint
         items.push_back(hexAndDecimal(value));
     }
     return items.join(QStringLiteral(", "));
-}
-
-void addField(QList<DetailField>& fields, const QString& key, const QString& value) {
-    if (!value.isEmpty()) {
-        fields.push_back(DetailField{key, value});
-    }
 }
 
 template<typename T>
@@ -68,12 +27,6 @@ template<typename T>
 void addOptionalNumberField(QList<DetailField>& fields, const QString& key, T value) {
     if (value != 0) {
         addNumberField(fields, key, value);
-    }
-}
-
-void pushSection(QList<DetailSection>& sections, const QString& title, QList<DetailField> fields) {
-    if (!fields.isEmpty()) {
-        sections.push_back(DetailSection{title, std::move(fields)});
     }
 }
 
@@ -91,7 +44,8 @@ QString initValueText(const ldf::Signal& signal) {
                              : QStringLiteral("{%1}").arg(parts.join(QStringLiteral(", ")));
 }
 
-// A schedule entry is a frame reference or a typed diagnostic command.
+} // namespace
+
 QString scheduleEntryLabel(const ldf::ScheduleEntry& entry) {
     switch (entry.command_case()) {
     case ldf::ScheduleEntry::kFrameName:
@@ -103,8 +57,6 @@ QString scheduleEntryLabel(const ldf::ScheduleEntry& entry) {
     }
     return {};
 }
-
-} // namespace
 
 QList<DetailSection> LdfDetailPresenter::buildDetails(const NodeBinding& binding) const {
     if (!std::holds_alternative<LdfPath>(binding.payload)) {
@@ -176,14 +128,7 @@ QString LdfDetailPresenter::buildRawJson(const NodeBinding& binding) const {
         return {};
     }
 
-    google::protobuf::util::JsonPrintOptions opts;
-    opts.add_whitespace = true;
-    std::string json;
-    auto status = google::protobuf::util::MessageToJsonString(*msg, &json, opts);
-    if (!status.ok()) {
-        return {};
-    }
-    return text(json);
+    return messageToJsonText(*msg);
 }
 
 const ldf::Signal* LdfDetailPresenter::findSignal(const std::string& name) const {

@@ -3,41 +3,9 @@
 #include <QStringList>
 #include <type_traits>
 
-#include <google/protobuf/util/json_util.h>
-
 #undef signals  // dbc proto's repeated `signals` field vs Qt's `signals` keyword macro
 
 namespace {
-
-QString text(const std::string& value) {
-    auto utf8 = QString::fromUtf8(value.data(), static_cast<int>(value.size()));
-    if (utf8.contains(QChar::ReplacementCharacter)) {
-        return QString::fromLatin1(value.data(), static_cast<int>(value.size()));
-    }
-    return utf8;
-}
-
-QString boolText(bool value) {
-    return value ? QStringLiteral("Yes") : QStringLiteral("No");
-}
-
-QString joinStrings(const google::protobuf::RepeatedPtrField<std::string>& values) {
-    QStringList items;
-    for (const std::string& value : values) {
-        items.push_back(text(value));
-    }
-    return items.join(QStringLiteral(", "));
-}
-
-QString hexId(quint32 id) {
-    return QStringLiteral("0x%1").arg(id, 0, 16).toUpper();
-}
-
-void addField(QList<DetailField>& fields, const QString& key, const QString& value) {
-    if (!value.isEmpty()) {
-        fields.push_back(DetailField{key, value});
-    }
-}
 
 template<typename T>
 void addNumberField(QList<DetailField>& fields, const QString& key, T value) {
@@ -45,12 +13,6 @@ void addNumberField(QList<DetailField>& fields, const QString& key, T value) {
         fields.push_back(DetailField{key, QString::number(static_cast<double>(value))});
     else
         fields.push_back(DetailField{key, QString::number(static_cast<qlonglong>(value))});
-}
-
-void pushSection(QList<DetailSection>& sections, const QString& title, QList<DetailField> fields) {
-    if (!fields.isEmpty()) {
-        sections.push_back(DetailSection{title, std::move(fields)});
-    }
 }
 
 } // namespace
@@ -111,14 +73,7 @@ QString DbcDetailPresenter::buildRawJson(const NodeBinding& binding) const {
         return {};
     }
 
-    google::protobuf::util::JsonPrintOptions opts;
-    opts.add_whitespace = true;
-    std::string json;
-    auto status = google::protobuf::util::MessageToJsonString(*msg, &json, opts);
-    if (!status.ok()) {
-        return {};
-    }
-    return text(json);
+    return messageToJsonText(*msg);
 }
 
 QList<DetailSection> DbcDetailPresenter::nodeDetails(const DbcPath& path) const {

@@ -8,44 +8,6 @@
 
 #undef signals  // ldf proto's repeated `signals` field vs Qt's `signals` keyword macro
 
-namespace {
-
-QString text(const std::string& value) {
-    auto utf8 = QString::fromUtf8(value.data(), static_cast<int>(value.size()));
-    if (utf8.contains(QChar::ReplacementCharacter)) {
-        return QString::fromLatin1(value.data(), static_cast<int>(value.size()));
-    }
-    return utf8;
-}
-
-QString numberText(double value) {
-    return QString::number(value, 'g', 12);
-}
-
-template<typename T>
-QString numberText(T value) {
-    return QString::number(static_cast<qlonglong>(value));
-}
-
-QString hexValue(quint32 value) {
-    return QStringLiteral("0x%1").arg(value, 0, 16).toUpper();
-}
-
-// A schedule entry is a frame reference or a typed diagnostic command.
-QString scheduleEntryLabel(const ldf::ScheduleEntry& entry) {
-    switch (entry.command_case()) {
-    case ldf::ScheduleEntry::kFrameName:
-        return text(entry.frame_name());
-    case ldf::ScheduleEntry::kDiagnosticCommand:
-        return text(ldf::DiagnosticCommand_Type_Name(entry.diagnostic_command().type()));
-    case ldf::ScheduleEntry::COMMAND_NOT_SET:
-        break;
-    }
-    return {};
-}
-
-} // namespace
-
 LdfDocumentSession::LdfDocumentSession(QString displayName,
                                        QString sourcePath,
                                        ldf::LdfFile document,

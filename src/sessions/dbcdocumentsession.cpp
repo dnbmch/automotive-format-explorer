@@ -7,22 +7,6 @@
 
 #undef signals  // dbc proto's repeated `signals` field vs Qt's `signals` keyword macro
 
-namespace {
-
-QString text(const std::string& value) {
-    auto utf8 = QString::fromUtf8(value.data(), static_cast<int>(value.size()));
-    if (utf8.contains(QChar::ReplacementCharacter)) {
-        return QString::fromLatin1(value.data(), static_cast<int>(value.size()));
-    }
-    return utf8;
-}
-
-QString hexId(quint32 id) {
-    return QStringLiteral("0x%1").arg(id, 0, 16).toUpper();
-}
-
-} // namespace
-
 DbcDocumentSession::DbcDocumentSession(QString displayName,
                                        QString sourcePath,
                                        dbc::DbcFile document,

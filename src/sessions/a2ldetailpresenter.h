@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/detailpresenter.h"
+#include "sessions/presentertext.h"
 
 #pragma push_macro("signals")
 #undef signals
@@ -21,18 +22,6 @@ constexpr int kTypedefCharacteristicCategory = 0;
 constexpr int kTypedefStructureCategory = 1;
 constexpr int kTypedefAxisCategory = 2;
 
-inline QString text(const std::string& value) {
-    auto utf8 = QString::fromUtf8(value.data(), static_cast<int>(value.size()));
-    if (utf8.contains(QChar::ReplacementCharacter)) {
-        return QString::fromLatin1(value.data(), static_cast<int>(value.size()));
-    }
-    return utf8;
-}
-
-inline QString boolText(bool value) {
-    return value ? QStringLiteral("Yes") : QStringLiteral("No");
-}
-
 inline QString hex64(quint64 value) {
     return QStringLiteral("0x%1").arg(value, 0, 16).toUpper();
 }
@@ -45,12 +34,6 @@ QString numberText(T value) {
         return QString::number(static_cast<qulonglong>(value));
     } else {
         return QString::number(static_cast<qlonglong>(value));
-    }
-}
-
-inline void addField(QList<DetailField>& fields, const QString& key, const QString& value) {
-    if (!value.isEmpty()) {
-        fields.push_back(DetailField{key, value});
     }
 }
 
@@ -78,12 +61,6 @@ inline void addOptionalString(QList<DetailField>& fields,
 inline void addOptionalBool(QList<DetailField>& fields, const QString& key, bool present, bool value) {
     if (present) {
         addField(fields, key, boolText(value));
-    }
-}
-
-inline void pushSection(QList<DetailSection>& sections, const QString& title, QList<DetailField> fields) {
-    if (!fields.isEmpty()) {
-        sections.push_back(DetailSection{title, std::move(fields)});
     }
 }
 

@@ -3,8 +3,6 @@
 #include <QStringList>
 #include <variant>
 
-#include <google/protobuf/util/json_util.h>
-
 QList<DetailSection> A2lDetailPresenter::buildDetails(const NodeBinding& binding) const {
     if (!std::holds_alternative<A2lPath>(binding.payload)) {
         return {};
@@ -109,14 +107,7 @@ QString A2lDetailPresenter::buildRawJson(const NodeBinding& binding) const {
         return {};
     }
 
-    google::protobuf::util::JsonPrintOptions opts;
-    opts.add_whitespace = true;
-    std::string json;
-    auto status = google::protobuf::util::MessageToJsonString(*msg, &json, opts);
-    if (!status.ok()) {
-        return {};
-    }
-    return text(json);
+    return messageToJsonText(*msg);
 }
 
 const a2l::Module* A2lDetailPresenter::moduleAt(int index) const {

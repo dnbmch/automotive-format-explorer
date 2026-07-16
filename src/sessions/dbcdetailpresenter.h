@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/detailpresenter.h"
+#include "sessions/presentertext.h"
 
 #pragma push_macro("signals")
 #undef signals

@@ -1,11 +1,27 @@
 #pragma once
 
 #include "core/detailpresenter.h"
+#include "sessions/presentertext.h"
 
 #pragma push_macro("signals")
 #undef signals
 #include "ldf/ldf.pb.h"
 #pragma pop_macro("signals")
+
+// LDF renders doubles at full precision; the parser reports frame IDs and NADs
+// as small unsigned values, so the integer path casts straight to qlonglong.
+inline QString numberText(double value) {
+    return QString::number(value, 'g', 12);
+}
+
+template<typename T>
+QString numberText(T value) {
+    return QString::number(static_cast<qlonglong>(value));
+}
+
+// A schedule entry is a frame reference or a typed diagnostic command. Needs
+// LDF proto types, so it lives here rather than in the cross-format header.
+QString scheduleEntryLabel(const ldf::ScheduleEntry& entry);
 
 class LdfDetailPresenter final : public DetailPresenter {
 public:
