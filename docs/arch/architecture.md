@@ -64,7 +64,7 @@ A `DocumentSession` (interface in `src/sessions/documentsession.h`) is the per-d
 | `treeModel()` | `TreeModel*` for the nav panel |
 | `detailModel()` | `DetailModel*` — the detail panel's section/field model |
 | `diagnostics()` | `QList<DiagnosticMessage>` — diagnostics gathered during load |
-| `hasWarnings()` | `bool` — true when a load produced warning-severity diagnostics |
+| `hasDiagnostics()` | `bool` — true when a load produced any diagnostic (warning or error); drives the tab badge |
 | `selectNode(quint64 key)` | selects the entity with the given node key |
 | `centerPanelSource()` | `QUrl` — QML component URL; empty means the layout collapses to two columns |
 | `centerPanelModel()` | `QAbstractListModel*` for the center panel; null when there is no center panel |
@@ -136,7 +136,8 @@ src/
   ui/           memorygriditem, signalgriditem (QQuickPaintedItem renderers)
 qml/
   Main.qml      root layout with SplitView, tabs, Loader
-  components/   NavPanel, MemoryView, SignalMapView, SplashOverlay, Theme, Toast
+  components/   NavPanel, MemoryView, SignalMapView, SplashOverlay, Theme, Toast,
+                DiagnosticsPopup
 cmake/          FetchParserLib, DeployMsys2Deps
 ```
 

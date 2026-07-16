@@ -1,5 +1,10 @@
 #include "models/tabmodel.h"
 
+#include "core/diagnostics.h"
+
+#include <QVariantList>
+#include <QVariantMap>
+
 TabModel::TabModel(QObject* parent)
     : QAbstractListModel(parent) {
 }
@@ -26,8 +31,23 @@ QVariant TabModel::data(const QModelIndex& index, int role) const {
         return session->formatName();
     case SourcePathRole:
         return session->sourcePath();
-    case HasWarningsRole:
-        return session->hasWarnings();
+    case HasDiagnosticsRole:
+        return session->hasDiagnostics();
+    case DiagnosticsRole: {
+        QVariantList rows;
+        const QList<DiagnosticMessage> diagnostics = session->diagnostics();
+        rows.reserve(diagnostics.size());
+        for (const DiagnosticMessage& message : diagnostics) {
+            rows.append(QVariantMap{
+                {QStringLiteral("severity"),
+                 message.severity == DiagnosticSeverity::Error ? QStringLiteral("Error")
+                                                               : QStringLiteral("Warning")},
+                {QStringLiteral("title"), message.title},
+                {QStringLiteral("detail"), message.detail},
+            });
+        }
+        return rows;
+    }
     default:
         return {};
     }
@@ -38,7 +58,8 @@ QHash<int, QByteArray> TabModel::roleNames() const {
         {TitleRole, "title"},
         {FormatRole, "formatName"},
         {SourcePathRole, "sourcePath"},
-        {HasWarningsRole, "hasWarnings"},
+        {HasDiagnosticsRole, "hasDiagnostics"},
+        {DiagnosticsRole, "diagnostics"},
     };
 }
 

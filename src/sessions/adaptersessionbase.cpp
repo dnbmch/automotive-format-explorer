@@ -42,8 +42,8 @@ QList<DiagnosticMessage> AdapterSessionBase::diagnostics() const {
     return _diagnostics;
 }
 
-bool AdapterSessionBase::hasWarnings() const {
-    return ::hasWarnings(_diagnostics);
+bool AdapterSessionBase::hasDiagnostics() const {
+    return !_diagnostics.isEmpty();
 }
 
 void AdapterSessionBase::selectNode(quint64 key) {

@@ -220,7 +220,8 @@ ApplicationWindow {
                                 id: tabDelegate
                                 required property int index
                                 required property string title
-                                required property bool hasWarnings
+                                required property bool hasDiagnostics
+                                required property var diagnostics
 
                                 width: Math.min(tabRow.implicitWidth + 24, Theme.tabWidthMax)
                                 font.pixelSize: Theme.fontSizeM
@@ -235,12 +236,31 @@ ApplicationWindow {
                                     leftPadding: 4
 
                                     Label {
-                                        text: tabDelegate.hasWarnings ? tabDelegate.title + " \u26A0" : tabDelegate.title
+                                        text: tabDelegate.title
                                         font.pixelSize: Theme.fontSizeM
                                         color: tabs.currentIndex === tabDelegate.index
                                             ? Theme.textWhite : Theme.textSecondary
                                         elide: Text.ElideRight
                                         anchors.verticalCenter: parent.verticalCenter
+                                    }
+
+                                    // Diagnostics indicator \u2014 opens the app-level popup
+                                    Label {
+                                        text: "\u26A0"
+                                        visible: tabDelegate.hasDiagnostics
+                                        font.pixelSize: Theme.fontSizeM
+                                        color: Theme.accentGold
+                                        anchors.verticalCenter: parent.verticalCenter
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                AppController.currentTabIndex = tabDelegate.index
+                                                diagnosticsPopup.openFor(tabDelegate.title, tabDelegate.diagnostics)
+                                            }
+                                        }
                                     }
 
                                     Rectangle {
@@ -598,6 +618,11 @@ ApplicationWindow {
     // --- Toast notification ---
     Toast {
         id: toast
+    }
+
+    // --- Per-tab diagnostics popup ---
+    DiagnosticsPopup {
+        id: diagnosticsPopup
     }
 
     // Wire toast to controller events

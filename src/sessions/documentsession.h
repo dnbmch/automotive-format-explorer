@@ -23,7 +23,7 @@ public:
     virtual TreeModel* treeModel() = 0;
     virtual DetailModel* detailModel() = 0;
     virtual QList<DiagnosticMessage> diagnostics() const = 0;
-    virtual bool hasWarnings() const = 0;
+    virtual bool hasDiagnostics() const = 0;
     virtual void selectNode(quint64 key) = 0;
 
     virtual QUrl centerPanelSource() const { return {}; }

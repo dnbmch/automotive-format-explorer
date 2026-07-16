@@ -199,6 +199,7 @@ qt_add_qml_module(automotive-format-explorer
         qml/components/SplashOverlay.qml
         qml/components/NavPanel.qml
         qml/components/Toast.qml
+        qml/components/DiagnosticsPopup.qml
         qml/components/MemoryView.qml
         qml/components/SignalMapView.qml
 )

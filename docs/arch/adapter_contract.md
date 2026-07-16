@@ -48,7 +48,7 @@ public:
     virtual TreeModel* treeModel() = 0;               // left NavPanel
     virtual DetailModel* detailModel() = 0;           // right Detail panel
     virtual QList<DiagnosticMessage> diagnostics() const = 0;
-    virtual bool hasWarnings() const = 0;             // true when warning-severity diagnostics exist
+    virtual bool hasDiagnostics() const = 0;          // true when any diagnostic (warning or error) exists
     virtual void selectNode(quint64 key) = 0;         // refresh DetailModel for a NodeRegistry key
 
     // Optional center panel (memory view / signal map / blank)

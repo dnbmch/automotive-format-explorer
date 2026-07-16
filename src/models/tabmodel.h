@@ -15,7 +15,8 @@ public:
         TitleRole = Qt::UserRole + 1,
         FormatRole,
         SourcePathRole,
-        HasWarningsRole
+        HasDiagnosticsRole,
+        DiagnosticsRole
     };
 
     explicit TabModel(QObject* parent = nullptr);

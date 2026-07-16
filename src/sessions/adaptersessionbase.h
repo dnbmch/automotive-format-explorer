@@ -25,7 +25,7 @@ public:
     TreeModel* treeModel() override;
     DetailModel* detailModel() override;
     QList<DiagnosticMessage> diagnostics() const override;
-    bool hasWarnings() const override;
+    bool hasDiagnostics() const override;
     void selectNode(quint64 key) override;
     void moveModelsToThread(QThread* thread) override;
 
