@@ -126,6 +126,14 @@ Parser library versions are pinned in `CMakeLists.txt`. To override:
 cmake -B build -DA2L_PARSER_VERSION=v0.4.0 -DDBC_PARSER_VERSION=v0.4.0 -DLDF_PARSER_VERSION=v0.5.0
 ```
 
+### Offline build (sibling working trees)
+
+In the multi-repo workspace, `bash seed-parser-deps.sh` stages the sibling
+parser repos' current build outputs into `build/_parser_deps/` in the exact
+release-artifact layout; the configure-time fetch then skips all downloads.
+Use it to build against unpublished parser changes or without network. The
+seeded bits are the siblings' working trees, not the pinned releases.
+
 ### Platform Notes
 
 - **Windows (MinGW)**: Primary development platform. Backends are shared libraries loaded at runtime.

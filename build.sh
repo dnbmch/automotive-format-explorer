@@ -3,7 +3,8 @@
 # Compiler + protobuf come from the msys2 mingw64 toolchain; Qt6 comes from a
 # standalone Qt install (msys2 does not ship qt6 here). Parser libraries are
 # fetched from GitHub releases at configure time, so the first configure needs
-# network access.
+# network access — or seed them from the sibling working trees first:
+# bash seed-parser-deps.sh
 #
 #   bash build.sh                 # Debug build
 #   BUILD_TYPE=Release bash build.sh

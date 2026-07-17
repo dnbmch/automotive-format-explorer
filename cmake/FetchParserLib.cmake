@@ -79,6 +79,7 @@ function(fetch_parser_lib)
         list(GET download_status 0 status_code)
         if(NOT status_code EQUAL 0)
             list(GET download_status 1 status_msg)
+            file(REMOVE "${headers_tarball}")
             message(FATAL_ERROR
                 "Failed to download ${headers_archive}:\n  ${status_msg}\n"
                 "URL: ${base_url}/${headers_archive}")
@@ -114,6 +115,7 @@ function(fetch_parser_lib)
         list(GET download_status 0 status_code)
         if(NOT status_code EQUAL 0)
             list(GET download_status 1 status_msg)
+            file(REMOVE "${binary_tarball}")
             message(FATAL_ERROR
                 "Failed to download ${binary_archive}:\n  ${status_msg}\n"
                 "URL: ${base_url}/${binary_archive}")
