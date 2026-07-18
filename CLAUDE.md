@@ -220,7 +220,8 @@ src/
   sessions/       documentsession (interface), adaptersessionbase, presentertext
                   (shared text/detail helpers), a2l/dbc/ldf sessions
   adapters/       a2l/dbc/ldf adapter + factory (extern "C" plugin entry points)
-  ui/             memorygriditem, signalgriditem (QQuickPaintedItem renderers)
+  ui/             memorygriditem, signalgriditem (QQuickPaintedItem renderers),
+                  gridpalette (shared palette/shade/highlight-flash helpers)
 qml/
   Main.qml        root layout with SplitView, tabs, Loader
   components/     NavPanel, MemoryView, SignalMapView, Theme, Toast, SplashOverlay,
