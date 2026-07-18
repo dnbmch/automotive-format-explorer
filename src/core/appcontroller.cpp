@@ -54,6 +54,7 @@ const BackendSpec* backendSpecForPath(const QString& path) {
 
 AppController::AppController(QObject* parent)
     : QObject(parent) {
+    _empty_tree_filter.setSourceModel(&_empty_tree_model);
     connect(&_load_watcher, &QFutureWatcher<std::shared_ptr<LoadResult>>::finished,
             this, &AppController::onLoadFinished);
 
@@ -68,9 +69,18 @@ TabModel* AppController::tabModel() {
     return &_tab_model;
 }
 
-TreeModel* AppController::currentTreeModel() {
+TreeFilterModel* AppController::currentTreeModel() {
     DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
-    return session ? session->treeModel() : &_empty_tree_model;
+    if (!session) {
+        return &_empty_tree_filter;
+    }
+
+    auto& filter = _tree_filters[session];
+    if (!filter) {
+        filter = std::make_unique<TreeFilterModel>();
+        filter->setSourceModel(session->treeModel());
+    }
+    return filter.get();
 }
 
 DetailModel* AppController::currentDetailModel() {
@@ -179,6 +189,7 @@ void AppController::closeTab(int index) {
     }
 
     const int previousCurrentIndex = _current_tab_index;
+    _tree_filters.erase(_tab_model.sessionAt(index));
     _tab_model.closeSession(index);
     if (_tab_model.rowCount() == 0) {
         if (_current_tab_index != -1) {
@@ -302,6 +313,36 @@ void AppController::setStartupStatusText(const QString& text) {
 
     _startup_status_text = text;
     emit startupStatusTextChanged();
+}
+
+QVariantList AppController::sampleFiles() const {
+    // Bundled sample files live next to the executable (release zip), one level
+    // up (dev build tree), or under share/ (AppImage). First hit wins.
+    static const QVariantList samples = [] {
+        const QDir appDir(QCoreApplication::applicationDirPath());
+        for (const QString& rel : {QStringLiteral("samples"),
+                                   QStringLiteral("../samples"),
+                                   QStringLiteral("../share/automotive-format-explorer/samples")}) {
+            const QDir dir(appDir.filePath(rel));
+            const auto entries = dir.entryInfoList(
+                {QStringLiteral("*.a2l"), QStringLiteral("*.dbc"), QStringLiteral("*.ldf")},
+                QDir::Files, QDir::Name);
+            if (entries.isEmpty()) {
+                continue;
+            }
+
+            QVariantList list;
+            for (const auto& entry : entries) {
+                list.push_back(QVariantMap{
+                    {QStringLiteral("title"), entry.fileName()},
+                    {QStringLiteral("url"), QUrl::fromLocalFile(entry.absoluteFilePath())},
+                });
+            }
+            return list;
+        }
+        return QVariantList{};
+    }();
+    return samples;
 }
 
 void AppController::setLastError(const QString& errorText) {

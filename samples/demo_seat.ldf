@@ -1,0 +1,119 @@
+/* Demo LDF for the Automotive Format Explorer.
+   Hand-authored synthetic seat-control cluster — not derived from the LIN
+   specification example or any vendor file. See SAMPLES.md for provenance. */
+
+LIN_description_file;
+LIN_protocol_version = "2.2";
+LIN_language_version = "2.2";
+LIN_speed = 19.2 kbps;
+Channel_name = "SeatBus";
+
+Nodes {
+    Master: SeatECU, 5 ms, 0.1 ms;
+    Slaves: MotorLeft, MotorRight;
+}
+
+Signals {
+    SeatMoveRequest: 2, 0, SeatECU, MotorLeft, MotorRight;
+    HeaterLevelCmd: 4, 0, SeatECU, MotorLeft;
+    MotorLeftPos: 16, 0, MotorLeft, SeatECU;
+    MotorLeftTemp: 8, 65, MotorLeft, SeatECU;
+    MotorLeftErr: 1, 0, MotorLeft, SeatECU;
+    MotorRightPos: 16, 0, MotorRight, SeatECU;
+    MotorRightErr: 1, 0, MotorRight, SeatECU;
+}
+
+Frames {
+    SeatCmd: 0x10, SeatECU, 2 {
+        SeatMoveRequest, 0;
+        HeaterLevelCmd, 2;
+    }
+    LeftStatus: 0x11, MotorLeft, 4 {
+        MotorLeftPos, 0;
+        MotorLeftTemp, 16;
+        MotorLeftErr, 24;
+    }
+    RightStatus: 0x12, MotorRight, 3 {
+        MotorRightPos, 0;
+        MotorRightErr, 16;
+    }
+}
+
+Node_attributes {
+    MotorLeft {
+        LIN_protocol = "2.2";
+        configured_NAD = 0x11;
+        initial_NAD = 0x01;
+        product_id = 0x0044, 0x4D01, 1;
+        response_error = MotorLeftErr;
+        P2_min = 50 ms;
+        ST_min = 20 ms;
+        N_As_timeout = 1000 ms;
+        N_Cr_timeout = 1000 ms;
+        configurable_frames {
+            SeatCmd;
+            LeftStatus;
+        }
+    }
+    MotorRight {
+        LIN_protocol = "2.2";
+        configured_NAD = 0x12;
+        initial_NAD = 0x02;
+        product_id = 0x0044, 0x4D02, 1;
+        response_error = MotorRightErr;
+        P2_min = 50 ms;
+        ST_min = 20 ms;
+        N_As_timeout = 1000 ms;
+        N_Cr_timeout = 1000 ms;
+        configurable_frames {
+            SeatCmd;
+            RightStatus;
+        }
+    }
+}
+
+Schedule_tables {
+    Main_Schedule {
+        SeatCmd delay 10 ms;
+        LeftStatus delay 10 ms;
+        RightStatus delay 10 ms;
+    }
+    Diag_Schedule {
+        MasterReq delay 10 ms;
+        SlaveResp delay 10 ms;
+    }
+}
+
+Signal_encoding_types {
+    MoveEncoding {
+        logical_value, 0, "hold";
+        logical_value, 1, "forward";
+        logical_value, 2, "backward";
+        logical_value, 3, "reserved";
+    }
+    HeaterEncoding {
+        logical_value, 0, "off";
+        physical_value, 1, 10, 1, 0, "level";
+        logical_value, 15, "error";
+    }
+    PosEncoding {
+        physical_value, 0, 65000, 0.01, 0, "deg";
+        logical_value, 65535, "invalid";
+    }
+    TempEncoding {
+        physical_value, 0, 250, 1, -40, "degC";
+        logical_value, 255, "sensor fault";
+    }
+    ErrEncoding {
+        logical_value, 0, "OK";
+        logical_value, 1, "error";
+    }
+}
+
+Signal_representation {
+    MoveEncoding: SeatMoveRequest;
+    HeaterEncoding: HeaterLevelCmd;
+    PosEncoding: MotorLeftPos, MotorRightPos;
+    TempEncoding: MotorLeftTemp;
+    ErrEncoding: MotorLeftErr, MotorRightErr;
+}

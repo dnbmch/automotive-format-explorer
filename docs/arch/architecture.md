@@ -13,9 +13,10 @@ QGuiApplication
     NodeRegistry          — node-key allocation and reverse lookup
     TabModel              — open documents
     DocumentSession[]     — one per open file
+    TreeFilterModel[]     — per-session filter proxy over the session's TreeModel
   QQmlApplicationEngine
     Main.qml
-      NavPanel          — tree (TreeModel)
+      NavPanel          — tree (TreeFilterModel over TreeModel)
       Loader            — MemoryView.qml (A2L) | SignalMapView.qml (DBC/LDF) | empty
       Detail            — DetailModel (sections, fields, references)
 ```
@@ -71,6 +72,8 @@ A `DocumentSession` (interface in `src/sessions/documentsession.h`) is the per-d
 | `moveModelsToThread(QThread*)` | moves the session's models to the given thread |
 
 `AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides the common machinery (NodeRegistry hookup, tree construction skeleton, diagnostics collection). The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`) inherit from it and supply format-specific tree building, detail sections, and center-panel choice.
+
+The nav panel never binds a session's `TreeModel` directly: `AppController::currentTreeModel()` returns a per-session `TreeFilterModel` (`src/models/treefiltermodel.h`) — a `QSortFilterProxyModel` with recursive filtering and auto-accepted child rows that also exposes `nodeKeyRole` and a source-mapped `indexForNodeKey()` to QML. One proxy per session keeps the filter text per tab and preserves NavPanel's model-identity-keyed expand/selection/scroll state; the proxies live in `AppController` and are dropped when their tab closes. Sessions and backends know nothing about filtering.
 
 ## NodeRegistry and node keys
 

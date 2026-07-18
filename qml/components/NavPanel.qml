@@ -8,7 +8,9 @@ Rectangle {
     color: Theme.bgPanel
 
     property var treeModel: null
-    property bool hasContent: treeView.rows > 0
+    // Source-backed content: stays true while a filter yields zero visible rows.
+    readonly property bool hasSource: treeModel && treeModel.sourceModel
+        ? treeModel.sourceModel.rowCount() > 0 : false
 
     // Per-model state: expand keys, selected node key, scroll position.
     // Keyed by model object identity so tab close/reorder doesn't invalidate entries.
@@ -16,14 +18,43 @@ Rectangle {
     property var _selectionState: ({})
     property var _scrollState: ({})
     property var _prevModel: null
-    readonly property int _nodeKeyRole: 261  // Qt::UserRole + 5 (TreeModel::NodeKeyRole)
+    readonly property int _nodeKeyRole: treeModel ? treeModel.nodeKeyRole : 0
 
     onTreeModelChanged: {
         let nextModel = treeModel
         _saveState(_prevModel)
         treeView.model = nextModel
-        Qt.callLater(function() { _restoreState(nextModel) })
+        Qt.callLater(function() {
+            searchField.text = nextModel ? nextModel.filterText : ""
+            _restoreState(nextModel)
+        })
         _prevModel = nextModel
+    }
+
+    function focusSearch() {
+        searchField.forceActiveFocus()
+        searchField.selectAll()
+    }
+
+    // Drives the per-tab filter. Snapshots the expand/selection/scroll state on
+    // the empty->filtered edge and restores it when the filter clears.
+    function _applyFilter(text) {
+        if (searchField.text !== text)
+            searchField.text = text
+        let model = treeView.model
+        if (!model || model.filterText === text)
+            return
+        if (model.filterText.length === 0 && text.length > 0)
+            _saveState(model)
+        model.filterText = text
+        if (text.length > 0) {
+            treeView.expandRecursively()
+            treeView.forceLayout()
+        } else {
+            treeView.collapseRecursively()
+            treeView.forceLayout()
+            _restoreState(model)
+        }
     }
 
     function _modelKey(model) {
@@ -182,7 +213,7 @@ Rectangle {
                     width: 24; height: 24
                     radius: Theme.radius
                     color: expandMa.containsMouse ? Theme.bgButtonHov : "transparent"
-                    visible: navPanel.hasContent
+                    visible: navPanel.hasSource
                     ToolTip.text: "Expand all"
                     ToolTip.visible: expandMa.containsMouse
                     ToolTip.delay: 400
@@ -207,7 +238,7 @@ Rectangle {
                     width: 24; height: 24
                     radius: Theme.radius
                     color: collapseMa.containsMouse ? Theme.bgButtonHov : "transparent"
-                    visible: navPanel.hasContent
+                    visible: navPanel.hasSource
                     ToolTip.text: "Collapse all"
                     ToolTip.visible: collapseMa.containsMouse
                     ToolTip.delay: 400
@@ -261,6 +292,68 @@ Rectangle {
             opacity: 0.3
         }
 
+        // Filter bar
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 34
+            color: Theme.bgPanel
+            visible: navPanel.hasSource
+
+            TextField {
+                id: searchField
+                anchors.fill: parent
+                anchors.margins: 5
+                leftPadding: 8
+                rightPadding: clearFilterButton.visible ? clearFilterButton.width + 10 : 8
+                placeholderText: "Filter (Ctrl+F)"
+                placeholderTextColor: Theme.textMuted
+                font.pixelSize: Theme.fontSizeM
+                color: Theme.textPrimary
+                selectionColor: Theme.bgSelection
+                selectedTextColor: Theme.textWhite
+
+                onTextEdited: navPanel._applyFilter(text)
+                Keys.onEscapePressed: {
+                    if (text.length > 0)
+                        navPanel._applyFilter("")
+                    else
+                        focus = false
+                }
+
+                background: Rectangle {
+                    color: Theme.bg
+                    radius: Theme.radius
+                    border.color: searchField.activeFocus ? Theme.accent : Theme.border
+                    border.width: 1
+                }
+
+                Rectangle {
+                    id: clearFilterButton
+                    anchors.right: parent.right
+                    anchors.rightMargin: 5
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 16; height: 16
+                    radius: 8
+                    visible: searchField.text.length > 0
+                    color: clearFilterMa.containsMouse ? Theme.bgButtonHov : "transparent"
+
+                    Label {
+                        anchors.centerIn: parent
+                        text: "✕"
+                        font.pixelSize: 9
+                        color: clearFilterMa.containsMouse ? Theme.textWhite : Theme.textMuted
+                    }
+                    MouseArea {
+                        id: clearFilterMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: navPanel._applyFilter("")
+                    }
+                }
+            }
+        }
+
         // Tree view area
         Item {
             Layout.fillWidth: true
@@ -270,7 +363,7 @@ Rectangle {
             ColumnLayout {
                 anchors.centerIn: parent
                 spacing: 8
-                visible: !navPanel.hasContent
+                visible: !navPanel.hasSource
 
                 Label {
                     Layout.alignment: Qt.AlignHCenter
@@ -287,12 +380,52 @@ Rectangle {
                     horizontalAlignment: Text.AlignHCenter
                     lineHeight: 1.3
                 }
+
+                Label {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 8
+                    visible: AppController.sampleFiles.length > 0
+                    text: "— or open a sample —"
+                    font.pixelSize: Theme.fontSizeXS
+                    color: Theme.textMuted
+                }
+
+                Repeater {
+                    model: AppController.sampleFiles
+
+                    delegate: Label {
+                        id: sampleLink
+                        required property var modelData
+                        Layout.alignment: Qt.AlignHCenter
+                        text: sampleLink.modelData.title
+                        font.pixelSize: Theme.fontSizeS
+                        font.underline: sampleLinkMa.containsMouse
+                        color: sampleLinkMa.containsMouse ? Theme.accent : Theme.textSecondary
+
+                        MouseArea {
+                            id: sampleLinkMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: AppController.openFile(sampleLink.modelData.url)
+                        }
+                    }
+                }
+            }
+
+            // Zero-match state while a filter is active
+            Label {
+                anchors.centerIn: parent
+                visible: navPanel.hasSource && treeView.rows === 0
+                text: "No matches"
+                font.pixelSize: Theme.fontSizeM
+                color: Theme.textMuted
             }
 
             TreeView {
                 id: treeView
                 anchors.fill: parent
-                visible: navPanel.hasContent
+                visible: navPanel.hasSource
                 clip: true
                 columnWidthProvider: function(column) {
                     return treeView.width
@@ -433,7 +566,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 24
             color: Theme.bgHeader
-            visible: navPanel.hasContent
+            visible: navPanel.hasSource
 
             RowLayout {
                 anchors.fill: parent
@@ -519,7 +652,9 @@ Rectangle {
             Label {
                 text: "• Click a tree item to select it\n"
                     + "• Double-click to expand/collapse\n"
-                    + "• Click the \u25B8 chevron to expand/collapse"
+                    + "• Click the \u25B8 chevron to expand/collapse
+"
+                    + "• Type in the filter box to narrow the tree"
                 font.pixelSize: Theme.fontSizeXS
                 color: Theme.textSecondary
                 wrapMode: Text.Wrap
@@ -542,6 +677,8 @@ Rectangle {
 
                 Label { text: "Ctrl+O";             font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
                 Label { text: "Open file";           font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
+                Label { text: "Ctrl+F";              font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
+                Label { text: "Filter tree";         font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
                 Label { text: "Ctrl+W";              font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }
                 Label { text: "Close tab";           font.pixelSize: Theme.fontSizeXS; color: Theme.textSecondary }
                 Label { text: "Ctrl+Tab";            font.pixelSize: Theme.fontSizeXS; font.family: Theme.fontMono; color: Theme.accentGold }

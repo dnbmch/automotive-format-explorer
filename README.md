@@ -36,7 +36,7 @@ A desktop tool for inspecting **A2L**, **DBC**, and **LDF** automotive files. Bu
 
 ### Tree Navigation
 
-Browse every parsed entity in a structured tree with expand/collapse and keyboard shortcuts. Supported entity types include:
+Browse every parsed entity in a structured tree with expand/collapse, keyboard shortcuts, and a live filter box (`Ctrl+F`) that narrows the tree to matching names — matches keep their ancestors and children visible, so filtering to a message keeps its signals in view. Supported entity types include:
 
 - **A2L**: Modules, Measurements, Characteristics, Axis Points, Compu Methods, Record Layouts, Units, Functions, Groups, Typedef Characteristics/Structures/Axes, Instances, Variant Coding, XCP and CCP protocol summaries
 - **DBC**: Messages, Signals, Nodes, Value Tables, Attribute Definitions, Environment Variables, Signal Groups
@@ -84,7 +84,11 @@ Click a tree node and the center view scrolls to it with a highlight flash. Clic
 
 ### Multi-Tab
 
-Open multiple files side by side. Async file loading keeps the UI responsive for large files.
+Open multiple files side by side. Async file loading keeps the UI responsive for large files. Each tab keeps its own tree filter.
+
+### Bundled Samples
+
+One sample file per format ships with the app ([samples/](samples/)); when no file is open, the sidebar offers them as one-click "open a sample" links. Provenance and licenses: [samples/SAMPLES.md](samples/SAMPLES.md). The DBC sample deliberately demonstrates the diagnostics badge — it carries one dangling `VAL_` entry the parser reports as DROPPED.
 
 ---
 

@@ -49,6 +49,9 @@ jobs:
           cp build/explorer-dbc-backend.dll dist/
           cp build/explorer-ldf-backend.dll dist/
 
+          # Bundled sample files.
+          cp -r samples dist/samples
+
           # MinGW runtime DLLs.
           for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll zlib1.dll \
                      libprotobuf.dll libutf8_validity.dll libutf8_range.dll \
@@ -141,6 +144,10 @@ jobs:
                    AppDir/usr/share/applications
 
           cp build/automotive-format-explorer AppDir/usr/bin/
+
+          # Bundled sample files (resolved via bin/../share/ at runtime).
+          mkdir -p AppDir/usr/share/automotive-format-explorer
+          cp -r samples AppDir/usr/share/automotive-format-explorer/samples
 
           cp resources/icons/explorer_256.png \
             AppDir/usr/share/icons/hicolor/256x256/apps/automotive-format-explorer.png

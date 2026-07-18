@@ -1,0 +1,276 @@
+/* Demo A2L for the Automotive Format Explorer.
+   Hand-authored synthetic engine-controller description — not derived from any
+   vendor or standards-body file. See SAMPLES.md for provenance. */
+
+ASAP2_VERSION 1 71
+
+/begin PROJECT Demo_ECU "Demo engine controller"
+
+  /begin MODULE DemoEngine "1.0L three-cylinder demo engine ECU"
+
+    /begin MOD_PAR "Demo calibration data set"
+      VERSION   "DEMO_V1.0"
+      EPK       "DEMO_ECU_V1.0"
+      ADDR_EPK  0x00810FF0
+      CPU_TYPE  "Cortex-M7"
+      ECU       "Engine control demo"
+      SUPPLIER  "Danube Mechatronics"
+    /end MOD_PAR
+
+    /begin MOD_COMMON "Little-endian target, absolute deposit"
+      DEPOSIT    ABSOLUTE
+      BYTE_ORDER MSB_LAST
+    /end MOD_COMMON
+
+    /* ------------------------------------------------------------------ */
+    /* Conversions                                                        */
+    /* ------------------------------------------------------------------ */
+
+    /begin COMPU_METHOD CM_Rpm "Engine speed, 0.25 rpm per bit"
+      RAT_FUNC "%5.0" "rpm"
+      COEFFS 0 4 0 0 0 1
+    /end COMPU_METHOD
+
+    /begin COMPU_METHOD CM_TempC "Temperature, 0.1 degC per bit, -40 offset"
+      RAT_FUNC "%5.1" "degC"
+      COEFFS 0 10 400 0 0 1
+    /end COMPU_METHOD
+
+    /begin COMPU_METHOD CM_Percent "Ratio, full scale 255 = 100 %"
+      RAT_FUNC "%5.1" "%"
+      COEFFS 0 2.55 0 0 0 1
+    /end COMPU_METHOD
+
+    /begin COMPU_METHOD CM_Volt "Voltage, 1 mV per bit"
+      RAT_FUNC "%6.3" "V"
+      COEFFS 0 1000 0 0 0 1
+    /end COMPU_METHOD
+
+    /begin COMPU_METHOD CM_Kpa "Pressure, 0.5 kPa per bit"
+      RAT_FUNC "%6.1" "kPa"
+      COEFFS 0 2 0 0 0 1
+    /end COMPU_METHOD
+
+    /begin COMPU_METHOD CM_Deg "Crank angle, 0.1 deg per bit"
+      RAT_FUNC "%5.1" "deg"
+      COEFFS 0 10 0 0 0 1
+    /end COMPU_METHOD
+
+    /begin COMPU_METHOD CM_Ident "Raw value"
+      IDENTICAL "%6.2" ""
+    /end COMPU_METHOD
+
+    /begin COMPU_METHOD CM_Gear "Gear position"
+      TAB_VERB "%2.0" ""
+      COMPU_TAB_REF VT_Gear
+    /end COMPU_METHOD
+
+    /begin COMPU_VTAB VT_Gear "Gear position labels" TAB_VERB 7
+      0 "Neutral"
+      1 "1st"
+      2 "2nd"
+      3 "3rd"
+      4 "4th"
+      5 "5th"
+      6 "Reverse"
+    /end COMPU_VTAB
+
+    /* ------------------------------------------------------------------ */
+    /* Record layouts                                                     */
+    /* ------------------------------------------------------------------ */
+
+    /begin RECORD_LAYOUT RL_VAL_U16
+      FNC_VALUES 1 UWORD ROW_DIR DIRECT
+    /end RECORD_LAYOUT
+
+    /begin RECORD_LAYOUT RL_CURVE_U16
+      FNC_VALUES 1 UWORD ROW_DIR DIRECT
+    /end RECORD_LAYOUT
+
+    /begin RECORD_LAYOUT RL_MAP_U8
+      FNC_VALUES 1 UBYTE COLUMN_DIR DIRECT
+    /end RECORD_LAYOUT
+
+    /begin RECORD_LAYOUT RL_AXIS_U16
+      AXIS_PTS_X 1 UWORD INDEX_INCR DIRECT
+    /end RECORD_LAYOUT
+
+    /* ------------------------------------------------------------------ */
+    /* Measurements (RAM, 0x40008000 block)                               */
+    /* ------------------------------------------------------------------ */
+
+    /begin MEASUREMENT EngineSpeed "Crankshaft speed"
+      UWORD CM_Rpm 1 0 0 16000
+      ECU_ADDRESS 0x40008000
+      FORMAT "%5.0"
+      PHYS_UNIT "rpm"
+    /end MEASUREMENT
+
+    /begin MEASUREMENT CoolantTemp "Coolant temperature"
+      UWORD CM_TempC 1 0 -40 140
+      ECU_ADDRESS 0x40008002
+      PHYS_UNIT "degC"
+    /end MEASUREMENT
+
+    /begin MEASUREMENT OilTemp "Engine oil temperature"
+      UWORD CM_TempC 1 0 -40 160
+      ECU_ADDRESS 0x40008004
+      PHYS_UNIT "degC"
+    /end MEASUREMENT
+
+    /begin MEASUREMENT ThrottlePos "Throttle plate position"
+      UBYTE CM_Percent 1 0 0 100
+      ECU_ADDRESS 0x40008006
+      PHYS_UNIT "%"
+    /end MEASUREMENT
+
+    /begin MEASUREMENT PedalPos "Accelerator pedal position"
+      UBYTE CM_Percent 1 0 0 100
+      ECU_ADDRESS 0x40008007
+      PHYS_UNIT "%"
+    /end MEASUREMENT
+
+    /begin MEASUREMENT ManifoldPress "Intake manifold absolute pressure"
+      UWORD CM_Kpa 1 0 10 400
+      ECU_ADDRESS 0x40008008
+      PHYS_UNIT "kPa"
+    /end MEASUREMENT
+
+    /begin MEASUREMENT BatteryVoltage "Supply voltage at the ECU pin"
+      UWORD CM_Volt 1 0 6 18
+      ECU_ADDRESS 0x4000800A
+      PHYS_UNIT "V"
+    /end MEASUREMENT
+
+    /begin MEASUREMENT LambdaBank1 "Normalized air-fuel ratio"
+      FLOAT32_IEEE CM_Ident 1 0 0.5 1.5
+      ECU_ADDRESS 0x4000800C
+    /end MEASUREMENT
+
+    /begin MEASUREMENT GearPosition "Selected gear"
+      UBYTE CM_Gear 1 0 0 6
+      ECU_ADDRESS 0x40008010
+    /end MEASUREMENT
+
+    /begin MEASUREMENT IgnitionAngle "Ignition advance before TDC"
+      SWORD CM_Deg 1 0 -30 60
+      ECU_ADDRESS 0x40008012
+      PHYS_UNIT "deg"
+    /end MEASUREMENT
+
+    /begin MEASUREMENT InjectionTime "Base injector opening time"
+      FLOAT32_IEEE CM_Ident 1 0 0 25
+      ECU_ADDRESS 0x40008014
+    /end MEASUREMENT
+
+    /begin MEASUREMENT StatusFlags "Engine status bits, low nibble"
+      UBYTE CM_Ident 1 0 0 15
+      ECU_ADDRESS 0x40008018
+      BIT_MASK 0x0F
+    /end MEASUREMENT
+
+    /begin MEASUREMENT FuelLevel "Tank level"
+      UBYTE CM_Percent 1 0 0 100
+      ECU_ADDRESS 0x40008019
+      PHYS_UNIT "%"
+    /end MEASUREMENT
+
+    /* ------------------------------------------------------------------ */
+    /* Characteristics (flash, 0x00810000 block)                          */
+    /* ------------------------------------------------------------------ */
+
+    /begin CHARACTERISTIC LimEngineSpeed "Rev limiter threshold"
+      VALUE 0x00810000 RL_VAL_U16 100.0 CM_Rpm 0 8000
+      PHYS_UNIT "rpm"
+    /end CHARACTERISTIC
+
+    /begin CHARACTERISTIC FanOnTemp "Radiator fan switch-on temperature"
+      VALUE 0x00810002 RL_VAL_U16 10.0 CM_TempC 60 120
+      PHYS_UNIT "degC"
+    /end CHARACTERISTIC
+
+    /begin CHARACTERISTIC IdleTargetRpm "Idle speed governor target"
+      VALUE 0x00810004 RL_VAL_U16 50.0 CM_Rpm 600 1400
+      PHYS_UNIT "rpm"
+    /end CHARACTERISTIC
+
+    /begin CHARACTERISTIC BoostMax "Maximum allowed boost pressure"
+      VALUE 0x00810006 RL_VAL_U16 20.0 CM_Kpa 100 250
+      PHYS_UNIT "kPa"
+    /end CHARACTERISTIC
+
+    /begin AXIS_PTS SharedRpmAxis "Shared engine-speed breakpoints"
+      0x00810010 EngineSpeed RL_AXIS_U16 100.0 CM_Rpm 12 0 8000
+      BYTE_ORDER MSB_LAST
+    /end AXIS_PTS
+
+    /begin CHARACTERISTIC TorqueLimitCurve "Torque limit over engine speed"
+      CURVE 0x00810030 RL_CURVE_U16 50.0 CM_Ident 0 400
+      /begin AXIS_DESCR
+        COM_AXIS EngineSpeed CM_Rpm 12 0 8000
+        AXIS_PTS_REF SharedRpmAxis
+      /end AXIS_DESCR
+    /end CHARACTERISTIC
+
+    /begin CHARACTERISTIC IgnBaseMap "Base ignition advance map"
+      MAP 0x00810080 RL_MAP_U8 5.0 CM_Deg 0 25.5
+      /begin AXIS_DESCR
+        STD_AXIS EngineSpeed CM_Rpm 8 0 8000
+        MAX_GRAD 20.0
+      /end AXIS_DESCR
+      /begin AXIS_DESCR
+        STD_AXIS ManifoldPress CM_Kpa 8 10 400
+      /end AXIS_DESCR
+    /end CHARACTERISTIC
+
+    /begin CHARACTERISTIC InjCorrMap "Injection correction map"
+      MAP 0x008100C0 RL_MAP_U8 5.0 CM_Percent 0 100
+      /begin AXIS_DESCR
+        STD_AXIS EngineSpeed CM_Rpm 8 0 8000
+      /end AXIS_DESCR
+      /begin AXIS_DESCR
+        STD_AXIS CoolantTemp CM_TempC 8 -40 140
+      /end AXIS_DESCR
+    /end CHARACTERISTIC
+
+    /* ------------------------------------------------------------------ */
+    /* XCP on CAN                                                         */
+    /* ------------------------------------------------------------------ */
+
+    /begin IF_DATA XCPplus 0x0105
+      /begin PROTOCOL_LAYER
+        0x0105
+        10 10 10 10 10 0 50
+        8 8
+        BYTE_ORDER_MSB_LAST
+        ADDRESS_GRANULARITY_BYTE
+      /end PROTOCOL_LAYER
+      /begin DAQ
+        STATIC
+        2 2 0
+        OPTIMISATION_TYPE_DEFAULT
+        ADDRESS_EXTENSION_FREE
+        IDENTIFICATION_FIELD_TYPE_ABSOLUTE
+        GRANULARITY_ODT_ENTRY_SIZE_DAQ_BYTE
+        1
+        NO_OVERLOAD_INDICATION
+        /begin EVENT
+          "10ms task" "10ms"
+          0 DAQ 1 10 6 0
+        /end EVENT
+        /begin EVENT
+          "100ms task" "100ms"
+          1 DAQ 1 100 6 0
+        /end EVENT
+      /end DAQ
+      /begin XCP_ON_CAN
+        0x0105
+        CAN_ID_MASTER 0x6F0
+        CAN_ID_SLAVE 0x6F1
+        BAUDRATE 500000
+        TRANSPORT_LAYER_INSTANCE "cal_can"
+      /end XCP_ON_CAN
+    /end IF_DATA
+
+  /end MODULE
+/end PROJECT

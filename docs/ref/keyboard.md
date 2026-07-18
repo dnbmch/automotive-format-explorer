@@ -9,6 +9,7 @@ Defined in [qml/Main.qml](../../qml/Main.qml).
 | Shortcut | Action |
 |---|---|
 | `Ctrl+O` | Open file dialog |
+| `Ctrl+F` | Focus the tree filter box (opens the sidebar if hidden) |
 | `Ctrl+W` | Close the current tab (no-op if no tab is open) |
 | `Ctrl+Tab` | Next tab (wraps) |
 | `Ctrl+Shift+Tab` | Previous tab (wraps) |
@@ -35,3 +36,5 @@ Defined in [src/ui/memorygriditem.cpp](../../src/ui/memorygriditem.cpp). The gri
 ## Tree (NavPanel)
 
 The Qt `QQuickTreeView` ships with built-in keyboard navigation: arrow keys move between visible items, `+`/`-` expand/collapse, `Return` activates the current item. Selection updates flow through `AppController::selectCurrentNode()` and refresh the detail panel and any open center-panel view.
+
+The filter box above the tree narrows it live as you type (case-insensitive, matches node titles and subtitles; ancestors and descendants of a match stay visible). `Esc` in the box clears the filter and restores the pre-filter expand/selection state; the small `✕` does the same.

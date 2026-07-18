@@ -12,6 +12,10 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - A2L memory-map view and DBC/LDF signal-map view via `QQuickPaintedItem`
   C++ renderers (`MemoryGridItem`, `SignalGridItem`) with FBO scrolling.
 - Bidirectional selection (tree ↔ detail ↔ center) keyed by `NodeRegistry`.
+- Per-tab tree filter (`TreeFilterModel` proxy, `Ctrl+F`) with recursive matching
+  and pre-filter state restore.
+- Bundled samples (one per format, `samples/`) with "open a sample" links in the
+  empty sidebar; provenance in `samples/SAMPLES.md`.
 - Splash overlay + DWM cloak startup.
 - Statically links the three parser libraries (fetched from GitHub releases at
   configure time). GPL-3.0.

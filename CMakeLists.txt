@@ -71,6 +71,7 @@ qt_add_library(explorer-core SHARED
     src/models/memorymapmodel.cpp
     src/models/signalmapmodel.cpp
     src/models/tabmodel.cpp
+    src/models/treefiltermodel.cpp
     src/models/treemodel.cpp
     src/sessions/adaptersessionbase.cpp
 )
@@ -242,6 +243,15 @@ set_target_properties(explorer-dbc-backend PROPERTIES
 set_target_properties(explorer-ldf-backend PROPERTIES
     AUTOMOC OFF
     WINDOWS_EXPORT_ALL_SYMBOLS ON
+)
+
+# Bundled sample files, staged next to the executable so the "open a sample"
+# links resolve in dev builds and in the packaged release alike.
+add_custom_command(TARGET automotive-format-explorer POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/samples"
+        "$<TARGET_FILE_DIR:automotive-format-explorer>/samples"
+    COMMENT "Staging sample files"
 )
 
 deploy_msys2_deps(automotive-format-explorer)

@@ -25,9 +25,3 @@ Structural findings from /enforce coverage, awaiting a call — deliberately not
 `src/ui/memorygriditem.cpp` and `src/ui/signalgriditem.cpp` share ~60 palette+fade lines. A small `GridPalette` helper is a real dedupe candidate (unlike BL-E2, the shared block is verbatim styling, not per-format logic).
 
 **Size:** S
-
-### BL-E4: NavPanel role constant
-
-`qml/components/NavPanel.qml:19` hardcodes `readonly property int _nodeKeyRole: 261` duplicating `TreeModel::NodeKeyRole` (Qt::UserRole + 5) — silent rot if roles reorder. Expose the role value from C++ (context property or Q_INVOKABLE) instead.
-
-**Size:** S

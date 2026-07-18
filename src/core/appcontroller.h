@@ -3,19 +3,22 @@
 #include "core/formatregistry.h"
 #include "models/detailmodel.h"
 #include "models/tabmodel.h"
+#include "models/treefiltermodel.h"
 #include "models/treemodel.h"
 
 #include <QAbstractListModel>
 #include <QFutureWatcher>
 #include <QObject>
 #include <QLibrary>
+#include <QVariantList>
 #include <memory>
+#include <unordered_map>
 #include <QUrl>
 
 class AppController : public QObject {
     Q_OBJECT
     Q_PROPERTY(TabModel* tabModel READ tabModel CONSTANT)
-    Q_PROPERTY(TreeModel* currentTreeModel READ currentTreeModel NOTIFY currentSessionChanged)
+    Q_PROPERTY(TreeFilterModel* currentTreeModel READ currentTreeModel NOTIFY currentSessionChanged)
     Q_PROPERTY(DetailModel* currentDetailModel READ currentDetailModel NOTIFY currentSessionChanged)
     Q_PROPERTY(QUrl centerPanelSource READ centerPanelSource NOTIFY currentSessionChanged)
     Q_PROPERTY(QAbstractListModel* centerPanelModel READ centerPanelModel NOTIFY currentSessionChanged)
@@ -24,12 +27,13 @@ class AppController : public QObject {
     Q_PROPERTY(bool fileLoading READ fileLoading NOTIFY fileLoadingChanged)
     Q_PROPERTY(bool startupLoading READ startupLoading WRITE setStartupLoading NOTIFY startupLoadingChanged)
     Q_PROPERTY(QString startupStatusText READ startupStatusText WRITE setStartupStatusText NOTIFY startupStatusTextChanged)
+    Q_PROPERTY(QVariantList sampleFiles READ sampleFiles CONSTANT)
 
 public:
     explicit AppController(QObject* parent = nullptr);
 
     TabModel* tabModel();
-    TreeModel* currentTreeModel();
+    TreeFilterModel* currentTreeModel();
     DetailModel* currentDetailModel();
     QUrl centerPanelSource();
     QAbstractListModel* centerPanelModel();
@@ -46,6 +50,8 @@ public:
 
     QString startupStatusText() const;
     void setStartupStatusText(const QString& text);
+
+    QVariantList sampleFiles() const;
 
     Q_INVOKABLE void openFile(const QUrl& fileUrl);
     Q_INVOKABLE void closeTab(int index);
@@ -72,7 +78,9 @@ private:
     FormatRegistry _format_registry;
     TabModel _tab_model;
     TreeModel _empty_tree_model;
+    TreeFilterModel _empty_tree_filter;
     DetailModel _empty_detail_model;
+    std::unordered_map<DocumentSession*, std::unique_ptr<TreeFilterModel>> _tree_filters;
     std::vector<std::unique_ptr<QLibrary>> _loaded_backends;
     int _current_tab_index = -1;
     QString _last_error;

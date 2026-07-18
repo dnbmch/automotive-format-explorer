@@ -63,6 +63,15 @@ ApplicationWindow {
         onActivated: fileDialog.open()
     }
 
+    // Focus the tree filter (opens the sidebar if hidden)
+    Shortcut {
+        sequence: StandardKey.Find
+        onActivated: {
+            root.leftPaneVisible = true
+            navPanel.focusSearch()
+        }
+    }
+
     // Close current tab
     Shortcut {
         sequence: "Ctrl+W"
