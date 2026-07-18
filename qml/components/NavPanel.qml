@@ -652,8 +652,7 @@ Rectangle {
             Label {
                 text: "• Click a tree item to select it\n"
                     + "• Double-click to expand/collapse\n"
-                    + "• Click the \u25B8 chevron to expand/collapse
-"
+                    + "• Click the \u25B8 chevron to expand/collapse\n"
                     + "• Type in the filter box to narrow the tree"
                 font.pixelSize: Theme.fontSizeXS
                 color: Theme.textSecondary
