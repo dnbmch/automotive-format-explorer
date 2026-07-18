@@ -5,27 +5,45 @@ tree, inspect channel metadata in the detail pane, and plot a selected channel (
 value over time) in the center panel — zoom, pan, cursor readout.
 
 Cross-repo plan: a new `mdf4-parser` repo (+ public `mdf4-parser-lib`) supplies the
-reader; this repo grows the viewer backend. When `mdf4-parser` is scaffolded, its phases
-move into that repo's `roadmap.md`; this file remains the viewer-side plan of record.
+reader and doubles as `mdf4-writer`'s independent verification gate; this repo grows the
+viewer backend and a format-agnostic signal plot module. When `mdf4-parser` is
+scaffolded, its phases move into that repo's `roadmap.md`; this file remains the
+viewer-side plan of record.
 
 ## Decisions (operator-approved)
 
-- **D1 — reader home: new `mdf4-parser` repo + public `-lib`**, following the parser
-  conventions. Keeps the reader's licensing independently decidable (dual-license like the
-  other parsers, or not — operator sets `LICENSE.md` at repo creation; structure is
-  identical either way).
-- **D2 — v1 format subset: practical sorted subset.** ID/HD/DG/CG/CN/CC/TX/MD/SI blocks;
-  numeric channels (uint/sint/float, byte- and bit-aligned, both endiannesses); stored
-  (`cn_type` 2) and virtual (`cn_type` 3) time masters; identity/linear/rational/
-  value-to-value conversions; DT blocks and DL block lists. Unsupported features degrade
-  per channel/group with a diagnostic, never a failed load.
-- **D3 — plot rendering: custom `QQuickPaintedItem`** (`SignalPlotItem`), following the
+- **Reader home: new `mdf4-parser` repo + public `-lib`**, parser conventions, with a
+  second duty: `mdf4-writer`'s round-trip tests consume the sibling reader as an
+  **independent verification gate**. Independence is the point — the reader shares no
+  code or block structs with the writer, so it cannot inherit the writer's layout
+  assumptions. Licensing stays independently decidable (operator sets `LICENSE.md` at
+  repo creation).
+- **Reader scope: lockstep with the writer.** The reader reads what `mdf4-writer` emits
+  and grows when the writer grows (M6 DL/DZ/MLSD, stored-time master, …). Foreign-file
+  breadth beyond that is a set of priced, additive increments (see Deferred increments) —
+  spent when a concrete showcase moment exists, not before. Any unsupported feature
+  degrades per channel/group with a diagnostic, never a failed load: foreign files still
+  open and show their full structure; unsupported channels are visible but not plottable.
+- **Signal display is format-agnostic.** The plot module (model + painted item + QML)
+  never sees format types; sessions convert into an explorer-local series type at the
+  seam. A future TDMS backend — or a lift into the product apps for live view — costs a
+  reader + session only, zero plot work.
+- **Plot rendering: custom `QQuickPaintedItem`** (`SignalPlotItem`), following the
   `SignalGridItem` precedent. No new Qt modules, no new deploy surface.
-- **D4 — load strategy: metadata-only at open, per-channel decode on demand** on a worker
+- **Load strategy: metadata-only at open, per-channel decode on demand** on a worker
   thread, cached per channel.
-- **D5 — v1 plot scope: single channel** — click a channel in the tree, it plots.
+- **v1 plot scope: single channel** — click a channel in the tree, it plots.
 
-## Interface split (consequence of D1 + D4)
+## v1 reader scope (writer-output subset)
+
+ID/HD/FH/DG/CG/CN/CC/TX/MD/SI blocks; row (DT) **and column (LD/DV)** storage layouts;
+virtual equidistant time master (`cn_type` 3); little-endian numeric channels
+(uint/sint/float 8/16/32/64); the writer's conversion set (identity/linear). The column
+layout is in scope because the writer emits it and the current external gate is weak
+exactly there — asammdf 8.8.18 has a documented LDBLOCK reader bug
+(`../mdf4-writer/docs/backlog.md`).
+
+## Interface split
 
 The `-lib` surface is a hybrid — protobuf for the document, plain C++ for bulk samples:
 
@@ -61,23 +79,34 @@ Mirror `dbc-parser`'s layout: root `CMakeLists.txt`, `lib/` submodule
 MSVC cache patterns, do not push to test CI. GitHub: private `dnbmch/mdf4-parser` +
 public `dnbmch/mdf4-parser-lib`.
 
-Reader internals (all C++17, no Qt, spec-derived — `mdf4-writer`'s block headers and the
-BSD-2 legacy 4.1.0 reference serve as field-layout references; no code flows from the
-proprietary repos unless the operator explicitly relicenses):
+Reader internals (all C++17, no Qt, implemented **from the ASAM spec only** — no code or
+struct sharing with `mdf4-writer`, since independence is what makes the verification gate
+worth having):
 
-- `blocks` — 24-byte block-frame parse (id/length/link table), typed views for
-  ID/HD/DG/CG/CN/CC/TX/MD/SI.
+- `blocks` — 24-byte block-frame parse (id/length/link table), typed views for the v1
+  block set.
 - `index` — walk the block graph once, produce the group/channel structure plus record
-  layout and data-block ranges (DT or DL list) per group. This is the system boundary:
-  malformed links/lengths/counts become diagnostics on a best-effort `File`, per the
-  reporting-lenient contract.
-- `decode` — stream a group's records, extract one channel + its time master, apply the
-  conversion to physical doubles. Never materializes other channels.
+  layout and data-block ranges (DT or LD/DV chain) per group. This is the system
+  boundary: malformed links/lengths/counts become diagnostics on a best-effort `File`,
+  per the reporting-lenient contract.
+- `decode` — stream a group's records (row) or value blocks (column), extract one channel
+  + its time master, apply the conversion to physical doubles. Never materializes other
+  channels.
 - `extract` — the two public calls above; `extractFile` also serializes the proto.
 
 Differences from the text parsers, stated up front: input is binary (no line numbers —
 `Diagnostic.location` = block path + file offset), and the public API has the extra
 `decodeChannel` / `Series` surface next to the proto document.
+
+## Writer verification gate (in mdf4-writer)
+
+A round-trip ctest in `mdf4-writer` consuming the **sibling** `mdf4-parser` working tree
+(the same sibling-consumption pattern it already uses for `signal-core`): build a
+`Recording`, write it in Row and in Column layout, read both back through
+`mdf4::extract`, compare decoded values against the source. This closes the LD-territory
+hole in the asammdf gate; the asammdf interop test stays as third-party cross-check where
+it works. License direction is clean — the proprietary writer consumes the open parser at
+test time, never the reverse.
 
 ## Explorer backend
 
@@ -88,73 +117,101 @@ Differences from the text parsers, stated up front: input is binary (no line num
 - **Dispatch**: `BackendSpec` entry for `.mf4` (`src/core/appcontroller.cpp:36-51`),
   `BACKENDS_STATIC` registration (`src/core/appcontroller.cpp:60-64`), `FileDialog` name
   filters (`qml/Main.qml:51-57`). `FormatId::MDF4` + display name already exist
-  (`src/core/formatid.h:10-14`).
+  (`src/core/formatid.h:10-14`) — reserved for exactly this read-back use.
 - **Adapter** `src/adapters/mdf4adapter.{h,cpp}`: `load()` = `extractFile`, map proto
   diagnostics to `DiagnosticMessage`s, construct session.
 - **Session** `src/sessions/mdf4documentsession.{h,cpp}` (extends `AdapterSessionBase`):
   holds `mdf4::File _document`; tree = file → channel groups → channels (unit as
-  subtitle); owns the decode cache and the async decode flow.
+  subtitle); owns the decode cache and the async decode flow; converts decoded data into
+  the plot module's series type at this seam.
 - **Presenter** `src/sessions/mdf4detailpresenter.{h,cpp}`: channel cards — data type,
   bit geometry, unit, conversion kind + coefficients, sample count, master type; group
-  cards — record size, cycle count. Unsupported channels appear in tree + detail, marked
-  not-plottable with the reason.
+  cards — record size, cycle count, storage layout. Unsupported channels appear in tree +
+  detail, marked not-plottable with the reason.
 
-## Plot pipeline
+## Plot module (format-agnostic)
+
+The seam is an explorer-local value type — sessions produce it, the plot stack consumes
+only it, and no `mdf4::` (or future format) type crosses the line:
+
+```cpp
+// src/models/plotseries.h
+struct PlotSeries { QString name; QString unit; std::vector<double> time, value; };
+```
 
 - `src/models/signalplotmodel.{h,cpp}` — `QAbstractListModel` (center-panel contract,
-  `src/sessions/documentsession.h:30`) holding the decoded `Series` + view state (visible
-  time window, y-range, cursor) and the min/max-per-pixel bucket computation.
+  `src/sessions/documentsession.h:30`) holding the current `PlotSeries` + view state
+  (visible time window, y-range, cursor, busy flag) and the min/max-per-pixel bucket
+  computation. API surface: `setSeries(PlotSeries)`, `setBusy(bool)` — that is the whole
+  provider contract for v1; a formal interface class waits until a second producer
+  exists.
 - `src/ui/signalplotitem.{h,cpp}` — `QQuickPaintedItem`: bucketed min/max column polyline
   when samples exceed ~2× pixel width, direct polyline otherwise; axes + tick labels;
   wheel zoom around cursor; drag pan; hover readout (time + value at nearest sample).
   Theme colors via `setColors()` like `SignalGridItem`. Registered in `main.cpp`.
-- `qml/components/SignalPlotView.qml` — toolbar (channel name, unit, sample count,
+- `qml/components/SignalPlotView.qml` — toolbar (signal name, unit, sample count,
   reset-zoom), plot item, status bar; returned by `centerPanelSource()`; registered in
   `qt_add_qml_module`.
 - **Selection flow**: `selectNode(channel)` → session cache check → on miss,
   `decodeChannel` via `QtConcurrent` + `QFutureWatcher`, plot shows busy state, stale
   results (selection moved on) are dropped.
+- **Reuse note**: the plot module is a candidate for later lift into the proprietary apps
+  (live view off the UDP feed). Keep it contribution-clean — operator-authored only — so
+  self-relicensing stays possible.
 
 ## Testing
 
 - **mdf4-parser unit tests (ctest)**: fixtures are tiny `.mf4` files emitted by a test
   helper (byte-built at test time, no binary blobs in git — the ASAM spec-package files
-  are not redistributable). Cover: block-graph walk, bit-aligned extraction both
-  endiannesses, each conversion kind, stored + virtual masters, DL lists, malformed-file
-  diagnostics (truncated block, bad link, zero-record group). Golden checks: extracted
-  proto JSON vs golden, per parser convention.
+  are not redistributable). Cover: block-graph walk, row and column storage, virtual
+  master, each writer-set conversion, malformed-file diagnostics (truncated block, bad
+  link, zero-record group), unsupported-feature degradation (stored master → indexed but
+  not decodable, with diagnostic). Golden checks: extracted proto JSON vs golden, per
+  parser convention.
 - **Local ASAM corpus smoke** (exit-77 skip when absent): sweep
-  `../a2l-parser/docs/ASAM_2022_04_07/` examples — index every file, decode one supported
-  channel, assert no crash and correct unsupported-feature diagnostics.
-- **asammdf cross-check** (guarded, exit-77 — pattern from `mdf4-writer`): decoded values
-  match asammdf on selected fixtures.
-- **Manual acceptance**: open an ASAM `Simple` example and an `mdf4-writer` output file in
-  the explorer, plot a channel, verify values against `mdf4-writer/tools/mdf_roundtrip.py`.
+  `../a2l-parser/docs/ASAM_2022_04_07/` examples — index every file without crashing,
+  assert structure appears and out-of-scope features carry correct diagnostics. Decoding
+  is not expected here in v1.
+- **Writer round-trip gate**: the mdf4-writer-side ctest described above — this is the
+  primary value-correctness check, since writer output is exactly the v1 scope.
+- **Manual acceptance**: open an `mdf4-writer` output file in the explorer, plot a
+  channel, verify values against `mdf4-writer/tools/mdf_roundtrip.py`; open an ASAM
+  example and confirm graceful structure-only display.
 
 ## Phases + success criteria
 
 1. **Scaffold `mdf4-parser` + `-lib`** (repos, submodule, CMake, CI adapted, CLAUDE.md
    block-synced). Done when: repo configures + empty-lib ctest runs; workspace `README.md`
    + `CLAUDE.md` tables (repo list, build table, conventions, branch note) include mdf4.
-2. **Reader core** (`blocks`, `index`, `decode`, `extract`, proto). Done when: ctest green
-   on byte-built fixtures; corpus smoke indexes the ASAM `Simple` + `ConversionLinear`
-   families and decodes a channel with values matching asammdf.
-3. **Explorer backend** (fetch + seed line, adapter, session, presenter, dispatch,
-   CMake). Done when: opening an `.mf4` (seeded, unreleased parser) shows the channel tree
-   + metadata cards; unsupported channels carry diagnostics; existing formats unaffected.
-4. **Plot** (model, painted item, QML view, lazy decode wiring). Done when: clicking a
-   channel plots it; zoom/pan/cursor work; a million-sample channel stays responsive;
-   switching channels mid-decode doesn't race.
-5. **Release + docs**: `mdf4-parser-lib` v0.1.0 (operator-timed — may ride the pending
+2. **Reader core** (`blocks`, `index`, `decode`, `extract`, proto — v1 scope incl.
+   column). Done when: ctest green on byte-built fixtures for both layouts; ASAM corpus
+   smoke indexes every file gracefully with correct unsupported diagnostics.
+3. **Writer verification gate** (in `mdf4-writer`). Done when: Row + Column round-trip
+   ctest green against the sibling parser, values matching the source `Recording`;
+   documented next to the asammdf gate.
+4. **Explorer backend** (fetch + seed line, adapter, session, presenter, dispatch,
+   CMake). Done when: opening an `.mf4` (seeded, unreleased parser) shows the channel
+   tree + metadata cards; unsupported channels carry diagnostics; existing formats
+   unaffected.
+5. **Plot module** (plotseries, model, painted item, QML view, lazy decode wiring). Done
+   when: clicking a channel plots it; zoom/pan/cursor work; a million-sample channel
+   stays responsive; switching channels mid-decode doesn't race; no format types in the
+   plot module (grep-checkable).
+6. **Release + docs**: `mdf4-parser-lib` v0.1.0 (operator-timed — may ride the pending
    republish wave; explorer's mdf4 backend is not pushed before the release exists, since
    explorer CI must fetch it), `release.yml` backend-DLL entry, `EXPECTED_HASH` fill,
    updates to `README.md` / `roadmap.md` / `project_status.md` /
    `docs/arch/adapter_contract.md` / diagnostics-contract scope, backlog entries for the
-   deferred items.
+   deferred increments.
 
-## Non-goals (v1 — candidate v1.1 items)
+## Deferred increments (additive; spend when a showcase moment exists)
 
-DZ-compressed data (first in line — Vector tools compress by default), invalidation
-bits/bytes (v1 treats all samples valid), unsorted files, VLSD/MLSD string channels,
-channel arrays, bus-logging composition, multi-channel overlay, export of plotted data,
-TDMS (same seam, separate plan).
+Reader breadth, roughly in demo-value order: stored-time masters (`cn_type` 2) — the
+single biggest unlock for foreign files; DZ decompression (Vector tools compress by
+default); big-endian + arbitrary bit-aligned channels; rational / value-to-value
+conversions; DL row-storage lists (enters lockstep scope anyway when the writer's M6
+lands); invalidation bits; unsorted files; VLSD/MLSD string channels; channel arrays;
+bus-logging composition.
+
+Viewer: multi-channel overlay, export of plotted data, TDMS backend (same plot module,
+new reader + session), live view (product-side lift).
