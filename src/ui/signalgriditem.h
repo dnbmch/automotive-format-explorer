@@ -1,11 +1,11 @@
 #pragma once
 
 #include "models/signalmapmodel.h"
+#include "ui/gridpalette.h"
 
 #include <QQuickPaintedItem>
 #include <QColor>
 #include <QPointF>
-#include <QTimer>
 
 #include <vector>
 
@@ -79,11 +79,6 @@ private:
     // _color_map[displayBit]: encoded color index or -1.
     std::vector<int8_t> _color_map;
 
-    std::vector<QColor> _palette;
-    QColor _unoccupied_color{0x33, 0x33, 0x33};
-
-    // Highlight flash state.
-    int _highlight_sig = -1;
-    qreal _highlight_opacity = 0.0;
-    QTimer _highlight_timer;
+    GridPalette _palette;
+    HighlightFlash _flash{[this] { update(); }};
 };

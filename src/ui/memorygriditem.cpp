@@ -11,17 +11,6 @@ MemoryGridItem::MemoryGridItem(QQuickItem* parent)
     setAcceptHoverEvents(true);
     setAcceptedMouseButtons(Qt::LeftButton);
     setRenderTarget(QQuickPaintedItem::FramebufferObject);
-
-    _highlight_timer.setInterval(30);
-    connect(&_highlight_timer, &QTimer::timeout, this, [this]() {
-        _highlight_opacity -= 0.04;
-        if (_highlight_opacity <= 0.0) {
-            _highlight_opacity = 0.0;
-            _highlight_obj = -1;
-            _highlight_timer.stop();
-        }
-        update();
-    });
 }
 
 void MemoryGridItem::paint(QPainter* painter) {
@@ -73,16 +62,8 @@ void MemoryGridItem::paint(QPainter* painter) {
             const qreal x = gw + col * (cs + cg);
             const auto mapIdx = static_cast<size_t>(byteOffset);
 
-            if (mapIdx < _color_map.size()) {
-                int8_t ci = _color_map[mapIdx];
-                if (ci >= 0 && static_cast<size_t>(ci) < _palette.size()) {
-                    painter->fillRect(QRectF(x, y, cs, cs), _palette[static_cast<size_t>(ci)]);
-                } else {
-                    painter->fillRect(QRectF(x, y, cs, cs), _unoccupied_color);
-                }
-            } else {
-                painter->fillRect(QRectF(x, y, cs, cs), _unoccupied_color);
-            }
+            const int8_t encoded = mapIdx < _color_map.size() ? _color_map[mapIdx] : int8_t(-1);
+            painter->fillRect(QRectF(x, y, cs, cs), _palette.cellColor(encoded));
 
             // Persistent selection border.
             if (_selected_obj >= 0 && mapIdx < _object_map.size() &&
@@ -93,10 +74,8 @@ void MemoryGridItem::paint(QPainter* painter) {
             }
 
             // Highlight flash overlay.
-            if (_highlight_obj >= 0 && _highlight_opacity > 0.0 &&
-                mapIdx < _object_map.size() && _object_map[mapIdx] == _highlight_obj) {
-                QColor hl(255, 255, 255, static_cast<int>(_highlight_opacity * 160));
-                painter->setPen(QPen(hl, 2));
+            if (mapIdx < _object_map.size() && _flash.activeFor(_object_map[mapIdx])) {
+                painter->setPen(QPen(_flash.penColor(), 2));
                 painter->drawRect(QRectF(x, y, cs, cs));
                 painter->setPen(Qt::NoPen);
             }
@@ -215,25 +194,13 @@ void MemoryGridItem::setSelectedObjectIndex(int index) {
 }
 
 void MemoryGridItem::setColors(const QVariantList& colors, const QColor& unoccupied) {
-    _palette.clear();
-    // Build 16 entries: 0-7 = normal, 16-23 (stored as 8-15) = darker shade.
-    // Index in _color_map uses bits 0-2 for color, bit 4 for shade.
-    // We map: value & 0x0F < 8 → normal, value & 0x10 → alternate.
-    _palette.resize(32); // indexed by raw encoded value
-    for (int i = 0; i < colors.size() && i < 8; ++i) {
-        QColor base(colors[i].toString());
-        _palette[static_cast<size_t>(i)] = base;                          // normal: 0-7
-        _palette[static_cast<size_t>(i | 0x10)] = base.darker(130);      // alternate: 16-23
-    }
-    _unoccupied_color = unoccupied;
+    _palette.setColors(colors, unoccupied);
     update();
 }
 
 void MemoryGridItem::highlightObject(int objectIndex) {
     setSelectedObjectIndex(objectIndex);
-    _highlight_obj = objectIndex;
-    _highlight_opacity = 1.0;
-    _highlight_timer.start();
+    _flash.start(objectIndex);
     update();
 }
 
@@ -316,12 +283,7 @@ void MemoryGridItem::rebuildColorMap() {
     _color_map.assign(mapSize, -1);
     _object_map.assign(mapSize, -1);
 
-    // Track shade toggle per color index: flips each time a new object
-    // of the same color appears, so adjacent same-color objects alternate.
-    // shade[colorIdx] = current shade bit (0 or 0x10).
-    // lastObj[colorIdx] = last object index seen for that color.
-    int8_t shade[8] = {};
-    int32_t lastObj[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+    ShadeCycler shader;
 
     const int objCount = _model->rowCount();
     for (int i = 0; i < objCount; ++i) {
@@ -334,13 +296,7 @@ void MemoryGridItem::rebuildColorMap() {
             continue;
         }
 
-        // Toggle shade when a different object of the same color appears.
-        if (lastObj[ci] != -1 && lastObj[ci] != i) {
-            shade[ci] ^= 0x10;
-        }
-        lastObj[ci] = i;
-
-        const auto encoded = static_cast<int8_t>(ci | shade[ci]);
+        const int8_t encoded = shader.encode(ci, i);
 
         const auto startOff = static_cast<size_t>(addr - segStart);
         const auto endOff = qMin(startOff + static_cast<size_t>(size), mapSize);

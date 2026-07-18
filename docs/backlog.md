@@ -19,9 +19,3 @@ Structural findings from /enforce coverage, awaiting a call — deliberately not
 `src/adapters/a2ladapter.cpp` / `dbcadapter.cpp` / `ldfadapter.cpp` are ~95% identical (70/70/66 lines). The finder judged a shared abstraction premature at three near-clones; revisit if a fourth format lands or the clones drift.
 
 **Size:** M — only if unified; the status quo is a deliberate keep.
-
-### BL-E3: GridPalette helper
-
-`src/ui/memorygriditem.cpp` and `src/ui/signalgriditem.cpp` share ~60 palette+fade lines. A small `GridPalette` helper is a real dedupe candidate (unlike BL-E2, the shared block is verbatim styling, not per-format logic).
-
-**Size:** S

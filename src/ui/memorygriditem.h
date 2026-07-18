@@ -1,11 +1,11 @@
 #pragma once
 
 #include "models/memorymapmodel.h"
+#include "ui/gridpalette.h"
 
 #include <QQuickPaintedItem>
 #include <QColor>
 #include <QPointF>
-#include <QTimer>
 
 #include <vector>
 
@@ -101,11 +101,6 @@ private:
     // Parallel map: object index per byte (-1 = none).
     std::vector<int32_t> _object_map;
 
-    std::vector<QColor> _palette;
-    QColor _unoccupied_color{0x33, 0x33, 0x33};
-
-    // Highlight flash state.
-    int _highlight_obj = -1;
-    qreal _highlight_opacity = 0.0;
-    QTimer _highlight_timer;
+    GridPalette _palette;
+    HighlightFlash _flash{[this] { update(); }};
 };

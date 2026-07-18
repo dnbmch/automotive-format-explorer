@@ -12,17 +12,6 @@ SignalGridItem::SignalGridItem(QQuickItem* parent)
     setRenderTarget(QQuickPaintedItem::FramebufferObject);
     setFlag(QQuickItem::ItemAcceptsInputMethod, true);
     setActiveFocusOnTab(true);
-
-    _highlight_timer.setInterval(30);
-    connect(&_highlight_timer, &QTimer::timeout, this, [this]() {
-        _highlight_opacity -= 0.04;
-        if (_highlight_opacity <= 0.0) {
-            _highlight_opacity = 0.0;
-            _highlight_sig = -1;
-            _highlight_timer.stop();
-        }
-        update();
-    });
 }
 
 int SignalGridItem::totalHeight() const {
@@ -79,16 +68,9 @@ void SignalGridItem::paint(QPainter* painter) {
             const int displayBit = byteIdx * 8 + col;
 
             // Fill with color.
-            if (displayBit < static_cast<int>(_color_map.size())) {
-                int8_t ci = _color_map[displayBit];
-                if (ci >= 0 && static_cast<size_t>(ci) < _palette.size()) {
-                    painter->fillRect(QRectF(x, y, cs, cs), _palette[static_cast<size_t>(ci)]);
-                } else {
-                    painter->fillRect(QRectF(x, y, cs, cs), _unoccupied_color);
-                }
-            } else {
-                painter->fillRect(QRectF(x, y, cs, cs), _unoccupied_color);
-            }
+            const int8_t encoded = displayBit < static_cast<int>(_color_map.size())
+                ? _color_map[static_cast<size_t>(displayBit)] : int8_t(-1);
+            painter->fillRect(QRectF(x, y, cs, cs), _palette.cellColor(encoded));
 
             // Overlap stripe.
             if (_model->isOverlap(displayBit)) {
@@ -113,15 +95,11 @@ void SignalGridItem::paint(QPainter* painter) {
             }
 
             // Highlight flash overlay.
-            if (_highlight_sig >= 0 && _highlight_opacity > 0.0 &&
-                displayBit < static_cast<int>(_color_map.size())) {
-                int sigIdx = _model->signalAtBit(displayBit);
-                if (sigIdx == _highlight_sig) {
-                    QColor hl(255, 255, 255, static_cast<int>(_highlight_opacity * 160));
-                    painter->setPen(QPen(hl, 2));
-                    painter->drawRect(QRectF(x, y, cs, cs));
-                    painter->setPen(Qt::NoPen);
-                }
+            if (displayBit < static_cast<int>(_color_map.size()) &&
+                _flash.activeFor(_model->signalAtBit(displayBit))) {
+                painter->setPen(QPen(_flash.penColor(), 2));
+                painter->drawRect(QRectF(x, y, cs, cs));
+                painter->setPen(Qt::NoPen);
             }
         }
 
@@ -235,21 +213,12 @@ void SignalGridItem::setSelectedSignalIndex(int index) {
 }
 
 void SignalGridItem::setColors(const QVariantList& colors, const QColor& unoccupied) {
-    _palette.clear();
-    _palette.resize(32);
-    for (int i = 0; i < colors.size() && i < 8; ++i) {
-        QColor base(colors[i].toString());
-        _palette[static_cast<size_t>(i)] = base;
-        _palette[static_cast<size_t>(i | 0x10)] = base.darker(130);
-    }
-    _unoccupied_color = unoccupied;
+    _palette.setColors(colors, unoccupied);
     update();
 }
 
 void SignalGridItem::highlightSignal(int signalIndex) {
-    _highlight_sig = signalIndex;
-    _highlight_opacity = 1.0;
-    _highlight_timer.start();
+    _flash.start(signalIndex);
     update();
 }
 
@@ -303,9 +272,7 @@ void SignalGridItem::rebuildColorMap() {
 
     const int sigCount = _model->signalCount();
 
-    // Track shade alternation per color index (same logic as MemoryGridItem).
-    int8_t shade[8] = {};
-    int32_t lastSig[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+    ShadeCycler shader;
 
     for (int si = 0; si < sigCount; ++si) {
         if (!_model->isSignalVisible(si)) continue;
@@ -313,12 +280,7 @@ void SignalGridItem::rebuildColorMap() {
         const int ci = _model->data(mi, SignalMapModel::ColorIndexRole).toInt();
         if (ci < 0 || ci >= 8) continue;
 
-        if (lastSig[ci] != -1 && lastSig[ci] != si) {
-            shade[ci] ^= 0x10;
-        }
-        lastSig[ci] = si;
-
-        const auto encoded = static_cast<int8_t>(ci | shade[ci]);
+        const int8_t encoded = shader.encode(ci, si);
 
         for (int b = 0; b < totalBits; ++b) {
             if (_model->signalAtBit(b) == si && _color_map[b] < 0) {
