@@ -75,6 +75,19 @@ QString A2lDetailPresenter::buildRawJson(const NodeBinding& binding) const {
         return {};
     }
 
+    // The XCP/CCP summary nodes are synthesised over the module's repeated
+    // if_datas, so their raw JSON is the matching source blocks concatenated.
+    if (path.kind == A2lEntityKind::XcpSummary || path.kind == A2lEntityKind::CcpSummary) {
+        const bool wantXcp = path.kind == A2lEntityKind::XcpSummary;
+        QStringList blocks;
+        for (const auto& ifData : module->if_datas()) {
+            if (wantXcp ? ifData.has_xcp() : ifData.has_ccp()) {
+                blocks.push_back(messageToJsonText(ifData));
+            }
+        }
+        return blocks.join(QStringLiteral("\n"));
+    }
+
     const google::protobuf::Message* msg = nullptr;
     int i = path.secondaryIndex;
 
