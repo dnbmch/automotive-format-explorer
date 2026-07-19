@@ -255,3 +255,6 @@ add_custom_command(TARGET automotive-format-explorer POST_BUILD
 )
 
 deploy_msys2_deps(automotive-format-explorer)
+
+enable_testing()
+add_subdirectory(tests)
