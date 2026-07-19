@@ -102,7 +102,7 @@ The explorer is built on top of three parser libraries published by [Danube Mech
 | DBC | [dbc-parser-lib](https://github.com/dnbmch/dbc-parser-lib) | [Releases](https://github.com/dnbmch/dbc-parser-lib/releases) |
 | LDF | [ldf-parser-lib](https://github.com/dnbmch/ldf-parser-lib) | [Releases](https://github.com/dnbmch/ldf-parser-lib/releases) |
 
-Each library parses its respective format into Protocol Buffer messages. The explorer downloads prebuilt release artifacts automatically at CMake configure time -- no manual setup required.
+Each library parses its respective format into Protocol Buffer messages. At CMake configure time the explorer pulls the parser `-lib` release artifacts pinned in `CMakeLists.txt` from GitHub. In this multi-repo workspace the pinned tags may be ahead of what is published, so the build is driven from the sibling parser working trees instead -- `bash seed-parser-deps.sh` stages them and the fetch is skipped (see [Offline build](#offline-build-sibling-working-trees)).
 
 The parser libraries are **dual licensed: GPL-2.0 or Commercial**. See their repositories for details, or contact [Danube Mechatronics](https://danube-mechatronics.com) for commercial licensing.
 
@@ -115,7 +115,7 @@ The parser libraries are **dual licensed: GPL-2.0 or Commercial**. See their rep
 - Qt 6.5+ (`Core`, `Concurrent`, `Gui`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`)
 - CMake 3.21+
 - Protobuf development package (visible to CMake via CONFIG or MODULE mode)
-- Internet access at configure time (parser libraries are fetched from GitHub releases)
+- Parser libraries: either the sibling parser working trees staged via `seed-parser-deps.sh` (see [Offline build](#offline-build-sibling-working-trees)), or — once the pinned tags are published — internet access to fetch the `-lib` release artifacts at configure time
 
 ### Build
 

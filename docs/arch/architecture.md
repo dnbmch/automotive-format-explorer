@@ -25,7 +25,7 @@ QGuiApplication
 
 ## Startup: Splash + DWM Cloak
 
-On Windows the standard Qt show-window sequence flashes a white frame while the scene graph initialises. `src/main.cpp:40-58` works around this with three steps tied to the engine's `objectCreated` signal:
+On Windows the standard Qt show-window sequence flashes a white frame while the scene graph initialises. The `QQmlApplicationEngine::objectCreated` handler in `src/main.cpp` works around this with three steps:
 
 1. Set `DWMWA_CLOAK = TRUE` on the window's `HWND` before showing it.
 2. Call `window->show()` — the scene graph renders to the framebuffer while the window remains invisible to the compositor.

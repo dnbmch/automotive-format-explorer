@@ -17,17 +17,25 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - Bundled samples (one per format, `samples/`) with "open a sample" links in the
   empty sidebar; provenance in `samples/SAMPLES.md`.
 - Splash overlay + DWM cloak startup.
-- Statically links the three parser libraries (fetched from GitHub releases at
-  configure time). GPL-3.0.
+- Links the three parser libraries — fetched from GitHub releases at configure
+  time, or staged from the sibling working trees by `seed-parser-deps.sh`. GPL-3.0.
+- QTest targets (`tst_treefiltermodel`, `tst_a2ldetailpresenter`) registered with
+  ctest and run in CI.
 - CI (Windows MinGW + Ubuntu) + `release.yml` (Windows zip + Linux AppImage).
 
 ## In flight
 
-None. The `CMakeLists.txt` parser pins fetch the renamed `-lib` assets and a
-clean configure + build is green.
+A standalone clean configure cannot download the parser `-lib` artifacts: the
+tags pinned in `CMakeLists.txt` are ahead of what is published. The in-workspace
+build (`seed-parser-deps.sh` then `build.sh`) is green with the tests passing;
+publishing the pinned parser tags is what unblocks the standalone fetch.
+
+The working tree is ahead of the published `v0.1.0` release. The bundled
+screenshots (`docs/screenshot_*.png`) predate the per-tab filter and sample
+links; regenerate them when the next release is cut.
 
 ## Deferred
 
-Tracked in [docs/backlog.md](docs/backlog.md): ctest/QTest scaffolding (BL-E1) is
-the only open item. Memory-grid view-richness and new-format backends are in
-[roadmap.md](roadmap.md).
+Tracked in [docs/backlog.md](docs/backlog.md): the adapter-triplication call
+(BL-E2) is parked pending a fourth format. Memory-grid view-richness and
+new-format backends are in [roadmap.md](roadmap.md).

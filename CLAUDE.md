@@ -238,7 +238,7 @@ cmake -B build -G Ninja
 cmake --build build
 ```
 
-Qt 6.5+, CMake 3.21+, Protobuf required. Parser libraries are fetched automatically from GitHub releases at configure time.
+Qt 6.5+, CMake 3.21+, Protobuf required. Configure fetches the pinned parser `-lib` release artifacts from GitHub; in this workspace `seed-parser-deps.sh` stages the sibling parser working trees first so the fetch is skipped.
 
 ### Code conventions
 
