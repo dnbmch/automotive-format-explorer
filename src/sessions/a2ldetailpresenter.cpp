@@ -76,7 +76,9 @@ QString A2lDetailPresenter::buildRawJson(const NodeBinding& binding) const {
     }
 
     // The XCP/CCP summary nodes are synthesised over the module's repeated
-    // if_datas, so their raw JSON is the matching source blocks concatenated.
+    // if_datas, so their raw JSON is the matching source blocks. One match
+    // renders as a single object; several render as a JSON array so the result
+    // stays parseable rather than back-to-back objects.
     if (path.kind == A2lEntityKind::XcpSummary || path.kind == A2lEntityKind::CcpSummary) {
         const bool wantXcp = path.kind == A2lEntityKind::XcpSummary;
         QStringList blocks;
@@ -85,7 +87,13 @@ QString A2lDetailPresenter::buildRawJson(const NodeBinding& binding) const {
                 blocks.push_back(messageToJsonText(ifData));
             }
         }
-        return blocks.join(QStringLiteral("\n"));
+        if (blocks.isEmpty()) {
+            return {};
+        }
+        if (blocks.size() == 1) {
+            return blocks.front();
+        }
+        return QStringLiteral("[\n%1\n]").arg(blocks.join(QStringLiteral(",\n")));
     }
 
     const google::protobuf::Message* msg = nullptr;
@@ -112,9 +120,6 @@ QString A2lDetailPresenter::buildRawJson(const NodeBinding& binding) const {
         break;
     case A2lEntityKind::VariantCoding:
         if (module->has_variant_coding()) msg = &module->variant_coding();
-        break;
-    case A2lEntityKind::XcpSummary:
-    case A2lEntityKind::CcpSummary:
         break;
     }
 

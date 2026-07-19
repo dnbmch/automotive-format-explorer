@@ -7,6 +7,8 @@
 
 #include "sessions/a2ldetailpresenter.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QTest>
 
 namespace {
@@ -53,6 +55,8 @@ private slots:
     void ccpSummaryYieldsRawJson();
     void summaryRawJsonExcludesOtherFamilies();
     void summaryWithoutMatchingIfDataIsEmpty();
+    void singleMatchRawJsonIsOneObject();
+    void multipleMatchesRawJsonIsValidArray();
 };
 
 // A plain single-message node — guards the common path.
@@ -115,6 +119,38 @@ void TestA2lDetailPresenter::summaryWithoutMatchingIfDataIsEmpty() {
 
     QVERIFY(presenter.buildRawJson(bindingFor(A2lEntityKind::XcpSummary)).isEmpty());
     QVERIFY(presenter.buildRawJson(bindingFor(A2lEntityKind::CcpSummary)).isEmpty());
+}
+
+// One matching if_data renders as a bare JSON object, not a one-element array.
+void TestA2lDetailPresenter::singleMatchRawJsonIsOneObject() {
+    const a2l::A2lFile doc = makeDocument();
+    const A2lDetailPresenter presenter(doc);
+
+    const QString json = presenter.buildRawJson(bindingFor(A2lEntityKind::XcpSummary));
+    QJsonParseError err{};
+    const QJsonDocument parsed = QJsonDocument::fromJson(json.toUtf8(), &err);
+    QCOMPARE(err.error, QJsonParseError::NoError);
+    QVERIFY(parsed.isObject());
+}
+
+// Several matching if_datas must render as one parseable JSON array, not
+// back-to-back objects (which no JSON parser accepts).
+void TestA2lDetailPresenter::multipleMatchesRawJsonIsValidArray() {
+    a2l::A2lFile doc;
+    a2l::Module* module = doc.add_modules();
+    module->set_name("ECU_MAIN");
+
+    module->add_if_datas()->mutable_xcp()->mutable_protocol_layer()->set_max_cto(8);
+    module->add_if_datas()->mutable_xcp()->mutable_protocol_layer()->set_max_cto(16);
+
+    const A2lDetailPresenter presenter(doc);
+    const QString json = presenter.buildRawJson(bindingFor(A2lEntityKind::XcpSummary));
+
+    QJsonParseError err{};
+    const QJsonDocument parsed = QJsonDocument::fromJson(json.toUtf8(), &err);
+    QCOMPARE(err.error, QJsonParseError::NoError);
+    QVERIFY(parsed.isArray());
+    QCOMPARE(parsed.array().size(), 2);
 }
 
 QTEST_MAIN(TestA2lDetailPresenter)
