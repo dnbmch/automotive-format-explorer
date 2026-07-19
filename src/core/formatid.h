@@ -7,10 +7,9 @@ enum class FormatId {
     A2L,
     DBC,
     LDF,
-    // Reserved for planned explorer read-back of workspace-written files
-    // (mdf4-writer / tdms-writer output); no backend yet.
-    MDF4,
-    TDMS
+    // Reserved for the planned explorer read-back of mdf4-writer output
+    // (see docs/plans/mdf4_viewer.md); no backend yet.
+    MDF4
 };
 
 inline QString formatDisplayName(FormatId format) {
@@ -23,8 +22,6 @@ inline QString formatDisplayName(FormatId format) {
         return QStringLiteral("LDF");
     case FormatId::MDF4:
         return QStringLiteral("MDF4");
-    case FormatId::TDMS:
-        return QStringLiteral("TDMS");
     case FormatId::Unknown:
     default:
         return QStringLiteral("Unknown");
