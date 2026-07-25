@@ -35,8 +35,10 @@ private slots:
 
     void objectAtAddressHitsAndGaps();
     void objectAtAddressCoversEarlierStartingObject();
+    void objectAtAddressScansPastNonCoveringCandidate();
     void objectsInRange();
     void overlapBytesFlagged();
+    void straddlerClaimsInSegmentBytes();
     void separateBlocksAreNotOverlap();
     void tooltipRolesExposed();
 
@@ -73,6 +75,19 @@ void TestMemoryMapModel::objectAtAddressCoversEarlierStartingObject() {
     QCOMPARE(_model->objectAtAddress(0x1004), 0);
 }
 
+void TestMemoryMapModel::objectAtAddressScansPastNonCoveringCandidate() {
+    // Big [0x1000, 0x1010) fully contains Small [0x1008, 0x100C). At 0x100E
+    // the backward scan examines Small first (a miss — past its end) and must
+    // keep scanning to resolve Big; breaking on the first miss returns -1.
+    MemoryMapModel model;
+    model.addObject(makeObject(QStringLiteral("Big"), 0x1000, 16));
+    model.addObject(makeObject(QStringLiteral("Small"), 0x1008, 4));
+    model.finalize();
+
+    QCOMPARE(model.objectAtAddress(0x100E), 0);
+    QCOMPARE(model.objectAtAddress(0x100A), 1);
+}
+
 void TestMemoryMapModel::objectsInRange() {
     QCOMPARE(_model->objectsInRange(0x1004, 0x1024), QVariantList({0, 1, 2}));
     QCOMPARE(_model->objectsInRange(0x100F, 0x1010), QVariantList({0, 1}));
@@ -85,6 +100,26 @@ void TestMemoryMapModel::overlapBytesFlagged() {
     QVERIFY(_model->isOverlap(0x100F));
     QVERIFY(!_model->isOverlap(0x1007)); // A only
     QVERIFY(!_model->isOverlap(0x1010)); // both A and B end here (exclusive)
+}
+
+void TestMemoryMapModel::straddlerClaimsInSegmentBytes() {
+    // An object starting below the segment but reaching into it passes the
+    // segment filter and claims its in-segment bytes — a second object on the
+    // same bytes is an overlap. The grid paints straddlers clipped to match.
+    MemoryMapModel model;
+    MemorySegmentInfo seg;
+    seg.name = QStringLiteral("FLASH");
+    seg.address = 0x2000;
+    seg.size = 0x1000;
+    model.addSegment(seg);
+    model.addObject(makeObject(QStringLiteral("StraddlerX"), 0x1FF8, 16)); // [0x1FF8, 0x2008)
+    model.addObject(makeObject(QStringLiteral("InsideY"), 0x2000, 8));     // [0x2000, 0x2008)
+    model.finalize();
+
+    QCOMPARE(model.objectCount(), 2); // straddler passes the segment filter
+    QVERIFY(model.isOverlap(0x2000));
+    QVERIFY(model.isOverlap(0x2007));
+    QVERIFY(!model.isOverlap(0x2008));
 }
 
 void TestMemoryMapModel::separateBlocksAreNotOverlap() {

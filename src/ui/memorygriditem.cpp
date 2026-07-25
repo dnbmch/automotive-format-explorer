@@ -368,14 +368,17 @@ void MemoryGridItem::rebuildColorMap() {
         const auto size = _model->data(mi, MemoryMapModel::SizeRole).toULongLong();
         const int ci = _model->data(mi, MemoryMapModel::ColorIndexRole).toInt();
 
-        if (addr < segStart || size == 0 || ci < 0 || ci >= 8) {
+        if (size == 0 || ci < 0 || ci >= 8) {
             continue;
         }
 
         const int8_t encoded = shader.encode(ci, i);
 
-        const auto startOff = static_cast<size_t>(addr - segStart);
-        const auto endOff = qMin(startOff + static_cast<size_t>(size), mapSize);
+        // The model's segment filter includes objects straddling the segment
+        // start (end reaches into the segment); paint them clipped, matching
+        // the overlap map.
+        const auto startOff = addr > segStart ? static_cast<size_t>(addr - segStart) : size_t(0);
+        const auto endOff = static_cast<size_t>(qMin<uint64_t>(addr + size - segStart, mapSize));
 
         for (size_t b = startOff; b < endOff; ++b) {
             _color_map[b] = encoded;
