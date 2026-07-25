@@ -121,6 +121,11 @@ QString A2lDetailPresenter::buildRawJson(const NodeBinding& binding) const {
     case A2lEntityKind::VariantCoding:
         if (module->has_variant_coding()) msg = &module->variant_coding();
         break;
+    case A2lEntityKind::XcpSummary:
+    case A2lEntityKind::CcpSummary:
+        // Synthesised summary nodes are rendered by the early return above;
+        // listed here only to keep the switch exhaustive over A2lEntityKind.
+        break;
     }
 
     if (!msg) {
