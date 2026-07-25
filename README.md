@@ -62,7 +62,9 @@ Visual hex grid of ECU memory segments. Each byte is color-coded by the object t
 | Gold | AXIS_PTS (standalone axis) |
 
 - Segment selector with automatic fallback when no segments are defined
-- Hover tooltips with name, type, address, and computed size
+- Hover tooltips with name, type, address, computed size, record layout, and conversion
+- Diagonal red hatching on bytes claimed by more than one object
+- Click-drag byte-range selection with a status-bar readout (range, byte count, objects in range)
 - Jump-to-address input field
 - Configurable bytes-per-row (8 / 16 / 32)
 - Alternating shades to distinguish adjacent same-type objects

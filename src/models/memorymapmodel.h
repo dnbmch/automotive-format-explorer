@@ -61,6 +61,8 @@ public:
         ColorIndexRole,
         SizeApproximateRole,
         NodeKeyRole,
+        RecordLayoutRole,
+        ConversionRole,
     };
 
     explicit MemoryMapModel(QObject* parent = nullptr);
@@ -94,6 +96,10 @@ public:
     // Query: all objects overlapping [startAddr, endAddr).
     // Returns list of model row indices.
     Q_INVOKABLE QVariantList objectsInRange(quint64 startAddr, quint64 endAddr) const;
+
+    // Query: is the byte at `address` claimed by more than one object in the
+    // current segment?
+    Q_INVOKABLE bool isOverlap(quint64 address) const;
 
     // Scroll target: returns the row index that contains `address`.
     Q_INVOKABLE int rowForAddress(quint64 address) const;
@@ -129,6 +135,10 @@ private:
 
     // Objects filtered to the current segment's address range, sorted by address.
     std::vector<const MemoryObject*> _filtered_objects;
+
+    // Per-byte overlap flags for the current segment (offset from
+    // viewStartAddress, capped like the grid's color map).
+    std::vector<bool> _overlap_map;
 
     int _current_segment = 0;
     int _bytes_per_row = 16;

@@ -112,6 +112,9 @@ Item {
                             let row = mapModel.rowForAddress(addr)
                             let rh = gridItem.cellSize + gridItem.cellGap
                             gridItem.scrollY = row * rh
+                            let objIdx = mapModel.objectAtAddress(addr)
+                            if (objIdx >= 0)
+                                gridItem.highlightObject(objIdx)
                         }
                     }
                 }
@@ -275,6 +278,14 @@ Item {
                     color: Theme.textMuted
                     text: {
                         if (!mapModel || mapModel.segmentCount === 0) return ""
+                        if (gridItem.hasSelection) {
+                            let selStart = "0x" + Number(gridItem.selectionStart).toString(16).toUpperCase().padStart(8, '0')
+                            let selEnd = "0x" + Number(gridItem.selectionEnd).toString(16).toUpperCase().padStart(8, '0')
+                            let byteCount = Number(gridItem.selectionEnd - gridItem.selectionStart) + 1
+                            let objCount = mapModel.objectsInRange(gridItem.selectionStart, gridItem.selectionEnd + 1).length
+                            return "Selected: " + selStart + " \u2014 " + selEnd
+                                 + " (" + byteCount + " bytes) | " + objCount + " objects in range"
+                        }
                         let start = "0x" + Number(mapModel.viewStartAddress).toString(16).toUpperCase().padStart(8, '0')
                         let end = "0x" + Number(mapModel.viewEndAddress - 1).toString(16).toUpperCase().padStart(8, '0')
                         return start + " \u2014 " + end + "  |  " + mapModel.objectCount + " objects"

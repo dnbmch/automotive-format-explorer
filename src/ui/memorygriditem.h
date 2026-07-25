@@ -24,6 +24,9 @@ class MemoryGridItem : public QQuickPaintedItem {
     Q_PROPERTY(qreal mouseY READ mouseY NOTIFY mousePosChanged)
     Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex WRITE setSelectedObjectIndex
                NOTIFY selectedObjectChanged)
+    Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionRangeChanged)
+    Q_PROPERTY(quint64 selectionStart READ selectionStart NOTIFY selectionRangeChanged)
+    Q_PROPERTY(quint64 selectionEnd READ selectionEnd NOTIFY selectionRangeChanged)
 
 public:
     explicit MemoryGridItem(QQuickItem* parent = nullptr);
@@ -54,6 +57,12 @@ public:
     int selectedObjectIndex() const;
     void setSelectedObjectIndex(int index);
 
+    // Click-drag byte-range selection. Addresses are absolute and inclusive.
+    bool hasSelection() const;
+    quint64 selectionStart() const;
+    quint64 selectionEnd() const;
+    Q_INVOKABLE void clearSelection();
+
     Q_INVOKABLE void setColors(const QVariantList& colors, const QColor& unoccupied);
     Q_INVOKABLE void highlightObject(int objectIndex);
 
@@ -67,6 +76,7 @@ signals:
     void hoveredObjectChanged();
     void mousePosChanged();
     void selectedObjectChanged();
+    void selectionRangeChanged();
     void nodeKeyClicked(qulonglong nodeKey);
 
 protected:
@@ -74,6 +84,7 @@ protected:
     void hoverLeaveEvent(QHoverEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
 
 private slots:
     void onModelUpdated();
@@ -84,6 +95,10 @@ private:
     void rebuildColorMap();
     void updateContentHeight();
     int objectIndexAtPixel(qreal px, qreal py) const;
+    // Byte offset (from segment start) under a pixel, or -1 outside the grid.
+    // When clamp is true, out-of-grid pixels snap to the nearest valid byte
+    // (used while dragging a range selection).
+    qint64 byteOffsetAtPixel(qreal px, qreal py, bool clamp) const;
 
     MemoryMapModel* _model = nullptr;
     qreal _scroll_y = 0;
@@ -93,6 +108,13 @@ private:
     int _hovered_obj = -1;
     int _selected_obj = -1;
     QPointF _mouse_pos;
+
+    // Drag byte-range selection, as offsets from the segment start.
+    // _sel_anchor is the pressed byte; -1 while no drag can start.
+    // _sel_start/_sel_end (inclusive) hold the active selection; -1 = none.
+    qint64 _sel_anchor = -1;
+    qint64 _sel_start = -1;
+    qint64 _sel_end = -1;
 
     // Pre-computed flat color map: one int8 per byte in the segment.
     // -1 = unoccupied; otherwise (colorIndex | 0x10 alternate-shade bit), so

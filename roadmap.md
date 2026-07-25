@@ -21,20 +21,17 @@ shell.
 
 ## View richness
 
-The memory grid is the lagging view. Documented-but-unbuilt behaviour (see
-[docs/ref/memory_view.md](docs/ref/memory_view.md)) to bring it to parity with
-the signal grid:
+Remaining memory-grid richness (see
+[docs/plans/memory_view_planned.md](docs/plans/memory_view_planned.md); overlap
+hatching, byte-range selection, and the record-layout/conversion tooltip are
+built — [docs/ref/memory_view.md](docs/ref/memory_view.md)):
 
-- Hatched/striped overlap visualization and half-filled bit-mask cells in the
-  memory grid (currently signal-grid only).
-- Click-drag byte-range selection with an "N objects in range" status readout.
+- Sub-byte subdivided / half-filled cells for bit-mask footprints.
 - Overlap disambiguation popup when multiple objects claim the same address.
-- Richer hover tooltip (record layout / conversion fields).
+- Detail-panel listing of every object in a selected byte range.
 
 ## Quality & lifecycle
 
-- Test scaffolding: `enable_testing()` + a QTest target (no automated coverage
-  exists yet).
 - Engine/controller teardown ordering hardening.
 - Render documentation: per-pattern rules for the signal/memory grid stripes.
 

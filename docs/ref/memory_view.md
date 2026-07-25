@@ -89,16 +89,19 @@ Each row = 16 bytes (configurable: 8, 16, 32). Left gutter shows absolute addres
 | Unoccupied (in segment) | Dark gray | Allocated but not assigned |
 | Outside segment | Background | No data |
 
-Overlapping objects (e.g. a measurement aliasing a characteristic address) and sub-byte `bit_mask` footprints are not yet visually distinguished on the memory grid — see [planned enhancements](../plans/memory_view_planned.md).
+### Overlap hatching
+
+Bytes claimed by more than one object (e.g. a measurement aliasing a characteristic address) draw diagonal red hatching over the cell fill, matching the signal grid's overlap marker. Detection lives in the model: `MemoryMapModel::isOverlap(address)` reads a per-byte overlap map rebuilt with the segment filter. Sub-byte `bit_mask` footprints still color (and hatch) whole bytes — subdivided cells are a [planned enhancement](../plans/memory_view_planned.md).
 
 ### Hover tooltip
 
-On hover over a colored cell, a floating tooltip shows name, type, address, and size:
+On hover over a colored cell, a floating tooltip shows name, type, address, size, and — when the object carries them — record layout and conversion method:
 ```
-CHARACTERISTIC "KfAIRCTL_tTransDly"
+KfAIRCTL_tTransDly
 Type: CURVE  |  Address: 0x80100  |  Size: 24 bytes
+Record Layout: RL_CURVE_FLOAT32
+Conversion: CM_KfAIRCTL_tTransDly
 ```
-Record-layout and conversion fields in the tooltip are a [planned enhancement](../plans/memory_view_planned.md).
 
 ### Segment selector
 
@@ -132,7 +135,9 @@ Click a colored cell in the memory view. The tree auto-scrolls to and selects th
 
 ### Memory → memory
 
-Click-drag byte-range selection (with a range status readout and multi-object detail listing) is a [planned enhancement](../plans/memory_view_planned.md). The grid currently supports single-click selection only.
+Click-drag selects a byte range: press anchors the selection, dragging extends it (clamped to the grid), and the selected bytes render with a translucent white overlay. The status bar switches to a range readout — `Selected: 0x80100 — 0x8010F (16 bytes) | 3 objects in range` — with the object count from `MemoryMapModel::objectsInRange`. A plain click clears the range and selects the byte's owning object as before; segment or model changes also clear it. The detail panel listing every object in the range is a [planned enhancement](../plans/memory_view_planned.md).
+
+The "Go to" address field scrolls to the entered address and flash-highlights the object at it (`MemoryMapModel::objectAtAddress`), if any.
 
 ## Size Calculation
 
@@ -182,8 +187,14 @@ For Measurements with `bit_mask`, the footprint is the byte(s) containing the ma
 - Object filtering: Characteristics + AxisPts always included, Measurements only with `ecu_address`
 - Sorted interval-based color/object maps for O(1) byte-level hit testing
 - Tier 1 + Tier 2 size computation (VALUE, MEASUREMENT, CURVE, MAP, AXIS_PTS)
-- Colored cells, address gutter, hover tooltips (name, type, address, size)
-- Jump-to-address text field
+- Colored cells, address gutter, hover tooltips (name, type, address, size,
+  record layout, conversion)
+- Overlap detection (`MemoryMapModel::isOverlap`) + diagonal red hatching on
+  bytes claimed by more than one object
+- Click-drag byte-range selection with status-bar readout (range, byte count,
+  objects in range)
+- Jump-to-address text field (scrolls + flash-highlights the object at the
+  address)
 - Click cell → select in tree + update detail
 - Click tree node → scroll memory view + highlight flash
 - Bytes-per-row toggle (8, 16, 32)
@@ -193,9 +204,10 @@ For Measurements with `bit_mask`, the footprint is the byte(s) containing the ma
 
 ### Planned
 
-Tier 3 sizing, overlap/gap detection and visualization, richer tooltips,
-byte-range selection, the disambiguation popup, segment utilization, export, and
-grid keyboard navigation are designed in
+Tier 3 sizing, gap detection, sub-byte subdivided cells, dashed
+approximate-size borders, the range-selection detail listing, the
+disambiguation popup, segment utilization, export, and grid keyboard
+navigation are designed in
 [docs/plans/memory_view_planned.md](../plans/memory_view_planned.md).
 
 ## Technical Notes

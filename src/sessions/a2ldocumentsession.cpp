@@ -338,6 +338,7 @@ void A2lDocumentSession::buildMemoryMap() {
             obj.size = size > 0 ? size : 1;
             obj.sizeApproximate = (size == 0);
             obj.colorIndex = 6; // MEASUREMENT color
+            obj.conversion = text(meas.conversion());
             auto keyIt = _tree_node_keys.find({static_cast<int>(A2lEntityKind::Measurement), m, i});
             if (keyIt != _tree_node_keys.end()) obj.nodeKey = keyIt->second;
             _memory_map_model->addObject(std::move(obj));

@@ -11,6 +11,9 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   `DetailPresenter`.
 - A2L memory-map view and DBC/LDF signal-map view via `QQuickPaintedItem`
   C++ renderers (`MemoryGridItem`, `SignalGridItem`) with FBO scrolling.
+- Memory grid: overlap hatching (bytes claimed by more than one object),
+  click-drag byte-range selection with status readout, and hover tooltips with
+  record layout / conversion — see [docs/ref/memory_view.md](docs/ref/memory_view.md).
 - Bidirectional selection (tree ↔ detail ↔ center) keyed by `NodeRegistry`.
 - Per-tab tree filter (`TreeFilterModel` proxy, `Ctrl+F`) with recursive matching
   and pre-filter state restore.
@@ -19,8 +22,8 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - Splash overlay + DWM cloak startup.
 - Links the three parser libraries — fetched from GitHub releases at configure
   time, or staged from the sibling working trees by `seed-parser-deps.sh`. GPL-3.0.
-- QTest targets (`tst_treefiltermodel`, `tst_a2ldetailpresenter`) registered with
-  ctest and run in CI.
+- QTest targets (`tst_treefiltermodel`, `tst_memorymapmodel`,
+  `tst_a2ldetailpresenter`) registered with ctest and run in CI.
 - CI (Windows MinGW + Ubuntu) + `release.yml` (Windows zip + Linux AppImage).
 
 ## In flight

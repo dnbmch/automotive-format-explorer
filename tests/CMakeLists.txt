@@ -27,6 +27,8 @@ endfunction()
 
 explorer_add_test(tst_treefiltermodel explorer-core)
 
+explorer_add_test(tst_memorymapmodel explorer-core)
+
 explorer_add_test(tst_a2ldetailpresenter
     explorer-core
     explorer-a2l-backend

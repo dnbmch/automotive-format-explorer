@@ -115,15 +115,13 @@ The grid items emit `hoveredTooltip` (string) and `nodeKeyClicked(int)` signals;
 
 ### Overlap stripes
 
-`SignalGridItem` marks bits claimed by more than one signal. After filling a cell with its signal color, if `SignalMapModel::isOverlap(bit)` is true it draws diagonal red hatching (`rgba(255,60,60,180)`, 1px pen) clipped to the cell — parallel lines stepped every 6px — over the base fill, so an overlapped bit reads as "colored, with red diagonal lines". The stripe is drawn *before* the selection border and highlight-flash overlay, so those keep visual priority.
+Both grid items mark cells claimed by more than one occupant. After filling a cell with its color, if the model's overlap query is true (`SignalMapModel::isOverlap(bit)` per bit, `MemoryMapModel::isOverlap(address)` per byte) the item draws diagonal red hatching (`rgba(255,60,60,180)`, 1px pen) clipped to the cell — parallel lines stepped every 6px — over the base fill, so an overlapped cell reads as "colored, with red diagonal lines". The stripe is drawn *before* the selection border and highlight-flash overlay, so those keep visual priority. Overlap detection lives in the models: each rebuilds a per-cell overlap map alongside its occupancy map.
 
 ```
 +-----+-----+-----+
-| sig | sig⟍| sig |   ⟍ = red diagonal hatch on an overlapped bit
+| sig | sig⟍| sig |   ⟍ = red diagonal hatch on an overlapped cell
 +-----+-----+-----+
 ```
-
-`MemoryGridItem` does not draw overlap stripes: A2L objects sit at distinct addresses, so overlap visualization on the memory grid is a planned enhancement (see [../plans/memory_view_planned.md](../plans/memory_view_planned.md)).
 
 ## Project Structure
 

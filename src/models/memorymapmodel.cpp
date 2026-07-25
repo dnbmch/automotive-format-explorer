@@ -27,6 +27,8 @@ QVariant MemoryMapModel::data(const QModelIndex& index, int role) const {
     case ColorIndexRole:    return obj->colorIndex;
     case SizeApproximateRole: return obj->sizeApproximate;
     case NodeKeyRole:       return QVariant::fromValue(static_cast<qulonglong>(obj->nodeKey));
+    case RecordLayoutRole:  return obj->recordLayoutRef;
+    case ConversionRole:    return obj->conversion;
     }
     return {};
 }
@@ -40,6 +42,8 @@ QHash<int, QByteArray> MemoryMapModel::roleNames() const {
         {ColorIndexRole, "colorIndex"},
         {SizeApproximateRole, "sizeApproximate"},
         {NodeKeyRole, "nodeKey"},
+        {RecordLayoutRole, "recordLayout"},
+        {ConversionRole, "conversion"},
     };
 }
 
@@ -181,6 +185,18 @@ QVariantList MemoryMapModel::objectsInRange(quint64 startAddr, quint64 endAddr) 
     return result;
 }
 
+bool MemoryMapModel::isOverlap(quint64 address) const {
+    const quint64 start = viewStartAddress();
+    if (address < start) {
+        return false;
+    }
+    const uint64_t offset = address - start;
+    if (offset >= _overlap_map.size()) {
+        return false;
+    }
+    return _overlap_map[static_cast<size_t>(offset)];
+}
+
 int MemoryMapModel::rowForAddress(quint64 address) const {
     if (_segments.empty()) {
         return 0;
@@ -282,6 +298,7 @@ void MemoryMapModel::finalize() {
 void MemoryMapModel::rebuildFilteredObjects() {
     beginResetModel();
     _filtered_objects.clear();
+    _overlap_map.clear();
 
     if (!_segments.empty()) {
         const auto& seg = _segments[static_cast<size_t>(_current_segment)];
@@ -292,6 +309,30 @@ void MemoryMapModel::rebuildFilteredObjects() {
             uint64_t objEnd = obj.address + (obj.size > 0 ? obj.size : 1);
             if (objEnd > segStart && obj.address < segEnd) {
                 _filtered_objects.push_back(&obj);
+            }
+        }
+
+        // Per-byte overlap flags: a byte claimed by two or more objects.
+        // Same 16MB cap as the grid's color map.
+        const size_t mapSize = static_cast<size_t>(
+            qMin(segEnd - segStart, uint64_t(16 * 1024 * 1024)));
+        _overlap_map.assign(mapSize, false);
+        std::vector<bool> claimed(mapSize, false);
+
+        for (const MemoryObject* obj : _filtered_objects) {
+            if (obj->size == 0) {
+                continue; // unknown footprint, not painted — no overlap claim
+            }
+            const uint64_t startOff = obj->address > segStart ? obj->address - segStart : 0;
+            const uint64_t endOff = qMin(obj->address + obj->size - segStart,
+                                         static_cast<uint64_t>(mapSize));
+            for (uint64_t b = startOff; b < endOff; ++b) {
+                const auto i = static_cast<size_t>(b);
+                if (claimed[i]) {
+                    _overlap_map[i] = true;
+                } else {
+                    claimed[i] = true;
+                }
             }
         }
     }

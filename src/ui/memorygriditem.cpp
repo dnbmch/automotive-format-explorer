@@ -65,6 +65,25 @@ void MemoryGridItem::paint(QPainter* painter) {
             const int8_t encoded = mapIdx < _color_map.size() ? _color_map[mapIdx] : int8_t(-1);
             painter->fillRect(QRectF(x, y, cs, cs), _palette.cellColor(encoded));
 
+            // Overlap hatching: diagonal stripes on bytes claimed by more
+            // than one object (matches the signal grid's overlap marker).
+            if (_model->isOverlap(segStart + byteOffset)) {
+                painter->save();
+                painter->setClipRect(QRectF(x, y, cs, cs));
+                painter->setPen(QPen(QColor(255, 60, 60, 180), 1));
+                for (int s = -cs; s < cs * 2; s += 6) {
+                    painter->drawLine(QPointF(x + s, y),
+                                      QPointF(x + s + cs, y + cs));
+                }
+                painter->restore();
+            }
+
+            // Byte-range selection overlay.
+            if (_sel_start >= 0 && static_cast<qint64>(byteOffset) >= _sel_start &&
+                static_cast<qint64>(byteOffset) <= _sel_end) {
+                painter->fillRect(QRectF(x, y, cs, cs), QColor(255, 255, 255, 70));
+            }
+
             // Persistent selection border.
             if (_selected_obj >= 0 && mapIdx < _object_map.size() &&
                 _object_map[mapIdx] == _selected_obj) {
@@ -178,8 +197,18 @@ QString MemoryGridItem::hoveredTooltip() const {
         ? QStringLiteral("~%1 bytes (approx)").arg(size)
         : QStringLiteral("%1 bytes").arg(size);
 
-    return QStringLiteral("%1\nType: %2  |  Address: %3  |  Size: %4")
+    QString tip = QStringLiteral("%1\nType: %2  |  Address: %3  |  Size: %4")
         .arg(name, type, addrHex, sizeStr);
+
+    const QString layout = _model->data(mi, MemoryMapModel::RecordLayoutRole).toString();
+    if (!layout.isEmpty()) {
+        tip += QStringLiteral("\nRecord Layout: %1").arg(layout);
+    }
+    const QString conversion = _model->data(mi, MemoryMapModel::ConversionRole).toString();
+    if (!conversion.isEmpty()) {
+        tip += QStringLiteral("\nConversion: %1").arg(conversion);
+    }
+    return tip;
 }
 
 qreal MemoryGridItem::mouseX() const { return _mouse_pos.x(); }
@@ -190,6 +219,27 @@ void MemoryGridItem::setSelectedObjectIndex(int index) {
     if (_selected_obj == index) return;
     _selected_obj = index;
     emit selectedObjectChanged();
+    update();
+}
+
+bool MemoryGridItem::hasSelection() const { return _sel_start >= 0; }
+
+quint64 MemoryGridItem::selectionStart() const {
+    return _sel_start >= 0 ? _model->viewStartAddress() + static_cast<quint64>(_sel_start) : 0;
+}
+
+quint64 MemoryGridItem::selectionEnd() const {
+    return _sel_end >= 0 ? _model->viewStartAddress() + static_cast<quint64>(_sel_end) : 0;
+}
+
+void MemoryGridItem::clearSelection() {
+    _sel_anchor = -1;
+    if (_sel_start < 0) {
+        return;
+    }
+    _sel_start = -1;
+    _sel_end = -1;
+    emit selectionRangeChanged();
     update();
 }
 
@@ -235,6 +285,9 @@ void MemoryGridItem::mousePressEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton) {
         return;
     }
+    clearSelection();
+    _sel_anchor = byteOffsetAtPixel(event->position().x(), event->position().y(), false);
+
     int idx = objectIndexAtPixel(event->position().x(), event->position().y());
     setSelectedObjectIndex(idx);
     if (idx >= 0) {
@@ -247,7 +300,30 @@ void MemoryGridItem::mousePressEvent(QMouseEvent* event) {
     event->accept();
 }
 
+void MemoryGridItem::mouseMoveEvent(QMouseEvent* event) {
+    if (_sel_anchor < 0) {
+        return;
+    }
+    const qint64 off = byteOffsetAtPixel(event->position().x(), event->position().y(), true);
+    // A drag starts once the pointer leaves the anchor byte; from then on the
+    // range tracks the pointer (down to a single byte again).
+    if (_sel_start < 0 && off == _sel_anchor) {
+        return;
+    }
+    const qint64 start = qMin(_sel_anchor, off);
+    const qint64 end = qMax(_sel_anchor, off);
+    if (start == _sel_start && end == _sel_end) {
+        return;
+    }
+    _sel_start = start;
+    _sel_end = end;
+    emit selectionRangeChanged();
+    update();
+    event->accept();
+}
+
 void MemoryGridItem::onModelUpdated() {
+    clearSelection();
     rebuildColorMap();
     updateContentHeight();
     update();
@@ -313,7 +389,15 @@ void MemoryGridItem::updateContentHeight() {
 }
 
 int MemoryGridItem::objectIndexAtPixel(qreal px, qreal py) const {
-    if (!_model || _model->segmentCount() == 0 || _object_map.empty()) {
+    const qint64 off = byteOffsetAtPixel(px, py, false);
+    if (off < 0 || static_cast<size_t>(off) >= _object_map.size()) {
+        return -1;
+    }
+    return _object_map[static_cast<size_t>(off)];
+}
+
+qint64 MemoryGridItem::byteOffsetAtPixel(qreal px, qreal py, bool clamp) const {
+    if (!_model || _model->segmentCount() == 0) {
         return -1;
     }
 
@@ -323,26 +407,22 @@ int MemoryGridItem::objectIndexAtPixel(qreal px, qreal py) const {
     const int cg = _cell_gap;
     const int gw = _gutter_width;
 
-    if (px < gw) {
+    int col = static_cast<int>((px - gw) / (cs + cg));
+    int row = static_cast<int>((py + _scroll_y) / rh);
+
+    if (clamp) {
+        col = qBound(0, col, bpr - 1);
+        row = qBound(0, row, _model->totalRows() - 1);
+    } else if (px < gw || col < 0 || col >= bpr || row < 0 || row >= _model->totalRows()) {
         return -1;
     }
 
-    const int col = static_cast<int>((px - gw) / (cs + cg));
-    if (col < 0 || col >= bpr) {
-        return -1;
+    const uint64_t byteOffset =
+        static_cast<uint64_t>(row) * static_cast<uint64_t>(bpr) + static_cast<uint64_t>(col);
+    const uint64_t segSize = _model->viewEndAddress() - _model->viewStartAddress();
+
+    if (byteOffset >= segSize) {
+        return clamp ? static_cast<qint64>(segSize) - 1 : -1;
     }
-
-    const int row = static_cast<int>((py + _scroll_y) / rh);
-    if (row < 0 || row >= _model->totalRows()) {
-        return -1;
-    }
-
-    const auto byteOffset = static_cast<size_t>(
-        static_cast<uint64_t>(row) * static_cast<uint64_t>(bpr) + static_cast<uint64_t>(col));
-
-    if (byteOffset >= _object_map.size()) {
-        return -1;
-    }
-
-    return _object_map[byteOffset];
+    return static_cast<qint64>(byteOffset);
 }
