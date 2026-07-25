@@ -3,8 +3,26 @@
 #include <QAbstractListModel>
 #include <QString>
 
+#include <algorithm>
 #include <cstdint>
 #include <vector>
+
+// The in-segment byte span [first, last) an object claims, as offsets from the
+// segment start clamped to the per-byte map bounds. A straddler starting below
+// the segment clips its head to the segment start (offset 0); the tail clips to
+// mapSize. Callers pass only objects that pass the segment filter (end reaches
+// past segStart) and have a known footprint, so address + size > segStart holds.
+struct ClampedByteSpan {
+    uint64_t first;
+    uint64_t last;
+};
+
+inline ClampedByteSpan clampedByteSpan(uint64_t address, uint64_t size,
+                                       uint64_t segStart, uint64_t mapSize) {
+    const uint64_t first = address > segStart ? address - segStart : 0;
+    const uint64_t last = std::min(address + size - segStart, mapSize);
+    return {first, last};
+}
 
 // One addressable object placed on the memory grid.
 struct MemoryObject {

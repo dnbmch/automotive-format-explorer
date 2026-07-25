@@ -2,9 +2,10 @@
 //
 // Pins the behaviour the memory grid and MemoryView.qml depend on: byte-level
 // object lookup (objectAtAddress), range queries feeding the byte-range
-// selection readout (objectsInRange), byte-level overlap detection feeding the
-// grid's overlap hatching (isOverlap), and the record-layout / conversion roles
-// feeding the hover tooltip.
+// selection readout (objectsInRange), the segment-clip rule shared by the
+// overlap map and the grid's color map (clampedByteSpan), byte-level overlap
+// detection feeding the grid's overlap hatching (isOverlap), and the
+// record-layout / conversion roles feeding the hover tooltip.
 
 #include "models/memorymapmodel.h"
 
@@ -37,6 +38,7 @@ private slots:
     void objectAtAddressCoversEarlierStartingObject();
     void objectAtAddressScansPastNonCoveringCandidate();
     void objectsInRange();
+    void clampedByteSpanClipsToSegment();
     void overlapBytesFlagged();
     void straddlerClaimsInSegmentBytes();
     void separateBlocksAreNotOverlap();
@@ -93,6 +95,26 @@ void TestMemoryMapModel::objectsInRange() {
     QCOMPARE(_model->objectsInRange(0x100F, 0x1010), QVariantList({0, 1}));
     QCOMPARE(_model->objectsInRange(0x1010, 0x1020), QVariantList{}); // gap only
     QCOMPARE(_model->objectsInRange(0x1020, 0x1010), QVariantList{}); // inverted
+}
+
+void TestMemoryMapModel::clampedByteSpanClipsToSegment() {
+    // The clip rule shared by the model's overlap map and the grid's color map.
+    // An interior object maps to its full span.
+    auto s = clampedByteSpan(0x2010, 8, 0x2000, 0x1000);
+    QCOMPARE(s.first, uint64_t(0x10));
+    QCOMPARE(s.last, uint64_t(0x18));
+
+    // A straddler starting below the segment clips its head to offset 0 — it is
+    // painted, not skipped. The unguarded expression (address - segStart) would
+    // underflow to a huge offset and drop the object; this is the grid paint fix.
+    s = clampedByteSpan(0x1FF8, 16, 0x2000, 0x1000);
+    QCOMPARE(s.first, uint64_t(0));
+    QCOMPARE(s.last, uint64_t(8));
+
+    // A tail past the map cap clips to mapSize.
+    s = clampedByteSpan(0x2FF0, 0x40, 0x2000, 0x1000);
+    QCOMPARE(s.first, uint64_t(0xFF0));
+    QCOMPARE(s.last, uint64_t(0x1000));
 }
 
 void TestMemoryMapModel::overlapBytesFlagged() {

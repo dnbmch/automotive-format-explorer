@@ -323,10 +323,8 @@ void MemoryMapModel::rebuildFilteredObjects() {
             if (obj->size == 0) {
                 continue; // unknown footprint, not painted — no overlap claim
             }
-            const uint64_t startOff = obj->address > segStart ? obj->address - segStart : 0;
-            const uint64_t endOff = qMin(obj->address + obj->size - segStart,
-                                         static_cast<uint64_t>(mapSize));
-            for (uint64_t b = startOff; b < endOff; ++b) {
+            const auto span = clampedByteSpan(obj->address, obj->size, segStart, mapSize);
+            for (uint64_t b = span.first; b < span.last; ++b) {
                 const auto i = static_cast<size_t>(b);
                 if (claimed[i]) {
                     _overlap_map[i] = true;

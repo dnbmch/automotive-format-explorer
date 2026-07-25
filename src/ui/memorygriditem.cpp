@@ -377,10 +377,8 @@ void MemoryGridItem::rebuildColorMap() {
         // The model's segment filter includes objects straddling the segment
         // start (end reaches into the segment); paint them clipped, matching
         // the overlap map.
-        const auto startOff = addr > segStart ? static_cast<size_t>(addr - segStart) : size_t(0);
-        const auto endOff = static_cast<size_t>(qMin<uint64_t>(addr + size - segStart, mapSize));
-
-        for (size_t b = startOff; b < endOff; ++b) {
+        const auto span = clampedByteSpan(addr, size, segStart, mapSize);
+        for (size_t b = static_cast<size_t>(span.first); b < static_cast<size_t>(span.last); ++b) {
             _color_map[b] = encoded;
             _object_map[b] = static_cast<int32_t>(i);
         }
