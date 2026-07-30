@@ -22,17 +22,18 @@ set(A2L_PARSER_VERSION "v0.4.0" CACHE STRING "a2l-parser-lib release tag")
 set(DBC_PARSER_VERSION "v0.4.0" CACHE STRING "dbc-parser-lib release tag")
 set(LDF_PARSER_VERSION "v0.5.0" CACHE STRING "ldf-parser-lib release tag")
 
-# Optional integrity pins for the fetched -lib release assets. Empty = no check
-# (current behaviour). Fill after the re-cut release publishes, e.g.:
+# Integrity pins for the fetched -lib release assets, from the published tarballs:
 #   gh release download <tag> --repo dnbmch/a2l-parser-lib \
 #     --pattern 'a2lparser-headers-<tag>.tar.gz' && sha256sum a2lparser-headers-<tag>.tar.gz
-# The headers archive hash is platform-independent; the binary archive hash is
-# per-platform, so only pin BINARY_SHA256 for the platform you build on.
-set(A2L_HEADERS_SHA256 "" CACHE STRING "sha256 of a2lparser-headers-<tag>.tar.gz")
+# The headers archive hash is platform-independent and pinned to the tags above;
+# refill whenever the version pins move. The binary archive hash is per-platform,
+# so BINARY_SHA256 stays empty (no check) unless you pin it at configure time for
+# the platform you build on.
+set(A2L_HEADERS_SHA256 "d4b1950a00d40cfef7135bf556e1fec59f0dc5eff6a5a04420f25caeb78a1f36" CACHE STRING "sha256 of a2lparser-headers-<tag>.tar.gz")
 set(A2L_BINARY_SHA256  "" CACHE STRING "sha256 of the a2lparser binary archive for this platform")
-set(DBC_HEADERS_SHA256 "" CACHE STRING "sha256 of dbcparser-headers-<tag>.tar.gz")
+set(DBC_HEADERS_SHA256 "0db8b48014358aa3f77adff2c8b2708a70d3f15948598f9f65c485ed1c30537d" CACHE STRING "sha256 of dbcparser-headers-<tag>.tar.gz")
 set(DBC_BINARY_SHA256  "" CACHE STRING "sha256 of the dbcparser binary archive for this platform")
-set(LDF_HEADERS_SHA256 "" CACHE STRING "sha256 of ldfparser-headers-<tag>.tar.gz")
+set(LDF_HEADERS_SHA256 "c6e0cfce2d98954003f315bab0ff0b5df9b77df5a1dedcf78f4bcba96d7bb1d1" CACHE STRING "sha256 of ldfparser-headers-<tag>.tar.gz")
 set(LDF_BINARY_SHA256  "" CACHE STRING "sha256 of the ldfparser binary archive for this platform")
 
 fetch_parser_lib(
