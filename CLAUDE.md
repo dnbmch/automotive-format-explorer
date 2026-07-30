@@ -5,117 +5,90 @@ Qt/QML desktop app for inspecting A2L, DBC, and LDF automotive files. GPL-3.0. P
 <!-- block: Guidelines Standard [id:1d67c7] -->
 ## Guidelines
 
-- Keep MD files up to date after significant changes
-- Commit changes to git with sensible messages
-- Max 1256 LOC per file — no monolithic mega files
-- Do not assume, do not decide for me about features — if unsure, ask
-- **When asking the user to choose between options, always mark at least one as (Recommended) with a one-sentence reason.** The user is free to pick another — recommendation is signal, not a vote. Render choices in prose, not selection popups — house format in the Iterative Decision Workflow
-- Less is more. KISS, DRY, readable, maintainable. Do not over-abstract
-- Do not write bloated code
-- Do not over-pollute CLAUDE.md — orientation + guidelines only
-- **After context compaction:** do not act on assumptions from the summary. Read the summary, then ask the user what to do next
-- **Docs state facts, not history.** No "decided on (date)", "was X, now Y", "for now". State what *is*. Git tracks what *was*
-- **No pointer/stub files.** Don't leave "moved to ..." placeholders. Move real content, update references
+- Keep MD files current after significant changes. Max 1256 LOC per file. This file stays orientation + guidelines — detail belongs in `docs/`
+- Features and scope are the user's call — if unsure, ask. **But decide the obvious:** infer from the code, docs, and repo conventions; escalate only real design forks
+- **"Check / analyze / discuss / what can we improve" = findings only.** Propose, don't edit, until told to go
+- **Docs state facts, not history.** No "decided on (date)", "was X, now Y", "for now" — git tracks what was
+- No pointer/stub files — move real content, update references
 <!-- /block:1d67c7 -->
 
 <!-- block: Engineering Philosophy [id:eb1d7e] -->
 ## Engineering philosophy
 
-We are embedded developers. We write sound architectures with compact, non-bloated code.
+Embedded developers' mindset: sound architecture, compact code, less is more.
 
-- **No patches, no hipshot fixes.** When a bug or defect surfaces, zoom out. Understand the big picture — what invariant broke, where the design assumed something it shouldn't, what else is touched. Then architect the canonical fix at the right layer. A symptom-level patch that leaves the underlying confusion in place is worse than no fix
-- **Code-grounded reviews, no hipshot verdicts.** For audits, code reviews, and any claim about how the code behaves: cite `path:line` evidence. If you can't cite it, you haven't verified it. Especially when the user pushes back — re-read the actual source, don't restate your guess
-- Trust internal invariants. Validate at system boundaries (user input, external APIs, parsed files) — not between your own functions
-- No paranoid defensive code. Don't add `if (ptr != nullptr)` chains, fallback branches, or try/catch for cases that practically cannot happen
-- No "just in case" error handling, no silent fallbacks that mask real bugs
-- Prefer few well-named functions over deep wrappers and re-export layers
-- Three lines of clear repetition beat a premature abstraction
-- Half-finished implementations are worse than nothing — finish, or don't start
-- No diagnostic / warning infrastructure unless asked. If extraction can't map a value, fix the extractor — don't propose stderr loggers, `parse_warnings` fields, or severity enums as a first response
-- **Simplicity self-check before declaring done.** If you wrote 200 lines and it could be 50, rewrite it. Ask: *would a senior engineer call this overcomplicated?* If yes, simplify
-
+- **Fix causes, not symptoms.** When a defect surfaces, find the broken invariant and fix it at the right layer — a symptom patch that leaves the confusion in place is worse than none
+- **No claim without `path:line`.** Statements about code behavior need a citation; on pushback, re-read the source, don't restate the guess
+- Validate at system boundaries only (user input, external APIs, parsed files). No paranoid guards, "just in case" handling, or silent fallbacks between our own functions
+- Three lines of clear repetition beat a premature abstraction; few well-named functions over wrapper and re-export layers
+- Finish or don't start — half-done is worse than nothing. **No knowingly-bad shipped states:** fix at the right layer or park it in the backlog; never accept known-bad as the answer
+- No diagnostic/warning infrastructure unless asked — fix the parser, don't reach for stderr loggers or severity enums
 <!-- /block:eb1d7e -->
 
 <!-- block: Documentation Layout [id:dc01a7] -->
 ## Documentation
 
-> **Names below are symbolic, not literal.** The directory and filename conventions in this section are illustrative — the live `docs/` tree is canonical. `ref/`≈`reference/`, `manual/`≈`user/`, root vs `docs/roadmap/` placement, and `snake_case`≈`kebab-case` are interchangeable. Match whatever already exists rather than renaming to satisfy the rule.
+> Names are symbolic — the live `docs/` tree wins (`ref/`≈`reference/`, `manual/`≈`user/`, `snake_case`≈`kebab-case`). Match what exists; never rename to satisfy this section.
 
-Root files:
-- `README.md` — what the project is, how to run it
-- `roadmap.md` — the only active execution plan
-- `project_status.md` — current state of play: what's built, what's in flight, what's deferred
-
-Under `docs/`:
-- `docs/arch/` (or `docs/architecture/`) — normative facts about the running system. Name files for what they describe, not for phases or tasks
-- `docs/ref/` — stable cross-cutting references (coordinate systems, glossaries, file formats)
-- `docs/manual/` — user-facing operational documentation (how to use the app, workflows, screenshots)
-- `docs/plans/` — in-progress design docs and proposals
-- `docs/backlog.md` — FIXMEs and future work
-- `docs/handoff.md` — optional per-session operational log. Keep only the last 2–3 entries; prune older ones when wrapping a session (anything durable should already be lifted into `arch/`/`ref/` — git keeps the rest)
-- `docs/archive/` — completed plans and historical material. Never active guidance, never referenced from live docs
-
-Plan lifecycle — **never delete a plan, never archive it raw**:
-1. Draft the plan in `docs/plans/<name>.md`
-2. Execute it
-3. **Before archiving, harvest everything durable**: agreed approaches, strategies, invariants, formats, conventions, rationale, lessons. Lift them into `docs/arch/` or `docs/ref/` so the knowledge survives the plan
-4. Move the plan file to `docs/archive/`
-5. Grep for active references to the old path and remove them
-
-Rules:
-- Doc filenames are `snake_case.md`. Conventional capitalized files keep their casing: `README.md`, `LICENSE.md`, `CHANGELOG.md`, `CLAUDE.md`
-- Locked decisions become facts in `arch/` or `ref/`, not standalone ADRs
-- Code changes that touch public surface (APIs, file formats, paths, proto fields) update the matching arch doc in the same commit
-- Update `project_status.md` after significant changes
-- No active references to anything in `archive/`
+- Root: `README.md` (what it is, how to run) · `roadmap.md` (the only active plan) · `project_status.md` (built / in flight / deferred)
+- `docs/arch/` normative system facts · `docs/ref/` stable references · `docs/manual/` user-facing docs · `docs/plans/` in-progress designs · `docs/backlog.md` FIXMEs · `docs/handoff.md` last 2–3 session entries, pruned on wrap · `docs/archive/` completed material, never referenced from live docs
+- Plan lifecycle: draft in `docs/plans/<name>.md` → execute → **harvest durables into `arch/`/`ref/` as soon as work lands** (never gate on tests) → move plan to `archive/` → grep out stale references. Never delete a plan, never archive it raw
+- **Never pin volatile facts in prose** — line counts, LOC, test totals, source line-ranges rot on the next edit. State what a file or section *is* and *does*, not the number
+- Locked decisions become facts in `arch/`/`ref/`, not standalone ADRs. Code changes touching public surface update the matching arch doc in the same commit. Doc filenames `snake_case.md` (conventional caps keep theirs)
 <!-- /block:dc01a7 -->
 
 <!-- block: Memory Discipline [id:a7b3d1] -->
 ## Memory discipline
 
-Durable knowledge goes in version-controlled project docs, not in an opaque memory store that rots unseen.
-
-- **Avoid creating `.claude/projects/*/memory/*.md` files.** When a project doc can hold the fact, write it there instead — `docs/arch/`, `docs/ref/`, `project_status.md`, or this file's `## Project notes`. Overrides default memory behavior
-- **`MEMORY.md` stays a thin index** — one-line pointers to docs, never restated content
-- **`/flush-memory`** evacuates memory files that accumulate and re-slims `MEMORY.md`
+- Durable knowledge lives in version-controlled project docs, not an opaque memory store. **Avoid creating memory files** — write to `docs/arch|ref/`, `project_status.md`, or `## Project notes` instead (overrides default memory behavior)
+- `MEMORY.md` stays a thin index of one-line pointers; `/flush-memory` evacuates buildup
 <!-- /block:a7b3d1 -->
 
-<!-- block: Don't Run Without Asking [id:7a710c] -->
+<!-- block: Execution Rules [id:7a710c] -->
 ## Execution rules
 
-- Do not start dev servers (`npm run dev`, `python -m service.main`, etc.) without asking
-- Do not run builds (`cmake --build`, `npm run build`, `cargo build`, ESP-IDF, Keil) without asking — the user builds manually in their IDE
-- Do not deploy, push tags, or trigger CI/release workflows without explicit instruction
-- Read-only checks are fine: `git status`, `git diff`, `git log`, syntax checks (`python -m py_compile`), tests when the user has asked for verification
-- If unsure whether a command is read-only, ask first
-- **Deliver code, not process.** No unrequested verification ceremony — risk gates, probe harnesses, screenshot rigs, staged checklists, sign-off theater. Write the feature, commit it, state plainly what is untested. Verification runs when the user asks for it, on the user's terms
+**Run what the work needs** — build, test, launch, drive the app. The bounds below limit waste, not permission.
+
+- Probe a toolchain once (`--version` / `which`) before leaning on it; if absent, say so and stop — don't grind tokens at a tool that doesn't exist
+- Kill what you start — no servers, watchers, or containers left running after you report done
+- Headless-browser drives (`/looky`) burn tokens fast — only when a visual change genuinely needs seeing
+- Tests/migrations/seeds that hit a live service or shared DB: ask first. Host tests, type/syntax checks, `git status/diff/log`: always fine
+- Never deploy, push tags, or trigger CI/release without explicit instruction
 <!-- /block:7a710c -->
 
+<!-- block: Verification & Test Debt [id:7e5701] -->
+## Verification & test debt
+
+User time is scarce and expensive; machine time is not. **Deliver code, not process** — no unrequested verification ceremony, probe harnesses, staged checklists, or sign-off theater. Honor a standing proof contract in `## Project notes`; invent no other gate.
+
+- **Never block on the user, never nag for a manual check.** Finish the batch, commit, take the next. Untested ≠ unfinished: nothing known broken + a clean `UNVERIFIED:` line = done and committable
+- Accumulate host-runnable tests. Log user-only checks as `UNVERIFIED:` lines in `docs/handoff.md` (what to check, how to tell pass from fail), grouped by shared setup, cleared on a reported result
+<!-- /block:7e5701 -->
+
+<!-- block: Agents & Delegation [id:a6e11d] -->
+## Agents & delegation
+
+- **Default lean: one agent.** Fan-outs and multi-agent review are for work explicitly scoped as an audit or genuinely parallel — if unsure which, ask
+- **Tier the model to the work:** mechanical sweeps → cheap subagents (Haiku/Sonnet); fully-specced implementation → lower Opus tier; planning, orchestration, and final review → top tier only (Opus max / Fable high+)
+- Brief subagents to finish — enough context and latitude to decide the obvious. Subagents return results, not narration; the orchestrator owns synthesis and the verdict
+<!-- /block:a6e11d -->
+
 <!-- block: Iterative Decision Workflow [id:1de4f0] -->
-## Iterative Decision Workflow
+## Iterative decision workflow
 
-For non-trivial work (refactors, new features, architecture changes), follow this loop:
+Non-trivial work (refactors, features, architecture) runs: **audit → batch findings → recommend → approve → plan-audit → lock plan in `docs/plans/<name>.md` → implement in one shot**, then grep-sweep for stale refs and broken paths before reporting done.
 
-1. **Spec / Audit** — read the spec or audit the codebase: relevant files, grep for impacts, map what exists. Surface concrete evidence (current state, problems, stale refs, dead code). No proposals yet
-2. **Batch** — group findings into coherent batches by intent or area. Don't dump a flat list of 40 items
-3. **Recommend** — for each item, propose a solution **with an exact diff or pseudo-code**, not just prose. The user must see what the change looks like before approving
-4. **Approval** — wait for explicit go/no-go per item or per batch. Short answers are fine ("go with B", "skip 3 and 7", "A but defer the rename")
-5. **Plan audit** — once the approved set is known, re-check it as a whole: gaps, contradictions, ordering, missed dependencies, broken references
-6. **Plan finalization** — write the locked plan into `docs/plans/<name>.md` the user can review and reference during execution
-7. **Implementation** — execute the locked plan in one shot with a todo checklist. Fix small problems and keep going. After execution: grep sweep for stale references, broken paths, inconsistencies — fix before reporting done
+- Audit first, concrete evidence only — no proposals until the code is mapped
+- Recommend with an exact diff or pseudo-code per item; the user approves per item or batch (`go with B`, `skip 3 and 7`, `A but defer the rename`)
+- **You research, the user decides** — never propose without evidence, never pick on their behalf
+- Define success criteria up front, machine-checkable where possible ("fix the bug" → "failing test that reproduces it, then make it pass")
+- Moves/renames update ALL references in the same session — grep, don't rely on memory. Parallelize independent work
 
-Rules:
-- Research is my job, decisions are yours. Never propose without evidence, never pick for you
-- Parallelize independent work
-- When moving or renaming anything, update ALL references in the same session — imports, docs, configs, launch files, codegen. Grep, don't rely on memory
-- **Define success criteria up front, with a verify check per step.** "Make it work" is too weak to loop on — turn each step into a checkable outcome ("add validation" → "write tests for invalid inputs, then make them pass"; "fix the bug" → "write a failing test that reproduces it, then make it pass"). Strong criteria let you iterate without constant clarification
-
-**Presenting choices — house format.** When a step needs a decision, render it as prose, not a selection popup: numbered questions, **each option on its own line** (never crammed onto one line — that's unreadable), **always** one marked `Rec:` with a one-sentence reason. The user replies compactly and can mix answers (`1a, 2b, 3 do X instead`):
+**Presenting choices:** numbered questions, each option on its own line, one always marked `Rec:` with a one-sentence reason — signal, not a vote. Never a selection popup; the user mixes compact answers (`1a, 2b, 3 do X instead`):
 
 > **1. \<question>?**
 > - a) \<option>
 > - b) \<option>
-> - c) \<option>
 >
 > ↳ **Rec: b** — \<one-sentence reason>
 <!-- /block:1de4f0 -->
@@ -123,35 +96,23 @@ Rules:
 <!-- block: Commits & Co-Authoring [id:c0a002] -->
 ## Commits
 
-- **No `Co-Authored-By` lines.** The user is responsible for what gets pushed; authorship is theirs
-- **Commit when a batch wraps** with a sensible scoped message. Don't wait to be asked
-- **Never push automatically.** Push is always user-driven
-- **Use `[skip ci]`** in commit messages for doc-only or trivial batches — GitHub Actions minutes cost money
-- Commit in coherent batches by intent — one deliverable, one commit
-- Keep messages concise and scoped by area (e.g. `kernel`, `viewer`, `docs`)
-- **No audit-item indexes, no plan-phase numbers in code or commit messages.** No `// Batch C.2`, no `feat: Phase 3.1 — ...`. Name the change for what it *does*, not which doc tracked it. The indexing scheme is administrative noise that rots the moment the plan is archived
-- Never `--no-verify`, never `--amend` published commits, never force-push without explicit instruction
-- Do not use git to roll back changes — if you are unsure it will work, the user can do that manually
+- Commit when a batch wraps — coherent batches by intent, one deliverable one commit, concise messages scoped by area. **No `Co-Authored-By` lines** — authorship is the user's
+- **Never push automatically.** Never `--no-verify`, never `--amend` published commits, never force-push unasked
+- `[skip ci]` on doc-only or trivial batches — CI minutes cost money
+- No plan-phase numbers or audit indexes in code or commit messages — name the change for what it does
 <!-- /block:c0a002 -->
 
 <!-- block: Greenfield — No Backwards-Compat [id:9e7f1d] -->
 ## Greenfield discipline
 
-This project has no external consumers yet. Act accordingly:
-
-- The proto / API / file-format contract is ours to change. Add, rename, restructure freely when it makes the model cleaner
-- Do not invent fictional users to protect
-- Do not add deprecation shims, compatibility flags, or "for backward compat" fields
-- Do not version messages defensively
-- If a change makes the contract better, just make it — and update every callsite in the same commit
-- **There are no existing installs.** No migration notes, no reseed/upgrade instructions, no "users of the old format" landmines in docs or handoffs. When real users exist, the user will say so — until then compat thinking is banned unless explicitly requested
+No external consumers, or owned end-to-end by us: the contract (proto / API / file format) is ours to change. If a change makes it better, make it — and update every callsite in the same commit. No deprecation shims, compat flags, defensive versioning, migration notes, or fictional users to protect. When real users exist, the user will say so; until then compat thinking is banned unless requested.
 <!-- /block:9e7f1d -->
 
 <!-- block: File-Path Link Convention [id:f11e7a] -->
 ## Referencing code & IDs
 
-- **Code → `path:line`.** When referencing code in chat or docs, use `path:line` so the user can click through. Example: `src/MapPoint.h:42`.
-- **IDs are never bare.** Whenever you name a ticket / task / backlog / issue ID (`RB-94`, JIRA keys, item numbers) — in chat or in a handoff/status summary — gloss it inline on **every** mention: `RB-94 (proximity-sensor calibration drift)`. The user must never open a doc to decode an ID, nor remember a code from earlier in the conversation. Bare strings like "Close RB-94 + RB-88 via the proof sign-off" are banned.
+- Code → `path:line` (clickable), e.g. `src/MapPoint.h:42`
+- IDs are never bare — gloss every mention inline: `RB-94 (proximity-sensor calibration drift)`. The user never opens a doc or scrolls back to decode an ID
 <!-- /block:f11e7a -->
 
 ## Project notes
