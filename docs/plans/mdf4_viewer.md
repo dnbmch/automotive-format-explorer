@@ -36,12 +36,14 @@ viewer-side plan of record.
 
 ## v1 reader scope (writer-output subset)
 
-ID/HD/FH/DG/CG/CN/CC/TX/MD/SI blocks; row (DT) **and column (LD/DV)** storage layouts;
-virtual equidistant time master (`cn_type` 3); little-endian numeric channels
-(uint/sint/float 8/16/32/64); the writer's conversion set (identity/linear). The column
-layout is in scope because the writer emits it and the current external gate is weak
-exactly there — asammdf 8.8.18 has a documented LDBLOCK reader bug
-(`../mdf4-writer/docs/backlog.md`).
+ID/HD/FH/DG/CG/CN/CC/TX/MD/SI blocks; row (DT) **and column (LD/DV, including
+`##DZ`-compressed fragments)** storage layouts; virtual equidistant time master
+(`cn_type` 3); little-endian numeric channels (uint/sint/float 8/16/32/64); the
+writer's full conversion set — identity, linear, rational, value-to-value tables with
+and without interpolation, and value-to-text (decoded as raw numerics with the labels
+in the metadata document). Column and DZ are in scope because the writer emits them
+and the current external gate is weak exactly there — asammdf 8.8.18 has a documented
+LDBLOCK reader bug (`../mdf4-writer/docs/backlog.md`).
 
 ## Interface split
 
@@ -61,14 +63,19 @@ The `-lib` surface is a hybrid — protobuf for the document, plain C++ for bulk
 // lib/include/mdf4/extract.h        namespace mdf4::extract
 mdf4::File extractFile(const std::string& path);          // block graph walk, no sample read
 Series decodeChannel(const std::string& path,
-                     uint32_t group, uint32_t channel);    // samples + time master, physical
+                     uint32_t group, uint32_t channel,     // samples + time master, physical
+                     uint64_t firstSample = 0,
+                     uint64_t sampleCount = UINT64_MAX);   // sample window, clamped
 // lib/include/mdf4/series.h
 struct Series { std::vector<double> time; std::vector<double> value; };
 ```
 
 Both calls are stateless (re-open by path) — no long-lived file handle, trivially usable
 from worker threads. `extractFile` reads block headers only; sample count comes from CG
-cycle counts, so open cost is proportional to structure, not file size.
+cycle counts, so open cost is proportional to structure, not file size. Decode streams
+through a bounded buffer, so file size never bounds RAM; the decoded `Series`
+(16 bytes/sample) is the only output-size cost, and the sample window caps it for
+huge channels.
 
 ## mdf4-parser repo
 
@@ -207,9 +214,9 @@ struct PlotSeries { QString name; QString unit; std::vector<double> time, value;
 ## Deferred increments (additive; spend when a showcase moment exists)
 
 Reader breadth, roughly in demo-value order: stored-time masters (`cn_type` 2) — the
-single biggest unlock for foreign files; DZ decompression (Vector tools compress by
-default); big-endian + arbitrary bit-aligned channels; rational / value-to-value
-conversions; DL row-storage lists (enters lockstep scope anyway when the writer's M6
+single biggest unlock for foreign files; big-endian + arbitrary bit-aligned channels;
+remaining conversion families (algebraic `cc_type` 3, value-range 6/8, text-keyed
+9–11); DL row-storage lists (enters lockstep scope anyway when the writer's M6
 lands); invalidation bits; unsorted files; VLSD/MLSD string channels; channel arrays;
 bus-logging composition.
 
