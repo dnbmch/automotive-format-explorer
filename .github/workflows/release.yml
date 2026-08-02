@@ -46,6 +46,9 @@ jobs:
       - name: Build
         run: cmake --build build
 
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
       - name: Package
         run: QT_PREFIX="$QT_ROOT_DIR" bash scripts/package_windows.sh build dist
 
@@ -88,6 +91,9 @@ jobs:
       - name: Build
         run: cmake --build build
 
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
       - name: Package AppDir
         run: |
           mkdir -p AppDir/usr/bin AppDir/usr/share/icons/hicolor/256x256/apps \
@@ -129,6 +135,9 @@ jobs:
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage
           mv Automotive_Format_Explorer-*.AppImage \
             automotive-format-explorer-${GITHUB_REF_NAME}-linux-x86_64.AppImage
+
+      - name: Smoke test
+        run: bash scripts/smoke_linux.sh .
 
       - uses: actions/upload-artifact@v4
         with:

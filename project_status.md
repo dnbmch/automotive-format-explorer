@@ -34,26 +34,26 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - CI (Windows MinGW + Ubuntu, also on `release/**`) + `release.yml` (Windows zip
   + Linux AppImage). Windows CI and release build against the same standalone Qt
   as local development.
-- Windows packaging by dependency closure (`scripts/package_windows.sh`) plus a
-  headless launch gate (`scripts/smoke_windows.sh`); the release publishes only
-  after every platform builds, packages, and launches. See
+- Windows packaging by dependency closure (`scripts/package_windows.sh`) plus headless
+  Windows and Linux AppImage launch gates (`scripts/smoke_windows.sh`,
+  `scripts/smoke_linux.sh`). Release jobs run ctest before packaging and publish only
+  after both platforms pass. The Linux gate is locally syntax-checked and awaits its
+  first runner proof. See
   [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md).
 
 ## In flight
 
-`v0.2.1` is the live release: A2L, DBC, and LDF, cut from `release/v0.2.1`
-(v0.2.0 plus the packaging repair, MDF4 excluded). It is verified to launch
-self-contained with no unresolved imports.
+`v0.2.1` is the live release: A2L, DBC, and LDF (v0.2.0 plus the packaging
+repair, MDF4 excluded). Its tag preserves the shipped commit and the temporary
+release branch is retired. The real Windows download launches self-contained with
+no unresolved imports, and its packaged backends open the bundled A2L, DBC, and LDF.
 
-MDF4 ships in no release and cannot build anywhere but a workstation: the
-backend is built and audited, but `dnbmch/mdf4-parser` and `dnbmch/mdf4-parser-lib`
-do not exist, so the pinned artifact fetch fails and `master` CI is red at
-Configure. Creating those repos and cutting `mdf4-parser` v0.1.0 unblocks both
-CI and an MDF4-carrying release; the source repo stays private like its siblings,
-only the `-lib` artifacts repo is public.
-
-`release/v0.2.1` still exists and has no MDF4; whether it merges back or is
-retired once MDF4 is publishable is open.
+MDF4 ships in no explorer release. The private `dnbmch/mdf4-parser` and public
+artifact-only `dnbmch/mdf4-parser-lib` repositories now exist and their hardened
+`main` branches are pushed. Publication is blocked only on a fine-grained
+`LIB_RELEASE_TOKEN` for the source workflow; after v0.1.0 assets exist, explorer
+must pin their headers sha256 and run current `master` CI. No CI run corresponds
+to current `master` yet, and a fresh anonymous fetch remains blocked until then.
 
 The bundled screenshots (`docs/screenshot_*.png`) predate the per-tab filter and
 sample links; regenerate them when the next release is cut.

@@ -114,15 +114,14 @@ dialog opened before the flag is dropped.
 
 **Size:** S to change, M to verify honestly.
 
-### BL-K2: no launch gate on the Linux AppImage
+### BL-K2: prove the new Linux AppImage launch gate on a runner
 
-The Windows package is gated by `scripts/smoke_windows.sh`; the AppImage is only
-gated by its build succeeding. A `QT_QPA_PLATFORM=offscreen` run with
-`APPIMAGE_EXTRACT_AND_RUN=1` would close the gap, but it cannot be validated
-from this workstation, and a wrong gate blocks releases on the `publish` job.
-Add it when a Linux box is at hand to test against.
+`scripts/smoke_linux.sh` now runs the AppImage offscreen with
+`APPIMAGE_EXTRACT_AND_RUN=1`, and `release.yml` places it before artifact upload.
+The script is syntax-checked locally; close this item after its first successful
+Ubuntu release-workflow run.
 
-**Size:** XS to write, S to validate.
+**Size:** XS verification.
 
 ### BL-K3: `DeployMsys2Deps.cmake` still hand-lists DLLs
 

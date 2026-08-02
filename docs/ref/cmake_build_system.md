@@ -60,7 +60,7 @@ The C++ runtime must come from the toolchain that compiled the binaries. A stand
 Two places enforce this, and both must keep doing so:
 
 - [tests/CMakeLists.txt](../../tests/CMakeLists.txt) puts the compiler's own directory — derived from `CMAKE_CXX_COMPILER` — ahead of Qt's on the ctest `PATH`.
-- [scripts/package_windows.sh](../../scripts/package_windows.sh) passes `--no-compiler-runtime` to `windeployqt` and runs its closure walk afterwards, searching msys2 before Qt, so the msys2 runtime lands last and wins.
+- [scripts/package_windows.sh](../../scripts/package_windows.sh) passes `--no-compiler-runtime` to `windeployqt`; the later closure walk fills the deliberately absent compiler runtime from msys2 before considering Qt.
 
 Only binaries referencing a symbol absent from Qt's older runtime fail, so the fault appears in one target while its neighbours pass.
 
@@ -76,7 +76,7 @@ Release packaging is separate: [scripts/package_windows.sh](../../scripts/packag
 
 The packaging script names no dependency. It deploys Qt with `windeployqt --qmldir qml --no-compiler-runtime`, then walks the dependency closure — `objdump -p` over every binary in the output, breadth-first, resolving each import against what is already packaged, then the system directory, then msys2 and Qt. Unresolved imports fail the script. msys2 is searched ahead of Qt so the toolchain that compiled the binaries supplies the C++ runtime; Qt bundles an older MinGW runtime, and `--no-compiler-runtime` keeps it out of the way.
 
-Ordering is load-bearing: the closure walk runs after `windeployqt` precisely so the msys2 runtime overwrites Qt's.
+Ordering is load-bearing: `windeployqt --no-compiler-runtime` first leaves the runtime absent, then the closure walk resolves that absence from msys2. It does not rely on overwriting a Qt copy.
 
 ## Backend linking model — shared vs static
 
