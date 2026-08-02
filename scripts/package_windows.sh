@@ -18,7 +18,15 @@ cd "$(dirname "$0")/.."
 BUILD_DIR="${1:-build}"
 DIST="${2:-dist}"
 QT_PREFIX="${QT_PREFIX:-C:/Qt/6.10.1/mingw_64}"
-MINGW_BIN="${MINGW_BIN:-/c/msys64/mingw64/bin}"
+
+# The toolchain that compiled the binaries supplies the C++ runtime and the
+# protobuf/abseil DLLs, so locate it rather than hardcoding an install path —
+# msys2 does not live in the same place on a workstation and on a CI runner.
+# Inside an msys2 shell MINGW_PREFIX names it; otherwise follow g++ on PATH.
+if [ -z "${MINGW_BIN:-}" ]; then
+    MINGW_BIN="${MINGW_PREFIX:+$MINGW_PREFIX/bin}"
+    [ -n "$MINGW_BIN" ] || MINGW_BIN="$(dirname "$(command -v g++)")"
+fi
 
 command -v cygpath >/dev/null && QT_PREFIX="$(cygpath -u "$QT_PREFIX")"
 command -v cygpath >/dev/null && MINGW_BIN="$(cygpath -u "$MINGW_BIN")"
