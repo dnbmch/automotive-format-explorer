@@ -42,7 +42,7 @@ Browse every parsed entity in a structured tree with expand/collapse, keyboard s
 - **A2L**: Modules, Measurements, Characteristics, Axis Points, Compu Methods, Record Layouts, Units, Functions, Groups, Typedef Characteristics/Structures/Axes, Instances, Variant Coding, XCP and CCP protocol summaries
 - **DBC**: Messages, Signals, Nodes, Value Tables, Attribute Definitions, Environment Variables, Signal Groups
 - **LDF**: Frames, Signals, Nodes (Master/Slave), Schedule Tables, Signal Encoding Types, Signal Representations
-- **MDF4**: Channel Groups, Channels, Sources, Storage Layouts, Conversions, Masters, and unsupported-feature reasons
+- **MDF4**: Channel Groups and Channels, each channel showing its unit and whether it is plottable (sources, storage layouts, conversions, masters, and unsupported-feature reasons live in the detail panel)
 
 ### Detail Panel
 

@@ -40,9 +40,9 @@ zoom into dense bursts separated by large gaps.
 ## Interaction
 
 - Mouse wheel zooms the domain axis around the pointer.
-- Left-button drag pans the visible time window.
+- Left-button drag pans the visible domain window.
 - Hover snaps the cursor to the nearest sample and exposes its domain and value.
-- Reset Zoom restores the full domain range and recomputes the visible value
+- Reset view restores the full domain range and recomputes the visible value
   range.
 
 The value axis automatically follows the extrema of the visible domain range,

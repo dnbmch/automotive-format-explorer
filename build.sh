@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# automotive-format-explorer CMake build (Qt6 + protobuf, no tests).
+# automotive-format-explorer CMake build (Qt6 + protobuf). Builds the ctest
+# targets along with the app; run them with `ctest --test-dir build`.
 # Compiler + protobuf come from the msys2 mingw64 toolchain; Qt6 comes from a
 # standalone Qt install (msys2 does not ship qt6 here). Parser libraries are
 # fetched from GitHub releases at configure time, so the first configure needs
