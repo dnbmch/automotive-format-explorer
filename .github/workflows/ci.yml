@@ -24,19 +24,35 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-protobuf
-            mingw-w64-x86_64-qt6-base
-            mingw-w64-x86_64-qt6-declarative
 
       - uses: actions/checkout@v4
 
+      # Same Qt as the release job and local development.
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.1'
+          arch: 'win64_mingw'
+          modules: 'qtshadertools'
+          cache: true
+
       - name: Configure
-        run: cmake -B build -G Ninja
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(cygpath -m "$QT_ROOT_DIR")"
 
       - name: Build
         run: cmake --build build
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+      # Packaging runs on every push so a broken package surfaces here rather
+      # than after a tag is cut.
+      - name: Package
+        run: QT_PREFIX="$QT_ROOT_DIR" bash scripts/package_windows.sh build dist
+
+      - name: Smoke test
+        run: bash scripts/smoke_windows.sh dist
 
   linux:
     name: Linux x86_64
