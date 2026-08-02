@@ -46,7 +46,11 @@ This is a **local-build convenience only**. It copies the protobuf/abseil depend
 
 The deploy step uses `cmake -E copy_if_different` for each known dependency. To add a new dependency, append it to the list in `DeployMsys2Deps.cmake`. The deploy runs at build time as a `POST_BUILD` step on the `automotive-format-explorer` target.
 
-Release packaging is separate: [.github/workflows/release.yml](../../.github/workflows/release.yml) assembles the redistributable Windows zip and bundles the Qt6 DLLs, platform/style/imageformat/TLS plugins, and the imported QML modules itself. The local helper does not produce a distributable bundle.
+Release packaging is separate: [scripts/package_windows.sh](../../scripts/package_windows.sh) assembles the redistributable Windows bundle, and the local helper does not produce one.
+
+The packaging script names no dependency. It deploys Qt with `windeployqt --qmldir qml --no-compiler-runtime`, then walks the dependency closure — `objdump -p` over every binary in the output, breadth-first, resolving each import against what is already packaged, then the system directory, then msys2 and Qt. Unresolved imports fail the script. msys2 is searched ahead of Qt so the toolchain that compiled the binaries supplies the C++ runtime; Qt bundles an older MinGW runtime, and `--no-compiler-runtime` keeps it out of the way.
+
+Ordering is load-bearing: the closure walk runs after `windeployqt` precisely so the msys2 runtime overwrites Qt's.
 
 ## Backend linking model — shared vs static
 

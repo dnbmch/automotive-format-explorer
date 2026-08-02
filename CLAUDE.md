@@ -209,8 +209,9 @@ See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-works
 
 ### CI / Release
 
-- `ci.yml` runs on push to master: Windows MinGW + Ubuntu 24.04
-- `release.yml` triggers on `v*` tags: builds Windows zip + Linux AppImage, publishes to GitHub Releases
+- `ci.yml` runs on push to master: Windows MinGW + Ubuntu 24.04. The Windows job also packages and smoke-tests, so a broken package surfaces before a tag is cut
+- `release.yml` triggers on `v*` tags: builds the Windows zip + Linux AppImage, then a `publish` job gated on both creates the GitHub release. A platform failure means no release object exists
+- Windows CI and release build against the same standalone Qt as local development (`install-qt-action`); msys2 supplies gcc, ninja, cmake, and protobuf
 - Do NOT re-tag unless the workflow is verified. Each release build takes ~3 min
 
 ### Platform differences
@@ -218,6 +219,6 @@ See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-works
 | | Windows | Linux |
 |---|---------|-------|
 | Backends | SHARED (.dll), loaded via QLibrary | STATIC, linked into exe, registered at startup |
-| Qt deploy | Manual DLL copy from MSYS2 | AppImage via linuxdeploy |
+| Qt deploy | `windeployqt` + dependency-closure walk (`scripts/package_windows.sh`) | AppImage via linuxdeploy |
 | Protobuf JSON | `google/protobuf/util/json_util.h` (stable API, works on both v3 and v4+) | |
 | Define | — | `BACKENDS_STATIC` |

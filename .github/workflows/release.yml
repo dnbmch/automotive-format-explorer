@@ -25,93 +25,43 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-protobuf
-            mingw-w64-x86_64-qt6-base
-            mingw-w64-x86_64-qt6-declarative
             p7zip
 
       - uses: actions/checkout@v4
 
+      # Qt comes from the standalone install, matching local development.
+      # msys2 supplies gcc, ninja, cmake, and protobuf.
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.1'
+          arch: 'win64_mingw'
+          modules: 'qtshadertools'
+          cache: true
+
       - name: Configure
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(cygpath -m "$QT_ROOT_DIR")"
 
       - name: Build
         run: cmake --build build
 
       - name: Package
-        run: |
-          mkdir -p dist
-          PREFIX="${MINGW_PREFIX}"
+        run: QT_PREFIX="$QT_ROOT_DIR" bash scripts/package_windows.sh build dist
 
-          # Application binaries.
-          cp build/automotive-format-explorer.exe dist/
-          cp build/explorer-core.dll dist/
-          cp build/explorer-a2l-backend.dll dist/
-          cp build/explorer-dbc-backend.dll dist/
-          cp build/explorer-ldf-backend.dll dist/
-
-          # Bundled sample files.
-          cp -r samples dist/samples
-
-          # MinGW runtime DLLs.
-          for dll in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll zlib1.dll \
-                     libprotobuf.dll libutf8_validity.dll libutf8_range.dll \
-                     libdouble-conversion.dll libb2-1.dll libpcre2-16-0.dll \
-                     libharfbuzz-0.dll libpng16-16.dll libfreetype-6.dll \
-                     libbz2-1.dll libbrotlidec.dll libbrotlicommon.dll \
-                     libintl-8.dll libiconv-2.dll libglib-2.0-0.dll libgraphite2.dll \
-                     libmd4c.dll libicuin76.dll libicuuc76.dll libicudt76.dll; do
-            cp "${PREFIX}/bin/${dll}" dist/ 2>/dev/null || true
-          done
-          # Abseil DLLs (versioned).
-          cp ${PREFIX}/bin/libabsl_*.dll dist/ 2>/dev/null || true
-
-          # Qt6 core DLLs.
-          for dll in Qt6Core.dll Qt6Gui.dll Qt6Network.dll Qt6OpenGL.dll \
-                     Qt6Qml.dll Qt6QmlModels.dll Qt6QmlWorkerScript.dll \
-                     Qt6Quick.dll Qt6QuickControls2.dll Qt6QuickControls2Impl.dll \
-                     Qt6QuickDialogs2.dll Qt6QuickDialogs2QuickImpl.dll Qt6QuickDialogs2Utils.dll \
-                     Qt6QuickLayouts.dll Qt6QuickTemplates2.dll \
-                     Qt6Concurrent.dll Qt6Widgets.dll; do
-            cp "${PREFIX}/bin/${dll}" dist/ 2>/dev/null || true
-          done
-
-          # Qt6 platform plugins.
-          mkdir -p dist/platforms
-          cp "${PREFIX}/share/qt6/plugins/platforms/qwindows.dll" dist/platforms/
-
-          # Qt6 style plugins.
-          mkdir -p dist/styles
-          cp "${PREFIX}/share/qt6/plugins/styles/"*.dll dist/styles/ 2>/dev/null || true
-
-          # Qt6 image format plugins.
-          mkdir -p dist/imageformats
-          cp "${PREFIX}/share/qt6/plugins/imageformats/"*.dll dist/imageformats/ 2>/dev/null || true
-
-          # Qt6 TLS plugins (for network if needed).
-          mkdir -p dist/tls
-          cp "${PREFIX}/share/qt6/plugins/tls/"*.dll dist/tls/ 2>/dev/null || true
-
-          # Qt6 QML modules — copy the ones we actually import.
-          mkdir -p dist/qml
-          for mod in QtQuick QtQml Qt QtQuick/Controls QtQuick/Layouts \
-                     QtQuick/Templates QtQuick/Dialogs QtQuick/Window; do
-            if [ -d "${PREFIX}/share/qt6/qml/${mod}" ]; then
-              mkdir -p "dist/qml/${mod}"
-              cp -r "${PREFIX}/share/qt6/qml/${mod}/"* "dist/qml/${mod}/" 2>/dev/null || true
-            fi
-          done
+      - name: Smoke test
+        run: bash scripts/smoke_windows.sh dist
 
       - name: Create archive
         run: |
-          VERSION=${GITHUB_REF_NAME}
           cd dist
-          7z a -tzip "../automotive-format-explorer-${VERSION}-windows-x64.zip" .
+          7z a -tzip "../automotive-format-explorer-${GITHUB_REF_NAME}-windows-x64.zip" .
 
-      - name: Upload release artifact
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          files: automotive-format-explorer-*.zip
-          generate_release_notes: true
+          name: windows-package
+          path: automotive-format-explorer-*.zip
+          if-no-files-found: error
 
   linux:
     name: Linux x86_64
@@ -180,7 +130,29 @@ jobs:
           mv Automotive_Format_Explorer-*.AppImage \
             automotive-format-explorer-${GITHUB_REF_NAME}-linux-x86_64.AppImage
 
-      - name: Upload release artifact
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          files: automotive-format-explorer-*.AppImage
+          name: linux-package
+          path: automotive-format-explorer-*.AppImage
+          if-no-files-found: error
+
+  # The release is created only after every platform has produced a package
+  # that builds, resolves its dependency closure, and launches. A failure on
+  # any platform means no release object exists, so there is nothing to
+  # download.
+  publish:
+    name: Publish release
+    needs: [windows-mingw, linux]
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
