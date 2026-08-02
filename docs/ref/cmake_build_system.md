@@ -51,6 +51,18 @@ keys.
 - **`Header not found after extraction`:** the release was published with a different layout than the macro expects. Update the `HEADER` argument or fix the parser's release packaging.
 - **`Library not found after extraction`:** same as above for the platform-specific binary tarball.
 - **`protoc not found`:** local protobuf install is missing `protoc`. On msys2 install `mingw-w64-x86_64-protobuf-c++`; on Ubuntu install `protobuf-compiler`.
+- **`undefined reference to absl::lts_<date>::…` when linking a fetched parser:** the published static library was built against a newer abseil than the host msys2 has. The artifact pins the abseil release it was compiled with, so a workstation lagging behind CI cannot link it. Either update msys2 or stage the sibling working trees with `seed-parser-deps.sh`, which builds the parsers from source against the local toolchain and skips the fetch entirely.
+
+## Runtime provenance on Windows
+
+The C++ runtime must come from the toolchain that compiled the binaries. A standalone Qt mingw distribution bundles its own `libgcc_s_seh-1.dll` and `libstdc++-6.dll`, built by an older MinGW than the msys2 gcc used here — msys2's `libstdc++-6.dll` exports symbols Qt's does not. If Qt's copy wins the DLL search, the loader binds a runtime older than the binaries were compiled against and the process dies with `STATUS_ENTRYPOINT_NOT_FOUND` (`0xc0000139`) before `main()`, with no diagnostic.
+
+Two places enforce this, and both must keep doing so:
+
+- [tests/CMakeLists.txt](../../tests/CMakeLists.txt) puts the compiler's own directory — derived from `CMAKE_CXX_COMPILER` — ahead of Qt's on the ctest `PATH`.
+- [scripts/package_windows.sh](../../scripts/package_windows.sh) passes `--no-compiler-runtime` to `windeployqt` and runs its closure walk afterwards, searching msys2 before Qt, so the msys2 runtime lands last and wins.
+
+Only binaries referencing a symbol absent from Qt's older runtime fail, so the fault appears in one target while its neighbours pass.
 
 ## Windows DLL deploy (`deploy_msys2_deps`)
 

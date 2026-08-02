@@ -31,19 +31,32 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - QTest coverage for tree filtering, memory and signal-plot models, A2L/MDF4
   detail presenters, and MDF4 ranged-decode/cache/race behavior, registered
   with ctest and run in CI.
-- CI (Windows MinGW + Ubuntu) + `release.yml` (Windows zip + Linux AppImage).
+- CI (Windows MinGW + Ubuntu, also on `release/**`) + `release.yml` (Windows zip
+  + Linux AppImage). Windows CI and release build against the same standalone Qt
+  as local development.
+- Windows packaging by dependency closure (`scripts/package_windows.sh`) plus a
+  headless launch gate (`scripts/smoke_windows.sh`); the release publishes only
+  after every platform builds, packages, and launches. See
+  [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md).
 
 ## In flight
 
-The MDF4 reader, writer verification gate, explorer backend, and single-channel
-plot are built. The remaining work in the locked plan is release integration:
-publish the parser artifact on the operator's cadence, pin its integrity hash,
-package the backend DLL, and refresh release-facing documentation.
+`v0.2.1` is the live release: A2L, DBC, and LDF, cut from `release/v0.2.1`
+(v0.2.0 plus the packaging repair, MDF4 excluded). It is verified to launch
+self-contained with no unresolved imports.
 
-The published `v0.2.0` release consumes the live a2l/dbc/ldf parser releases,
-and standalone fetch plus consumer CI are green. The bundled screenshots
-(`docs/screenshot_*.png`) still predate the per-tab filter and sample links;
-regenerate them when the next release is cut.
+MDF4 ships in no release and cannot build anywhere but a workstation: the
+backend is built and audited, but `dnbmch/mdf4-parser` and `dnbmch/mdf4-parser-lib`
+do not exist, so the pinned artifact fetch fails and `master` CI is red at
+Configure. Creating those repos and cutting `mdf4-parser` v0.1.0 unblocks both
+CI and an MDF4-carrying release; the source repo stays private like its siblings,
+only the `-lib` artifacts repo is public.
+
+`release/v0.2.1` still exists and has no MDF4; whether it merges back or is
+retired once MDF4 is publishable is open.
+
+The bundled screenshots (`docs/screenshot_*.png`) predate the per-tab filter and
+sample links; regenerate them when the next release is cut.
 
 ## Deferred
 
