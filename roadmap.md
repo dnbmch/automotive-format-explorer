@@ -15,6 +15,11 @@ shell.
 
 ## Format coverage
 
+- MDF4 is the next backend. Its independent parser core and the writer
+  round-trip/cross-implementation verification phase are complete; next are the
+  explorer adapter/session/detail integration, followed by the format-agnostic
+  plot module and release work in phases 4–6 of
+  [the locked plan](docs/plans/mdf4_viewer.md).
 - New-format backends follow the workspace parser-research priority once their
   parsers exist: ARXML → ODX → FIBEX. Each plugs in as a `FormatAdapter` +
   `DocumentSession` with its own tree/detail/center wiring.

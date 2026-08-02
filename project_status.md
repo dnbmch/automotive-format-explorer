@@ -28,14 +28,15 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 
 ## In flight
 
-A standalone clean configure cannot download the parser `-lib` artifacts: the
-tags pinned in `CMakeLists.txt` are ahead of what is published. The in-workspace
-build (`seed-parser-deps.sh` then `build.sh`) is green with the tests passing;
-publishing the pinned parser tags is what unblocks the standalone fetch.
+The locked MDF4 plan has completed its independent parser core and phase-3
+writer verification gate, including both asammdf producer directions. Phase 4
+is next: seed the sibling parser and add the explorer backend, adapter, session,
+detail presentation, and dispatch before the phase-5 plot module.
 
-The working tree is ahead of the published `v0.1.0` release. The bundled
-screenshots (`docs/screenshot_*.png`) predate the per-tab filter and sample
-links; regenerate them when the next release is cut.
+The published `v0.2.0` release consumes the live a2l/dbc/ldf parser releases,
+and standalone fetch plus consumer CI are green. The bundled screenshots
+(`docs/screenshot_*.png`) still predate the per-tab filter and sample links;
+regenerate them when the next release is cut.
 
 ## Deferred
 

@@ -19,7 +19,9 @@ viewer-side plan of record.
   assumptions. Licensing stays independently decidable (operator sets `LICENSE.md` at
   repo creation).
 - **Reader scope: lockstep with the writer.** The reader reads what `mdf4-writer` emits
-  and grows when the writer grows (M6 DL/DZ/MLSD, stored-time master, …). Foreign-file
+  and grows when the writer grows (M6 row DL/HL/DZ, MLSD, …). Stored-time masters are
+  also in the read set because the foreign-writer cross-gate requires ordinary
+  asammdf output. Other foreign-file
   breadth beyond that is a set of priced, additive increments (see Deferred increments) —
   spent when a concrete showcase moment exists, not before. Any unsupported feature
   degrades per channel/group with a diagnostic, never a failed load: foreign files still
@@ -34,16 +36,19 @@ viewer-side plan of record.
   thread, cached per channel.
 - **v1 plot scope: single channel** — click a channel in the tree, it plots.
 
-## v1 reader scope (writer-output subset)
+## v1 reader scope (writer output + foreign-writer gate)
 
-ID/HD/FH/DG/CG/CN/CC/TX/MD/SI blocks; row (DT) **and column (LD/DV, including
-`##DZ`-compressed fragments)** storage layouts; virtual equidistant time master
-(`cn_type` 3); little-endian numeric channels (uint/sint/float 8/16/32/64); the
+ID/HD/FH/DG/CG/CN/CC/TX/MD/SI blocks; row (`##DT` or a direct `##DZ` replacing
+DT) **and column (`##DV` or `##LD`, including `##DZ`-compressed fragments)**
+storage layouts; virtual equidistant (`cn_type` 3) and stored (`cn_type` 2) time
+masters, local or remote; little-endian uint/sint channels at 8/16/32/64 bits
+and IEEE float channels at 32/64 bits; the
 writer's full conversion set — identity, linear, rational, value-to-value tables with
 and without interpolation, and value-to-text (decoded as raw numerics with the labels
-in the metadata document). Column and DZ are in scope because the writer emits them
-and the current external gate is weak exactly there — asammdf 8.8.18 has a documented
-LDBLOCK reader bug (`../mdf4-writer/docs/backlog.md`).
+in the metadata document). Column/DZ are in scope because the writer emits them;
+the foreign-writer gate also requires direct row DZ and stored axes. The optional
+asammdf reader leg retains a documented LDBLOCK bug workaround
+(`../mdf4-writer/docs/backlog.md`).
 
 ## Interface split
 
@@ -53,8 +58,8 @@ The `-lib` surface is a hybrid — protobuf for the document, plain C++ for bulk
   groups → channels (name, source, unit, data type, bit geometry, conversion, sample
   count, master type, supported/unsupported + reason). Root carries
   `repeated Diagnostic diagnostics` per the parser diagnostics contract
-  (`../../docs/ref/parser_diagnostics_contract.md` — extend that doc's scope to mdf4 when
-  the repo lands). This keeps the explorer's detail cards, raw-JSON toggle, and
+  (`../../docs/ref/parser_diagnostics_contract.md`, which includes MDF4). This
+  keeps the explorer's detail cards, raw-JSON toggle, and
   diagnostics badge/popup working unchanged.
 - **Samples as a direct C++ API** — bulk time-series data does not round-trip through
   protobuf.
@@ -93,7 +98,7 @@ worth having):
 - `blocks` — 24-byte block-frame parse (id/length/link table), typed views for the v1
   block set.
 - `index` — walk the block graph once, produce the group/channel structure plus record
-  layout and data-block ranges (DT or LD/DV chain) per group. This is the system
+  layout and data-block ranges (DT/DZ or LD/DV/DZ chain) per group. This is the system
   boundary: malformed links/lengths/counts become diagnostics on a best-effort `File`,
   per the reporting-lenient contract.
 - `decode` — stream a group's records (row) or value blocks (column), extract one channel
@@ -107,13 +112,15 @@ Differences from the text parsers, stated up front: input is binary (no line num
 
 ## Writer verification gate (in mdf4-writer)
 
-A round-trip ctest in `mdf4-writer` consuming the **sibling** `mdf4-parser` working tree
-(the same sibling-consumption pattern it already uses for `signal-core`): build a
-`Recording`, write it in Row and in Column layout, read both back through
-`mdf4::extract`, compare decoded values against the source. This closes the LD-territory
-hole in the asammdf gate; the asammdf interop test stays as third-party cross-check where
-it works. License direction is clean — the proprietary writer consumes the open parser at
-test time, never the reverse.
+The round-trip CTest in `mdf4-writer` consumes the **sibling** `mdf4-parser` working
+tree (the same sibling-consumption pattern it uses for `signal-core`). It writes
+every fixture-catalog `Recording` in Row, Column, and ColumnCompressed, then reads
+physical values and time axes through `mdf4::extract` and compares them with the
+catalog. A large mixed DV/DZ-under-LD case keeps the compressed path non-vacuous.
+Guarded cross-gates compare mdf4-parser and asammdf on the same writer file, then
+reverse the producer direction by decoding plain/compressed files written by
+asammdf at test time. License direction is clean — the proprietary writer consumes
+the open parser for verification, never the reverse.
 
 ## Explorer backend
 
@@ -171,16 +178,18 @@ struct PlotSeries { QString name; QString unit; std::vector<double> time, value;
 - **mdf4-parser unit tests (ctest)**: fixtures are tiny `.mf4` files emitted by a test
   helper (byte-built at test time, no binary blobs in git — the ASAM spec-package files
   are not redistributable). Cover: block-graph walk, row and column storage, virtual
-  master, each writer-set conversion, malformed-file diagnostics (truncated block, bad
-  link, zero-record group), unsupported-feature degradation (stored master → indexed but
-  not decodable, with diagnostic). Golden checks: extracted proto JSON vs golden, per
-  parser convention.
+  and stored masters (including a remote compressed-column axis), each writer-set
+  conversion, malformed-file diagnostics (truncated block, bad link, zero-record
+  group), and unsupported-feature degradation. Assertions inspect typed proto
+  metadata and decoded series directly; there is no committed binary or JSON golden.
 - **Local ASAM corpus smoke** (exit-77 skip when absent): sweep
   `../a2l-parser/docs/ASAM_2022_04_07/` examples — index every file without crashing,
-  assert structure appears and out-of-scope features carry correct diagnostics. Decoding
-  is not expected here in v1.
+  check version metadata for each file, and require at least one file to yield groups.
+  Diagnostic counts are reported for visibility, not asserted per file; decoding is
+  not expected from this smoke.
 - **Writer round-trip gate**: the mdf4-writer-side ctest described above — this is the
-  primary value-correctness check, since writer output is exactly the v1 scope.
+  primary value-correctness check for the writer-output portion; the reverse
+  asammdf-writer gate covers v1's stored-master and direct-row-DZ additions.
 - **Manual acceptance**: open an `mdf4-writer` output file in the explorer, plot a
   channel, verify values against `mdf4-writer/tools/mdf_roundtrip.py`; open an ASAM
   example and confirm graceful structure-only display.
@@ -191,11 +200,14 @@ struct PlotSeries { QString name; QString unit; std::vector<double> time, value;
    block-synced). Done when: repo configures + empty-lib ctest runs; workspace `README.md`
    + `CLAUDE.md` tables (repo list, build table, conventions, branch note) include mdf4.
 2. **Reader core** (`blocks`, `index`, `decode`, `extract`, proto — v1 scope incl.
-   column). Done when: ctest green on byte-built fixtures for both layouts; ASAM corpus
-   smoke indexes every file gracefully with correct unsupported diagnostics.
-3. **Writer verification gate** (in `mdf4-writer`). Done when: Row + Column round-trip
-   ctest green against the sibling parser, values matching the source `Recording`;
-   documented next to the asammdf gate.
+   column). Done when: ctest green on byte-built fixtures across the owned layouts;
+   ASAM corpus smoke indexes every file gracefully, checks versions, and observes
+   structure in the corpus.
+3. **Writer verification gate — complete** (in `mdf4-writer`). Row, Column, and
+   ColumnCompressed catalog round-trips are green against the sibling parser with
+   physical values and time axes matching ground truth; guarded asammdf reader and
+   writer cross-gates cover the foreign implementation boundary. The complete
+   matrix lives in `mdf4-writer/docs/arch/verification.md`.
 4. **Explorer backend** (fetch + seed line, adapter, session, presenter, dispatch,
    CMake). Done when: opening an `.mf4` (seeded, unreleased parser) shows the channel
    tree + metadata cards; unsupported channels carry diagnostics; existing formats
@@ -213,8 +225,7 @@ struct PlotSeries { QString name; QString unit; std::vector<double> time, value;
 
 ## Deferred increments (additive; spend when a showcase moment exists)
 
-Reader breadth, roughly in demo-value order: stored-time masters (`cn_type` 2) — the
-single biggest unlock for foreign files; big-endian + arbitrary bit-aligned channels;
+Reader breadth, roughly in demo-value order: big-endian + arbitrary bit-aligned channels;
 remaining conversion families (algebraic `cc_type` 3, value-range 6/8, text-keyed
 9–11); DL row-storage lists (enters lockstep scope anyway when the writer's M6
 lands); invalidation bits; unsorted files; VLSD/MLSD string channels; channel arrays;
