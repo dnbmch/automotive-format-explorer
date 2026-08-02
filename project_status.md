@@ -52,8 +52,9 @@ MDF4 ships in no explorer release. The private `dnbmch/mdf4-parser` and public
 artifact-only `dnbmch/mdf4-parser-lib` repositories now exist and their hardened
 `main` branches are pushed. Publication is blocked only on a fine-grained
 `LIB_RELEASE_TOKEN` for the source workflow; after v0.1.0 assets exist, explorer
-must pin their headers sha256 and run current `master` CI. No CI run corresponds
-to current `master` yet, and a fresh anonymous fetch remains blocked until then.
+must pin their headers sha256 and rerun current `master` CI. Run `30772666463`
+corresponds to current master and fails on both platforms only at the expected
+v0.1.0 headers fetch; no build/test result exists past that gate yet.
 
 The bundled screenshots (`docs/screenshot_*.png`) predate the per-tab filter and
 sample links; regenerate them when the next release is cut.

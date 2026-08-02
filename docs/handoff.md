@@ -44,13 +44,13 @@ items parked as BL-K1..K3 in [docs/backlog.md](backlog.md).
 - **Runtime provenance is load-bearing in two places** — the ctest `PATH` and the packaging
   closure order. Break either and binaries bind Qt's older runtime and die before `main()` with
   no diagnostic. Documented in `ref/cmake_build_system.md`.
-- **`master` has no current CI proof.** The MDF4 repos now exist and their `main` branches are
-  pushed, but v0.1.0 assets are not published, so a fresh anonymous artifact fetch still fails.
+- **`master` has a current, narrowly explained CI failure.** Run `30772666463` reaches the MDF4
+  fetch on Windows and Linux and fails only because v0.1.0 assets are unpublished.
 - **This workstation's msys2 abseil (2508) lags CI's (2605)**, so the published parser artifacts
   cannot be linked locally. Local builds must run `seed-parser-deps.sh` first. A clean `build/`
   wipe re-triggers the fetch and the link fails confusingly.
-- Doc-only and CI-skipping commits land with `[skip ci]`; master's last four do, so no CI run
-  corresponds to current `master` HEAD.
+- The current run stops at the known fetch gate, so build, ctest, and the new release gates still
+  require a rerun after publication.
 
 **Real-file parsing verified against the published Windows zip:** the packaged backend factories
 opened `demo_ecu.a2l` (0 diagnostics), `tesla_can.dbc` (1 expected nonfatal diagnostic), and
