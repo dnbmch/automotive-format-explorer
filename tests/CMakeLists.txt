@@ -3,8 +3,16 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
 # On Windows the test executables resolve explorer-core / the backend DLLs from
 # their own directory, but Qt's DLLs live in the Qt install. Hand ctest a PATH
 # that includes them so the suite runs without developer shell setup.
+#
+# The compiler's own bin comes first: a standalone Qt mingw distribution bundles
+# its own libgcc/libstdc++, built by an older MinGW than the one compiling here.
+# If Qt's bin wins the search the loader binds the older runtime and the process
+# dies with STATUS_ENTRYPOINT_NOT_FOUND before main(). The C++ runtime has to
+# come from the toolchain that produced the binaries — the same rule
+# scripts/package_windows.sh applies when packaging.
 if(WIN32)
-    set(_test_path "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS};$ENV{PATH}")
+    get_filename_component(_compiler_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    set(_test_path "${_compiler_bin};${QT6_INSTALL_PREFIX}/${QT6_INSTALL_BINS};$ENV{PATH}")
     string(REPLACE "/" "\\" _test_path "${_test_path}")
     string(REPLACE ";" "\\;" _test_path "${_test_path}")
 endif()
