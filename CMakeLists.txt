@@ -10,6 +10,7 @@ find_package(Protobuf CONFIG QUIET)
 if(NOT TARGET protobuf::libprotobuf)
     find_package(Protobuf REQUIRED)
 endif()
+find_package(ZLIB REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(FetchParserLib)
@@ -21,6 +22,7 @@ include(DeployMsys2Deps)
 set(A2L_PARSER_VERSION "v0.4.0" CACHE STRING "a2l-parser-lib release tag")
 set(DBC_PARSER_VERSION "v0.4.0" CACHE STRING "dbc-parser-lib release tag")
 set(LDF_PARSER_VERSION "v0.5.0" CACHE STRING "ldf-parser-lib release tag")
+set(MDF4_PARSER_VERSION "v0.1.0" CACHE STRING "mdf4-parser-lib release tag")
 
 # Integrity pins for the fetched -lib release assets, from the published tarballs:
 #   gh release download <tag> --repo dnbmch/a2l-parser-lib \
@@ -63,6 +65,13 @@ fetch_parser_lib(
     BINARY_SHA256  "${LDF_BINARY_SHA256}"
 )
 
+fetch_parser_lib(
+    TARGET  mdf4parser
+    REPO    dnbmch/mdf4-parser-lib
+    VERSION "${MDF4_PARSER_VERSION}"
+    HEADER  mdf4/extract.h
+)
+
 qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_library(explorer-core SHARED
@@ -71,6 +80,7 @@ qt_add_library(explorer-core SHARED
     src/models/detailmodel.cpp
     src/models/memorymapmodel.cpp
     src/models/signalmapmodel.cpp
+    src/models/signalplotmodel.cpp
     src/models/tabmodel.cpp
     src/models/treefiltermodel.cpp
     src/models/treemodel.cpp
@@ -102,11 +112,18 @@ qt_add_library(explorer-ldf-backend ${_backend_lib_type}
     src/sessions/ldfdetailpresenter.cpp
 )
 
+qt_add_library(explorer-mdf4-backend ${_backend_lib_type}
+    src/adapters/mdf4adapter.cpp
+    src/sessions/mdf4documentsession.cpp
+    src/sessions/mdf4detailpresenter.cpp
+)
+
 qt_add_executable(automotive-format-explorer
     src/main.cpp
     src/core/appcontroller.cpp
     src/ui/memorygriditem.cpp
     src/ui/signalgriditem.cpp
+    src/ui/signalplotitem.cpp
     $<$<PLATFORM_ID:Windows>:resources/explorer.rc>
 )
 
@@ -126,6 +143,10 @@ target_include_directories(explorer-ldf-backend PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
+target_include_directories(explorer-mdf4-backend PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+
 target_include_directories(automotive-format-explorer PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
@@ -134,6 +155,8 @@ target_link_libraries(explorer-core
     PUBLIC
         Qt6::Core
 )
+
+target_compile_definitions(explorer-core PRIVATE EXPLORER_CORE_LIBRARY)
 
 target_link_libraries(explorer-a2l-backend
     PRIVATE
@@ -159,6 +182,16 @@ target_link_libraries(explorer-ldf-backend
         ldfparser
 )
 
+target_link_libraries(explorer-mdf4-backend
+    PRIVATE
+        Qt6::Core
+        Qt6::Concurrent
+        protobuf::libprotobuf
+        explorer-core
+        mdf4parser
+        ZLIB::ZLIB
+)
+
 target_link_libraries(automotive-format-explorer PRIVATE
     Qt6::Core
     Qt6::Concurrent
@@ -177,6 +210,7 @@ if(WIN32)
         explorer-a2l-backend
         explorer-dbc-backend
         explorer-ldf-backend
+        explorer-mdf4-backend
     )
 else()
     # On Linux, backends are static — link directly and register at startup.
@@ -184,6 +218,7 @@ else()
         explorer-a2l-backend
         explorer-dbc-backend
         explorer-ldf-backend
+        explorer-mdf4-backend
     )
     target_compile_definitions(automotive-format-explorer PRIVATE BACKENDS_STATIC)
 endif()
@@ -204,6 +239,7 @@ qt_add_qml_module(automotive-format-explorer
         qml/components/DiagnosticsPopup.qml
         qml/components/MemoryView.qml
         qml/components/SignalMapView.qml
+        qml/components/SignalPlotView.qml
 )
 
 qt_add_resources(automotive-format-explorer "icons"
@@ -242,6 +278,11 @@ set_target_properties(explorer-dbc-backend PROPERTIES
 )
 
 set_target_properties(explorer-ldf-backend PROPERTIES
+    AUTOMOC OFF
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+)
+
+set_target_properties(explorer-mdf4-backend PROPERTIES
     AUTOMOC OFF
     WINDOWS_EXPORT_ALL_SYMBOLS ON
 )

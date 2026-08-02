@@ -29,9 +29,28 @@ explorer_add_test(tst_treefiltermodel explorer-core)
 
 explorer_add_test(tst_memorymapmodel explorer-core)
 
+explorer_add_test(tst_signalplotmodel explorer-core)
+
 explorer_add_test(tst_a2ldetailpresenter
     explorer-core
     explorer-a2l-backend
     protobuf::libprotobuf
     a2lparser
+)
+
+explorer_add_test(tst_mdf4detailpresenter
+    explorer-core
+    explorer-mdf4-backend
+    protobuf::libprotobuf
+    ZLIB::ZLIB
+    mdf4parser
+)
+
+explorer_add_test(tst_mdf4documentsession
+    explorer-core
+    explorer-mdf4-backend
+    Qt6::Concurrent
+    protobuf::libprotobuf
+    ZLIB::ZLIB
+    mdf4parser
 )

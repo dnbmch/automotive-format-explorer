@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/dnbmch/automotive-format-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/dnbmch/automotive-format-explorer/actions/workflows/ci.yml)
 
-A desktop tool for inspecting **A2L**, **DBC**, and **LDF** automotive files. Built with Qt/QML and C++17 by [Danube Mechatronics](https://danube-mechatronics.com).
+A desktop tool for inspecting **A2L**, **DBC**, **LDF**, and **MDF4** automotive files. Built with Qt/QML and C++17 by [Danube Mechatronics](https://danube-mechatronics.com).
 
 > **[Download latest release](https://github.com/dnbmch/automotive-format-explorer/releases/latest)**
 >
@@ -33,6 +33,7 @@ A desktop tool for inspecting **A2L**, **DBC**, and **LDF** automotive files. Bu
 | **A2L** | ASAM MCD-2MC (ASAP2) | ECU calibration and measurement definitions |
 | **DBC** | Vector CANdb | CAN bus message and signal databases |
 | **LDF** | LIN Consortium | LIN bus network description |
+| **MDF4** | ASAM MDF 4 | Measurement recordings and physical signal data |
 
 ### Tree Navigation
 
@@ -41,6 +42,7 @@ Browse every parsed entity in a structured tree with expand/collapse, keyboard s
 - **A2L**: Modules, Measurements, Characteristics, Axis Points, Compu Methods, Record Layouts, Units, Functions, Groups, Typedef Characteristics/Structures/Axes, Instances, Variant Coding, XCP and CCP protocol summaries
 - **DBC**: Messages, Signals, Nodes, Value Tables, Attribute Definitions, Environment Variables, Signal Groups
 - **LDF**: Frames, Signals, Nodes (Master/Slave), Schedule Tables, Signal Encoding Types, Signal Representations
+- **MDF4**: Channel Groups, Channels, Sources, Storage Layouts, Conversions, Masters, and unsupported-feature reasons
 
 ### Detail Panel
 
@@ -80,6 +82,20 @@ Bit-level visualization of CAN and LIN message payloads. Each signal is rendered
 - Hover tooltips with factor, offset, range, and unit
 - Keyboard navigation
 
+### Signal Plot (MDF4)
+
+Select a numeric MDF4 channel to decode and plot physical values against its
+resolved time master, or against the reader's record-index fallback when no time
+master exists. File open remains metadata-only; channel samples are decoded over
+an explicit range on a worker and cached after completion.
+
+- Responsive min/max bucketing for dense and million-sample recordings
+- Direct polylines at sparse zoom levels so individual samples remain exact
+- Wheel zoom around the pointer and drag pan
+- Nearest-sample cursor readout with correctly labeled domain, value, and units
+- Unsupported channels stay browsable and explain why they are not plottable
+- Late worker results are discarded after the selection changes
+
 ### Bidirectional Selection
 
 Click a tree node and the center view scrolls to it with a highlight flash. Click a cell in the memory or signal view and the tree scrolls to that entity with the detail panel updating simultaneously.
@@ -90,21 +106,22 @@ Open multiple files side by side. Async file loading keeps the UI responsive for
 
 ### Bundled Samples
 
-One sample file per format ships with the app ([samples/](samples/)); when no file is open, the sidebar offers them as one-click "open a sample" links. Provenance and licenses: [samples/SAMPLES.md](samples/SAMPLES.md). The DBC sample deliberately demonstrates the diagnostics badge — it carries one dangling `VAL_` entry the parser reports as DROPPED.
+One sample file per text-description format ships with the app ([samples/](samples/)); when no file is open, the sidebar offers them as one-click "open a sample" links. Provenance and licenses: [samples/SAMPLES.md](samples/SAMPLES.md). The DBC sample deliberately demonstrates the diagnostics badge — it carries one dangling `VAL_` entry the parser reports as DROPPED.
 
 ---
 
 ## Parser Libraries
 
-The explorer is built on top of three parser libraries published by [Danube Mechatronics](https://danube-mechatronics.com):
+The explorer consumes four parser libraries from [Danube Mechatronics](https://danube-mechatronics.com). The text-format libraries are published; MDF4 v0.1.0 is currently consumed from its sibling working tree pending release:
 
-| Format | Library | Releases |
-|--------|---------|----------|
+| Format | Library | Availability |
+|--------|---------|--------------|
 | A2L | [a2l-parser-lib](https://github.com/dnbmch/a2l-parser-lib) | [Releases](https://github.com/dnbmch/a2l-parser-lib/releases) |
 | DBC | [dbc-parser-lib](https://github.com/dnbmch/dbc-parser-lib) | [Releases](https://github.com/dnbmch/dbc-parser-lib/releases) |
 | LDF | [ldf-parser-lib](https://github.com/dnbmch/ldf-parser-lib) | [Releases](https://github.com/dnbmch/ldf-parser-lib/releases) |
+| MDF4 | [mdf4-parser-lib](https://github.com/dnbmch/mdf4-parser-lib) | Sibling tree; v0.1.0 pending |
 
-Each library parses its respective format into Protocol Buffer messages. At CMake configure time the explorer pulls the parser `-lib` release artifacts pinned in `CMakeLists.txt` from GitHub. In this multi-repo workspace the pinned tags may be ahead of what is published, so the build is driven from the sibling parser working trees instead -- `bash seed-parser-deps.sh` stages them and the fetch is skipped (see [Offline build](#offline-build-sibling-working-trees)).
+Each library parses its respective format into Protocol Buffer messages. At CMake configure time the explorer pulls available parser `-lib` release artifacts pinned in `CMakeLists.txt` from GitHub. In this multi-repo workspace the pinned tags may be ahead of what is published, so the build is driven from the sibling parser working trees instead -- `bash seed-parser-deps.sh` stages them and the fetch is skipped (see [Offline build](#offline-build-sibling-working-trees)).
 
 The parser libraries are **dual licensed: GPL-2.0 or Commercial**. See their repositories for details, or contact [Danube Mechatronics](https://danube-mechatronics.com) for commercial licensing.
 
@@ -117,6 +134,7 @@ The parser libraries are **dual licensed: GPL-2.0 or Commercial**. See their rep
 - Qt 6.5+ (`Core`, `Concurrent`, `Gui`, `Qml`, `Quick`, `QuickControls2`, `QuickDialogs2`)
 - CMake 3.21+
 - Protobuf development package (visible to CMake via CONFIG or MODULE mode)
+- zlib development package (for MDF4 compressed data blocks)
 - Parser libraries: either the sibling parser working trees staged via `seed-parser-deps.sh` (see [Offline build](#offline-build-sibling-working-trees)), or — once the pinned tags are published — internet access to fetch the `-lib` release artifacts at configure time
 
 ### Build
@@ -129,7 +147,7 @@ cmake --build build
 Parser library versions are pinned in `CMakeLists.txt`. To override:
 
 ```bash
-cmake -B build -DA2L_PARSER_VERSION=v0.4.0 -DDBC_PARSER_VERSION=v0.4.0 -DLDF_PARSER_VERSION=v0.5.0
+cmake -B build -DA2L_PARSER_VERSION=v0.4.0 -DDBC_PARSER_VERSION=v0.4.0 -DLDF_PARSER_VERSION=v0.5.0 -DMDF4_PARSER_VERSION=v0.1.0
 ```
 
 ### Offline build (sibling working trees)
@@ -151,6 +169,7 @@ seeded bits are the siblings' working trees, not the pinned releases.
 - [docs/arch/adapter_contract.md](docs/arch/adapter_contract.md) — how to add a new format adapter.
 - [docs/ref/memory_view.md](docs/ref/memory_view.md) — A2L memory grid visual + interaction reference.
 - [docs/ref/signal_map.md](docs/ref/signal_map.md) — DBC/LDF signal grid visual + interaction reference.
+- [docs/ref/signal_plot.md](docs/ref/signal_plot.md) — format-neutral time-series plot reference.
 - [docs/ref/keyboard.md](docs/ref/keyboard.md) — application + grid keyboard shortcuts.
 - [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — `fetch_parser_lib` mechanics, MSYS2 deploy, shared-vs-static backend model.
 - [roadmap.md](roadmap.md) — direction and planned work.

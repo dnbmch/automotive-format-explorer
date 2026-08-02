@@ -52,6 +52,12 @@ enum class LdfEntityKind {
     DiagnosticFrame
 };
 
+enum class Mdf4EntityKind {
+    File,
+    ChannelGroup,
+    Channel
+};
+
 struct A2lPath {
     A2lEntityKind kind = A2lEntityKind::Module;
     int primaryIndex = -1;
@@ -73,6 +79,12 @@ struct LdfPath {
     int tertiaryIndex = -1;
 };
 
+struct Mdf4Path {
+    Mdf4EntityKind kind = Mdf4EntityKind::File;
+    int groupIndex = -1;
+    int channelIndex = -1;
+};
+
 struct NodeRef {
     FormatId format = FormatId::Unknown;
     quint64 key = 0;
@@ -80,7 +92,7 @@ struct NodeRef {
     bool isValid() const { return key != 0; }
 };
 
-using NodePayload = std::variant<A2lPath, DbcPath, LdfPath>;
+using NodePayload = std::variant<A2lPath, DbcPath, LdfPath, Mdf4Path>;
 
 struct NodeBinding {
     SemanticKind semanticKind = SemanticKind::Entity;

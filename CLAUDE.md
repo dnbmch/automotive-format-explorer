@@ -1,6 +1,6 @@
 # automotive-format-explorer
 
-Qt/QML desktop app for inspecting A2L, DBC, and LDF automotive files. GPL-3.0. Plugin architecture (shared `.dll` on Windows, static on Linux) with format-specific document sessions backed by `QQuickPaintedItem` C++ renderers for the memory map and signal map views.
+Qt/QML desktop app for inspecting A2L, DBC, LDF, and MDF4 automotive files. GPL-3.0. Plugin architecture (shared `.dll` on Windows, static on Linux) with format-specific document sessions backed by `QQuickPaintedItem` C++ renderers for the memory map, signal map, and format-neutral signal plot views.
 
 <!-- block: Guidelines Standard [id:1d67c7] -->
 ## Guidelines
@@ -132,6 +132,7 @@ No external consumers, or owned end-to-end by us: the contract (proto / API / fi
    TreeModel            Loader (per-session)           DetailModel
    (QAbstractItemModel)    MemoryView.qml (A2L)       (QAbstractListModel)
                            SignalMapView.qml (DBC/LDF)
+                           SignalPlotView.qml (MDF4)
                                     │
                     ┌───────────────┤
                     ▼               ▼
@@ -179,16 +180,16 @@ src/
   core/           appcontroller, noderegistry, formatid, detailsection, detailpresenter
   models/         treemodel, treefiltermodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel
   sessions/       documentsession (interface), adaptersessionbase, presentertext
-                  (shared text/detail helpers), a2l/dbc/ldf sessions
-  adapters/       a2l/dbc/ldf adapter + factory (extern "C" plugin entry points)
-  ui/             memorygriditem, signalgriditem (QQuickPaintedItem renderers),
+                  (shared text/detail helpers), a2l/dbc/ldf/mdf4 sessions
+  adapters/       a2l/dbc/ldf/mdf4 adapter + factory (C plugin entry points)
+  ui/             memorygriditem, signalgriditem, signalplotitem (painted renderers),
                   gridpalette (shared palette/shade/highlight-flash helpers)
 qml/
   Main.qml        root layout with SplitView, tabs, Loader
-  components/     NavPanel, MemoryView, SignalMapView, Theme, Toast, SplashOverlay,
-                  DiagnosticsPopup
+  components/     NavPanel, MemoryView, SignalMapView, SignalPlotView, Theme,
+                  Toast, SplashOverlay, DiagnosticsPopup
 docs/             design docs, screenshots
-samples/          bundled sample files (one per format) + SAMPLES.md provenance
+samples/          bundled text-format sample files + SAMPLES.md provenance
 cmake/            FetchParserLib, DeployMsys2Deps
 ```
 

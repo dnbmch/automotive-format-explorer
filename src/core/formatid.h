@@ -7,8 +7,6 @@ enum class FormatId {
     A2L,
     DBC,
     LDF,
-    // Reserved for the planned explorer read-back of mdf4-writer output
-    // (see docs/plans/mdf4_viewer.md); no backend yet.
     MDF4
 };
 

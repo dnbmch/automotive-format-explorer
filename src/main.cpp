@@ -1,6 +1,7 @@
 #include "core/appcontroller.h"
 #include "ui/memorygriditem.h"
 #include "ui/signalgriditem.h"
+#include "ui/signalplotitem.h"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -29,6 +30,7 @@ int main(int argc, char* argv[]) {
 
     qmlRegisterType<MemoryGridItem>("ExplorerApp", 1, 0, "MemoryGridItem");
     qmlRegisterType<SignalGridItem>("ExplorerApp", 1, 0, "SignalGridItem");
+    qmlRegisterType<SignalPlotItem>("ExplorerApp", 1, 0, "SignalPlotItem");
 
     AppController controller;
     qmlRegisterSingletonInstance("ExplorerApp", 1, 0, "AppController", &controller);

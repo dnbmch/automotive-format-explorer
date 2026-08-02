@@ -6,20 +6,18 @@ live in [docs/backlog.md](docs/backlog.md).
 
 ## Direction
 
-A single-binary Qt/QML viewer that opens automotive description files (A2L, DBC,
-LDF) through a plugin-per-format backend and renders them with a tree view,
-detail panel, and format-specific center views (A2L memory map, DBC/LDF signal
-map). The plugin ABI (`FormatAdapter` / `DocumentSession` / `DetailPresenter`)
-is the extension seam: new formats arrive as backends, not as changes to the
-shell.
+A single-binary Qt/QML viewer that opens automotive description and recording
+files (A2L, DBC, LDF, MDF4) through a plugin-per-format backend and renders them
+with a tree view, detail panel, and format-specific center views (A2L memory
+map, DBC/LDF signal map, MDF4 signal plot). The plugin ABI (`FormatAdapter` /
+`DocumentSession` / `DetailPresenter`) is the extension seam: new formats
+arrive as backends, not as changes to the shell.
 
 ## Format coverage
 
-- MDF4 is the next backend. Its independent parser core and the writer
-  round-trip/cross-implementation verification phase are complete; next are the
-  explorer adapter/session/detail integration, followed by the format-agnostic
-  plot module and release work in phases 4–6 of
-  [the locked plan](docs/plans/mdf4_viewer.md).
+- MDF4 structure browsing, metadata details, and lazy single-channel plotting
+  are implemented against the sibling parser. Publication and packaging remain
+  in the release phase of [the locked plan](docs/plans/mdf4_viewer.md).
 - New-format backends follow the workspace parser-research priority once their
   parsers exist: ARXML → ODX → FIBEX. Each plugs in as a `FormatAdapter` +
   `DocumentSession` with its own tree/detail/center wiring.

@@ -41,4 +41,5 @@ echo "Seeding _parser_deps from sibling working trees (local HEAD, not the pinne
 seed_one a2lparser a2l-parser a2l A2L_PARSER_VERSION
 seed_one dbcparser dbc-parser dbc DBC_PARSER_VERSION
 seed_one ldfparser ldf-parser ldf LDF_PARSER_VERSION
+seed_one mdf4parser mdf4-parser mdf4 MDF4_PARSER_VERSION
 echo "Done. Configure/build the explorer normally; the artifact fetch is skipped."

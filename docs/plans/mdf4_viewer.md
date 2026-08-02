@@ -150,7 +150,11 @@ only it, and no `mdf4::` (or future format) type crosses the line:
 
 ```cpp
 // src/models/plotseries.h
-struct PlotSeries { QString name; QString unit; std::vector<double> time, value; };
+struct PlotSeries {
+    QString name, unit;
+    QString domainName, domainUnit;
+    std::vector<double> time, value;
+};
 ```
 
 - `src/models/signalplotmodel.{h,cpp}` — `QAbstractListModel` (center-panel contract,
@@ -208,11 +212,11 @@ struct PlotSeries { QString name; QString unit; std::vector<double> time, value;
    physical values and time axes matching ground truth; guarded asammdf reader and
    writer cross-gates cover the foreign implementation boundary. The complete
    matrix lives in `mdf4-writer/docs/arch/verification.md`.
-4. **Explorer backend** (fetch + seed line, adapter, session, presenter, dispatch,
+4. **Explorer backend — complete** (fetch + seed line, adapter, session, presenter, dispatch,
    CMake). Done when: opening an `.mf4` (seeded, unreleased parser) shows the channel
    tree + metadata cards; unsupported channels carry diagnostics; existing formats
    unaffected.
-5. **Plot module** (plotseries, model, painted item, QML view, lazy decode wiring). Done
+5. **Plot module — complete** (plotseries, model, painted item, QML view, lazy decode wiring). Done
    when: clicking a channel plots it; zoom/pan/cursor work; a million-sample channel
    stays responsive; switching channels mid-decode doesn't race; no format types in the
    plot module (grep-checkable).

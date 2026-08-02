@@ -49,10 +49,11 @@ ApplicationWindow {
         title: "Open automotive file"
         fileMode: FileDialog.OpenFile
         nameFilters: [
-            "Automotive files (*.dbc *.a2l *.ldf)",
+            "Automotive files (*.dbc *.a2l *.ldf *.mf4)",
             "DBC files (*.dbc)",
             "A2L files (*.a2l)",
             "LDF files (*.ldf)",
+            "MDF4 files (*.mf4)",
             "All files (*)"
         ]
         onAccepted: AppController.openFile(selectedFile)

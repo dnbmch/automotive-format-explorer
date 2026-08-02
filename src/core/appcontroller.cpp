@@ -10,6 +10,7 @@
 extern "C" FormatAdapter* createA2lAdapterPlugin();
 extern "C" FormatAdapter* createDbcAdapterPlugin();
 extern "C" FormatAdapter* createLdfAdapterPlugin();
+extern "C" FormatAdapter* createMdf4AdapterPlugin();
 #endif
 
 namespace {
@@ -38,6 +39,7 @@ const BackendSpec* backendSpecForPath(const QString& path) {
         {FormatId::A2L, QStringLiteral("a2l"), QStringLiteral("explorer-a2l-backend"), "createA2lAdapterPlugin"},
         {FormatId::DBC, QStringLiteral("dbc"), QStringLiteral("explorer-dbc-backend"), "createDbcAdapterPlugin"},
         {FormatId::LDF, QStringLiteral("ldf"), QStringLiteral("explorer-ldf-backend"), "createLdfAdapterPlugin"},
+        {FormatId::MDF4, QStringLiteral("mf4"), QStringLiteral("explorer-mdf4-backend"), "createMdf4AdapterPlugin"},
     };
 
     const QString suffix = QFileInfo(path).suffix().toLower();
@@ -62,6 +64,7 @@ AppController::AppController(QObject* parent)
     _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createA2lAdapterPlugin()));
     _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createDbcAdapterPlugin()));
     _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createLdfAdapterPlugin()));
+    _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createMdf4AdapterPlugin()));
 #endif
 }
 
@@ -325,7 +328,7 @@ QVariantList AppController::sampleFiles() const {
                                    QStringLiteral("../share/automotive-format-explorer/samples")}) {
             const QDir dir(appDir.filePath(rel));
             const auto entries = dir.entryInfoList(
-                {QStringLiteral("*.a2l"), QStringLiteral("*.dbc"), QStringLiteral("*.ldf")},
+                {QStringLiteral("*.a2l"), QStringLiteral("*.dbc"), QStringLiteral("*.ldf"), QStringLiteral("*.mf4")},
                 QDir::Files, QDir::Name);
             if (entries.isEmpty()) {
                 continue;

@@ -1,6 +1,6 @@
 # Adapter contract
 
-How to add a fourth format to the explorer.
+How to add another format to the explorer.
 
 The explorer is plugin-based at the architecture level: each format ships an adapter (loads a file → returns a session) and a session (owns the parsed document and exposes models to QML). On Windows adapters are shared libraries loaded by `QLibrary` at runtime; on Linux they are linked statically into the executable.
 
@@ -13,7 +13,9 @@ The explorer is plugin-based at the architecture level: each format ships an ada
 | `cmake/FetchParserLib.cmake` call in `CMakeLists.txt` | Resolves the parser headers + static lib from the public `-lib` release artifacts |
 | Registration in `src/core/appcontroller.cpp` static block | Under `#ifdef BACKENDS_STATIC` (Linux), call `_format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(create<Fmt>AdapterPlugin()))` |
 
-The three existing implementations under `src/adapters/{a2l,dbc,ldf}adapter.*` and `src/sessions/{a2l,dbc,ldf}documentsession.*` are the working reference. DBC is the smallest and is the cleanest template.
+The four existing implementations under `src/adapters/` and `src/sessions/`
+are the working references. DBC is the smallest metadata-at-open template;
+MDF4 is the reference for metadata-only open followed by lazy bulk-data work.
 
 ## FormatAdapter interface
 
@@ -125,8 +127,26 @@ If your format has nothing graphical to show in the middle column, leave `center
 |---|---|---|
 | A2L | `qrc:/qt/qml/ExplorerApp/qml/components/MemoryView.qml` | `MemoryMapModel` |
 | DBC, LDF | `qrc:/qt/qml/ExplorerApp/qml/components/SignalMapView.qml` | `SignalMapModel` |
+| MDF4 | `qrc:/qt/qml/ExplorerApp/qml/components/SignalPlotView.qml` | `SignalPlotModel` |
 
-Both views are `QQuickPaintedItem` C++ renderers driven by pre-computed flat arrays — adding a new view means another component in [qml/components/](../../qml/components/) plus a `QQuickPaintedItem` subclass in [src/ui/](../../src/ui/).
+The center views use `QQuickPaintedItem` C++ renderers. Grid views are driven by
+pre-computed flat occupancy arrays; the signal plot uses a format-neutral
+`PlotSeries` seam and min/max summaries. Adding a new recording format that can
+produce `PlotSeries` needs no plot changes.
+
+### Lazy bulk-data sessions
+
+Keep metadata extraction inside `FormatAdapter::load()` so opening and browsing
+a large recording does not read sample payloads. The session owns lazy work:
+
+- translate its format document into tree and detail models at open;
+- translate a selected channel into `PlotSeries` at the plot seam;
+- dispatch sample decoding away from the GUI thread and pass an explicit range;
+- cache completed channels; and
+- tag each request so a result from an older selection cannot update the model.
+
+Decoder/library types must not appear under `src/models/`, `src/ui/`, or the
+plot QML component. This keeps the plot reusable by future recording backends.
 
 ## Checklist
 

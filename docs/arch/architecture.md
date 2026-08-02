@@ -2,7 +2,10 @@
 
 ## Purpose
 
-`automotive-format-explorer` is a Qt/QML desktop app for inspecting parsed A2L, DBC, and LDF files in a tree + detail + center-panel layout. It is the showcase / front-door product that demonstrates the three parser libraries integrated in a single binary.
+`automotive-format-explorer` is a Qt/QML desktop app for inspecting parsed A2L,
+DBC, LDF, and MDF4 files in a tree + detail + center-panel layout. It is the
+showcase / front-door product that demonstrates the four parser libraries
+integrated in a single binary.
 
 ## Process Layout
 
@@ -17,7 +20,8 @@ QGuiApplication
   QQmlApplicationEngine
     Main.qml
       NavPanel          — tree (TreeFilterModel over TreeModel)
-      Loader            — MemoryView.qml (A2L) | SignalMapView.qml (DBC/LDF) | empty
+      Loader            — MemoryView.qml (A2L) | SignalMapView.qml (DBC/LDF)
+                          | SignalPlotView.qml (MDF4) | empty
       Detail            — DetailModel (sections, fields, references)
 ```
 
@@ -37,10 +41,10 @@ Non-Windows builds skip the DWMWA dance and call `window->show()` directly.
 
 ## Plugin / Backend Loading
 
-Each parser (a2l, dbc, ldf) is exposed to the explorer as a "backend" via a small C-ABI factory:
+Each parser (a2l, dbc, ldf, mdf4) is exposed to the explorer as a "backend" via a small C-ABI factory:
 
-- **Windows** — backends are shared libraries (`.dll`) loaded at runtime via `QLibrary`. Each DLL exports `extern "C"` entry points that the explorer resolves to construct the backend's `FormatAdapter`. Each backend DLL (`explorer-<fmt>-backend.dll`) is deployed next to the executable and loaded by exact name from `QCoreApplication::applicationDirPath()` (`src/core/appcontroller.cpp:254-255`) — there is no `plugins/<format>/` subdirectory.
-- **Linux** — backends are static libraries linked into the executable. Each backend self-registers in a constructor; the `FormatRegistry` collects registrations on startup. Built with `-DBACKENDS_STATIC`.
+- **Windows** — backends are shared libraries (`.dll`) loaded at runtime via `QLibrary`. Each DLL exports `extern "C"` entry points that the explorer resolves to construct the backend's `FormatAdapter`. Each backend DLL (`explorer-<fmt>-backend.dll`) is deployed next to the executable and loaded by exact name from `QCoreApplication::applicationDirPath()` in `AppController::loadBackend()` — there is no `plugins/<format>/` subdirectory.
+- **Linux** — backends are static libraries linked into the executable. With `BACKENDS_STATIC` defined, `AppController` explicitly calls and registers the four `create<Fmt>AdapterPlugin()` factories at startup.
 
 The `FormatRegistry` (`src/core/formatregistry.h`) is the single lookup point: given a `FormatId`, return the `FormatAdapter*` that can load files of that type. The platform difference is invisible above this layer.
 
@@ -71,7 +75,7 @@ A `DocumentSession` (interface in `src/sessions/documentsession.h`) is the per-d
 | `centerPanelModel()` | `QAbstractListModel*` for the center panel; null when there is no center panel |
 | `moveModelsToThread(QThread*)` | moves the session's models to the given thread |
 
-`AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides the common machinery (NodeRegistry hookup, tree construction skeleton, diagnostics collection). The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`) inherit from it and supply format-specific tree building, detail sections, and center-panel choice.
+`AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides the common machinery (NodeRegistry hookup, tree construction skeleton, diagnostics collection). The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`, `Mdf4DocumentSession`) inherit from it and supply format-specific tree building, detail sections, and center-panel choice. MDF4 open is metadata-only; its session requests an explicit sample range on a worker only when a decodable channel is selected, caches completed channels, and rejects results whose selection generation is stale.
 
 The nav panel never binds a session's `TreeModel` directly: `AppController::currentTreeModel()` returns a per-session `TreeFilterModel` (`src/models/treefiltermodel.h`) — a `QSortFilterProxyModel` with recursive filtering and auto-accepted child rows that also exposes `nodeKeyRole` and a source-mapped `indexForNodeKey()` to QML. One proxy per session keeps the filter text per tab and preserves NavPanel's model-identity-keyed expand/selection/scroll state; the proxies live in `AppController` and are dropped when their tab closes. Sessions and backends know nothing about filtering.
 
@@ -104,7 +108,10 @@ Center panel (memory grid / signal grid click)
 
 ## Rendering
 
-`MemoryGridItem` (A2L memory map) and `SignalGridItem` (DBC/LDF signal layout) both extend `QQuickPaintedItem`:
+`MemoryGridItem` (A2L memory map), `SignalGridItem` (DBC/LDF signal layout), and
+`SignalPlotItem` (format-neutral time series) extend `QQuickPaintedItem`.
+
+The two grid renderers use these rules:
 
 - Pre-computed flat arrays (`colorMap`, `objectMap`) for O(1) per-byte / per-bit lookup.
 - Paint only the visible region — the QQuickPaintedItem is sized to the viewport; scroll offsets are tracked in C++.
@@ -112,6 +119,15 @@ Center panel (memory grid / signal grid click)
 - `FBO` render target for stable scroll performance.
 
 The grid items emit `hoveredTooltip` (string) and `nodeKeyClicked(int)` signals; the QML layer is responsible only for placement and signal routing.
+
+The signal plot consumes only `PlotSeries` (`QString` signal/domain metadata plus
+parallel `std::vector<double>` domain/value arrays). `SignalPlotModel` builds fixed-size
+min/max summaries when a series arrives and derives viewport-width buckets from
+those summaries. The paint representation therefore follows the viewport rather than the
+recording size. `SignalPlotItem` draws direct polylines when the visible data is
+sparse and min/max columns when it is dense; wheel zoom, drag pan, and nearest-
+sample cursor lookup remain in the format-neutral plot stack. MDF4 protobuf and
+decoder types stop at `Mdf4DocumentSession`.
 
 ### Overlap stripes
 
@@ -129,21 +145,22 @@ Both grid items mark cells claimed by more than one occupant. After filling a ce
 src/
   core/         appcontroller, formatregistry, noderegistry, detailpresenter,
                 detailsection, treeitem, formatid, diagnostics
-  models/       treemodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel
+  models/       treemodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel,
+                plotseries, signalplotmodel
   sessions/     documentsession (interface), adaptersessionbase, presentertext
-                (shared text/detail helpers), a2l/dbc/ldf sessions, a2l/dbc/ldf
+                (shared text/detail helpers), a2l/dbc/ldf/mdf4 sessions and
                 detail presenters (a2l splits ifdata helpers into
                 a2ldetailpresenter_ifdata.cpp)
-  adapters/     a2l/dbc/ldf adapter + factory (extern "C" plugin entry points)
-  ui/           memorygriditem, signalgriditem (QQuickPaintedItem renderers)
+  adapters/     a2l/dbc/ldf/mdf4 adapter + factory (C plugin entry points)
+  ui/           memorygriditem, signalgriditem, signalplotitem (painted renderers)
 qml/
   Main.qml      root layout with SplitView, tabs, Loader
-  components/   NavPanel, MemoryView, SignalMapView, SplashOverlay, Theme, Toast,
-                DiagnosticsPopup
+  components/   NavPanel, MemoryView, SignalMapView, SignalPlotView,
+                SplashOverlay, Theme, Toast, DiagnosticsPopup
 cmake/          FetchParserLib, DeployMsys2Deps
 ```
 
-Each format's detail rendering lives in its own `DetailPresenter` subclass — `a2ldetailpresenter.{h,cpp}`, `dbcdetailpresenter.{h,cpp}`, `ldfdetailpresenter.{h,cpp}` — kept separate from the session files so no session carries both construction/query and the bulk of the detail-building helpers. A2L additionally splits its IF_DATA helpers into `a2ldetailpresenter_ifdata.cpp`. Cross-format text and detail helpers (`text`, `boolText`, `hexId`/`hexValue`, `addField`, `pushSection`, `joinStrings`, `messageToJsonText`) live in `sessions/presentertext.h`, shared by every presenter and document session; `text` decodes protobuf bytes as strict UTF-8 (via `QStringDecoder`, stateless) and falls back to Latin-1 only on a genuine decode error. Format-specific number formatting stays in the per-format headers.
+Each format's detail rendering lives in its own `DetailPresenter` subclass — `a2ldetailpresenter.{h,cpp}`, `dbcdetailpresenter.{h,cpp}`, `ldfdetailpresenter.{h,cpp}`, `mdf4detailpresenter.{h,cpp}` — kept separate from the session files so no session carries both construction/query and the bulk of the detail-building helpers. A2L additionally splits its IF_DATA helpers into `a2ldetailpresenter_ifdata.cpp`. Cross-format text and detail helpers (`text`, `boolText`, `hexId`/`hexValue`, `addField`, `pushSection`, `joinStrings`, `messageToJsonText`) live in `sessions/presentertext.h`, shared by every presenter and document session; `text` decodes protobuf bytes as strict UTF-8 (via `QStringDecoder`, stateless) and falls back to Latin-1 only on a genuine decode error. Format-specific number formatting stays in the per-format headers.
 
 ## Memory Ownership
 
@@ -155,4 +172,5 @@ Each format's detail rendering lives in its own `DetailPresenter` subclass — `
 
 - [../ref/memory_view.md](../ref/memory_view.md) — memory grid visual + interaction spec
 - [../ref/signal_map.md](../ref/signal_map.md) — signal grid visual + interaction spec
+- [../ref/signal_plot.md](../ref/signal_plot.md) — time-series plot data seam and interaction spec
 - [../backlog.md](../backlog.md) — known issues / planned changes
