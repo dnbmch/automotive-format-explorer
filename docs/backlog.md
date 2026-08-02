@@ -78,3 +78,21 @@ master. Harmless but meaningless; the tree could mark masters as axis channels
 instead of offering them as signals.
 
 **Size:** XS.
+
+### BL-P5: the writer-file smoke reports green without running
+
+`tst_mdf4documentsession::siblingWriterFileOpensAndPlots`
+(`tests/tst_mdf4documentsession.cpp:170-175`) `QSKIP`s unless
+`MDF4_WRITER_SAMPLE` names an `.mf4`, and QTest counts a skipped case as a pass,
+so a plain `ctest --test-dir build` shows 6/6 green while the only end-to-end
+"a real recording opens and plots" case never executed. The gate itself is right
+— no binary fixture belongs in git — but the signal is misleading. The reader
+repo solved the same problem with an exit-77 ctest skip
+(`docs/plans/mdf4_viewer.md`, corpus smoke), which surfaces as `Skipped` rather
+than `Passed`. Options: adopt exit-77 here, or have the test generate its own
+`.mf4` from the sibling writer at build time so it always runs.
+
+Run it by hand meanwhile:
+`MDF4_WRITER_SAMPLE=<file>.mf4 ./build/tst_mdf4documentsession.exe`
+
+**Size:** XS for exit-77; S to generate a fixture at test time.
