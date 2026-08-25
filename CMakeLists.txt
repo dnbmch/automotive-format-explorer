@@ -74,6 +74,7 @@ fetch_parser_lib(
     HEADER  mdf4/extract.h
     HEADERS_SHA256 "${MDF4_HEADERS_SHA256}"
     BINARY_SHA256  "${MDF4_BINARY_SHA256}"
+    LINK_LIBRARIES ZLIB::ZLIB
 )
 
 qt_standard_project_setup(REQUIRES 6.5)
@@ -193,7 +194,6 @@ target_link_libraries(explorer-mdf4-backend
         protobuf::libprotobuf
         explorer-core
         mdf4parser
-        ZLIB::ZLIB
 )
 
 target_link_libraries(automotive-format-explorer PRIVATE

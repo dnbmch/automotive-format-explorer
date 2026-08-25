@@ -50,7 +50,6 @@ explorer_add_test(tst_mdf4detailpresenter
     explorer-core
     explorer-mdf4-backend
     protobuf::libprotobuf
-    ZLIB::ZLIB
     mdf4parser
 )
 
@@ -59,6 +58,5 @@ explorer_add_test(tst_mdf4documentsession
     explorer-mdf4-backend
     Qt6::Concurrent
     protobuf::libprotobuf
-    ZLIB::ZLIB
     mdf4parser
 )

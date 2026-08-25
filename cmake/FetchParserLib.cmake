@@ -10,11 +10,15 @@
 #       VERSION     v0.1.0
 #       HEADER      dbc/dbcfile.h
 #   )
+#
+# LINK_LIBRARIES declares what the archive itself needs beyond protobuf, so the
+# dependency is ordered after it on the link line (mdf4parser inflates ##DZ and
+# needs zlib). Consumers link only the parser target.
 
 function(fetch_parser_lib)
     set(options "")
     set(oneValueArgs TARGET REPO VERSION HEADER HEADERS_SHA256 BINARY_SHA256)
-    set(multiValueArgs "")
+    set(multiValueArgs LINK_LIBRARIES)
     cmake_parse_arguments(FPL "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     foreach(required TARGET REPO VERSION HEADER)
@@ -210,7 +214,7 @@ function(fetch_parser_lib)
         "${headers_dir}"
         "${lib_dir}"
     )
-    target_link_libraries(${FPL_TARGET} INTERFACE protobuf::libprotobuf)
+    target_link_libraries(${FPL_TARGET} INTERFACE protobuf::libprotobuf ${FPL_LINK_LIBRARIES})
 
     message(STATUS "${FPL_TARGET} ${FPL_VERSION} ready (${platform_suffix})")
 endfunction()
