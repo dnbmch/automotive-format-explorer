@@ -37,6 +37,8 @@ set(DBC_HEADERS_SHA256 "0db8b48014358aa3f77adff2c8b2708a70d3f15948598f9f65c485ed
 set(DBC_BINARY_SHA256  "" CACHE STRING "sha256 of the dbcparser binary archive for this platform")
 set(LDF_HEADERS_SHA256 "c6e0cfce2d98954003f315bab0ff0b5df9b77df5a1dedcf78f4bcba96d7bb1d1" CACHE STRING "sha256 of ldfparser-headers-<tag>.tar.gz")
 set(LDF_BINARY_SHA256  "" CACHE STRING "sha256 of the ldfparser binary archive for this platform")
+set(MDF4_HEADERS_SHA256 "6103a8e0b26113c5943b1885b8190ba48e5c656e39080eff8f6292bce01fe27a" CACHE STRING "sha256 of mdf4parser-headers-<tag>.tar.gz")
+set(MDF4_BINARY_SHA256  "" CACHE STRING "sha256 of the mdf4parser binary archive for this platform")
 
 fetch_parser_lib(
     TARGET  a2lparser
@@ -70,6 +72,8 @@ fetch_parser_lib(
     REPO    dnbmch/mdf4-parser-lib
     VERSION "${MDF4_PARSER_VERSION}"
     HEADER  mdf4/extract.h
+    HEADERS_SHA256 "${MDF4_HEADERS_SHA256}"
+    BINARY_SHA256  "${MDF4_BINARY_SHA256}"
 )
 
 qt_standard_project_setup(REQUIRES 6.5)
