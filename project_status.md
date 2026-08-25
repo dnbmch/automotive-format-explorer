@@ -48,13 +48,10 @@ repair, MDF4 excluded). Its tag preserves the shipped commit and the temporary
 release branch is retired. The real Windows download launches self-contained with
 no unresolved imports, and its packaged backends open the bundled A2L, DBC, and LDF.
 
-MDF4 ships in no explorer release. The private `dnbmch/mdf4-parser` and public
-artifact-only `dnbmch/mdf4-parser-lib` repositories now exist and their hardened
-`main` branches are pushed. Publication is blocked only on a fine-grained
-`LIB_RELEASE_TOKEN` for the source workflow; after v0.1.0 assets exist, explorer
-must pin their headers sha256 and rerun current `master` CI. Run `30772666463`
-corresponds to current master and fails on both platforms only at the expected
-v0.1.0 headers fetch; no build/test result exists past that gate yet.
+MDF4 ships in no explorer release. Its parser artifacts are published as
+`mdf4-parser-lib` v0.1.0, and `master` fetches the headers archive under a sha256
+pin like the other three parsers. Putting the MDF4 backend in a user's hands is an
+explorer release, which is on-demand.
 
 The bundled screenshots (`docs/screenshot_*.png`) predate the per-tab filter and
 sample links; regenerate them when the next release is cut.

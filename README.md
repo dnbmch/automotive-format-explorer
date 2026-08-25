@@ -9,8 +9,8 @@ A desktop tool for inspecting **A2L**, **DBC**, **LDF**, and **MDF4** automotive
 > **Windows**: extract the zip and run `automotive-format-explorer.exe`
 > **Linux**: `chmod +x *.AppImage && ./automotive-format-explorer-*.AppImage`
 >
-> The current v0.2.1 release includes A2L, DBC, and LDF. MDF4 support is on `master` and will ship
-> after the MDF4 parser v0.1.0 artifacts are published.
+> The current v0.2.1 release includes A2L, DBC, and LDF. MDF4 support is on `master` and ships with
+> the next release.
 
 ---
 
@@ -115,14 +115,14 @@ One sample file per text-description format ships with the app ([samples/](sampl
 
 ## Parser Libraries
 
-The explorer consumes four parser libraries from [Danube Mechatronics](https://danube-mechatronics.com). The text-format libraries are published. The MDF4 source and artifact repositories exist, but v0.1.0 is still consumed from its sibling working tree pending its first artifact release:
+The explorer consumes four parser libraries from [Danube Mechatronics](https://danube-mechatronics.com), all of them published:
 
 | Format | Library | Availability |
 |--------|---------|--------------|
 | A2L | [a2l-parser-lib](https://github.com/dnbmch/a2l-parser-lib) | [Releases](https://github.com/dnbmch/a2l-parser-lib/releases) |
 | DBC | [dbc-parser-lib](https://github.com/dnbmch/dbc-parser-lib) | [Releases](https://github.com/dnbmch/dbc-parser-lib/releases) |
 | LDF | [ldf-parser-lib](https://github.com/dnbmch/ldf-parser-lib) | [Releases](https://github.com/dnbmch/ldf-parser-lib/releases) |
-| MDF4 | [mdf4-parser-lib](https://github.com/dnbmch/mdf4-parser-lib) | Repository live; v0.1.0 artifacts pending |
+| MDF4 | [mdf4-parser-lib](https://github.com/dnbmch/mdf4-parser-lib) | [Releases](https://github.com/dnbmch/mdf4-parser-lib/releases) |
 
 Each library parses its respective format into Protocol Buffer messages. At CMake configure time the explorer pulls available parser `-lib` release artifacts pinned in `CMakeLists.txt` from GitHub. In this multi-repo workspace the pinned tags may be ahead of what is published, so the build is driven from the sibling parser working trees instead -- `bash seed-parser-deps.sh` stages them and the fetch is skipped (see [Offline build](#offline-build-sibling-working-trees)).
 

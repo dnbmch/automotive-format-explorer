@@ -16,8 +16,9 @@ arrive as backends, not as changes to the shell.
 ## Format coverage
 
 - MDF4 structure browsing, metadata details, and lazy single-channel plotting
-  are implemented against the sibling parser. Publication and packaging remain
-  in the release phase of [the locked plan](docs/plans/mdf4_viewer.md).
+  are implemented and build against the published parser artifacts. Packaging
+  MDF4 into a shipped release remains in the release phase of
+  [the locked plan](docs/plans/mdf4_viewer.md).
 - New-format backends follow the workspace parser-research priority once their
   parsers exist: ARXML → ODX → FIBEX. Each plugs in as a `FormatAdapter` +
   `DocumentSession` with its own tree/detail/center wiring.

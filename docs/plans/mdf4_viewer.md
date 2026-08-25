@@ -220,12 +220,11 @@ struct PlotSeries {
    when: clicking a channel plots it; zoom/pan/cursor work; a million-sample channel
    stays responsive; switching channels mid-decode doesn't race; no format types in the
    plot module (grep-checkable).
-6. **Release + docs — publication remainder only.** The private source and public artifact repos
-   exist and their hardened `main` branches are pushed; the explorer backend and packaging glob
-   are already on `master`. Provide the source workflow a fine-grained `LIB_RELEASE_TOKEN`, cut
-   `mdf4-parser` v0.1.0, verify the public assets and artifact-repo CI, pin the headers sha256 in
-   explorer, run current explorer master CI, record the manifest entry, and perform the real `.mf4`
-   click-to-plot acceptance. Do not create or retag an explorer v0.2.1 release.
+6. **Release + docs — explorer release remainder only.** `mdf4-parser` v0.1.0 is published, the
+   artifact-repo CI builds its examples against those assets, and explorer `master` consumes the
+   headers archive under a sha256 pin with the manifest entry recorded. What remains: the real
+   `.mf4` click-to-plot acceptance, and an explorer release that actually carries the MDF4 backend.
+   Do not create or retag an explorer v0.2.1 release.
 
 ## Deferred increments (additive; spend when a showcase moment exists)
 
