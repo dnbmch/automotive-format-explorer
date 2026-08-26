@@ -132,3 +132,15 @@ scoped to build-tree runs rather than the shipped artifact. The closure walk in
 the same script instead of maintaining its own.
 
 **Size:** S.
+
+### BL-K4: normative packaging facts live only in `docs/archive/`
+
+`docs/archive/windows_packaging_closure.md` holds the current, normative
+description of the packaging path (closure walk, smoke gate, `publish` job
+gating) — but `archive/` is completed material that live docs must never
+reference. The packaging contract is still in force, so those facts belong in
+`docs/ref/`, leaving the archived plan as the record of how the decision was
+reached. Harvest, then grep out any reference that points readers into the
+archive.
+
+**Size:** S.
