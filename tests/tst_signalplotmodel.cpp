@@ -30,6 +30,10 @@ PlotSeries makeSeries(std::size_t count) {
     return series;
 }
 
+PlotSeriesPtr shared(PlotSeries series) {
+    return std::make_shared<const PlotSeries>(std::move(series));
+}
+
 } // namespace
 
 class TestSignalPlotModel : public QObject {
@@ -49,7 +53,7 @@ void TestSignalPlotModel::exposesSeriesAndListRoles() {
     SignalPlotModel model;
     PlotSeries series = makeSeries(3);
     series.value = {4.0, -2.0, 8.0};
-    model.setSeries(std::move(series));
+    model.setSeries(shared(std::move(series)));
 
     QCOMPARE(model.name(), QStringLiteral("EngineSpeed"));
     QCOMPARE(model.unit(), QStringLiteral("rpm"));
@@ -88,7 +92,7 @@ void TestSignalPlotModel::reportsBusyState() {
 
 void TestSignalPlotModel::zoomsPansAndResetsView() {
     SignalPlotModel model;
-    model.setSeries(makeSeries(100));
+    model.setSeries(shared(makeSeries(100)));
 
     model.setVisibleRange(20.0, 40.0);
     QCOMPARE(model.viewStart(), 20.0);
@@ -112,7 +116,7 @@ void TestSignalPlotModel::irregularAxisUsesLocalZoomFloor() {
     PlotSeries series;
     series.time = {0.0, 0.001, 1000.0};
     series.value = {1.0, 2.0, 3.0};
-    model.setSeries(std::move(series));
+    model.setSeries(shared(std::move(series)));
 
     model.setVisibleRange(0.0, 0.002);
     QVERIFY(model.viewEnd() - model.viewStart() < 0.01);
@@ -127,7 +131,7 @@ void TestSignalPlotModel::cursorChoosesNearestSample() {
     PlotSeries series;
     series.time = {0.0, 5.0, 10.0};
     series.value = {10.0, 20.0, 30.0};
-    model.setSeries(std::move(series));
+    model.setSeries(shared(std::move(series)));
 
     model.setCursorTime(6.0);
     QVERIFY(model.cursorVisible());
@@ -150,7 +154,7 @@ void TestSignalPlotModel::bucketsPreserveDenseExtrema() {
     series.value[1234] = 50.0;
     series.value[1235] = -40.0;
     series.value[8765] = std::numeric_limits<double>::quiet_NaN();
-    model.setSeries(std::move(series));
+    model.setSeries(shared(std::move(series)));
 
     const auto& buckets = model.buckets(100);
     QVERIFY(buckets.size() <= 100);
@@ -178,7 +182,7 @@ void TestSignalPlotModel::millionSamplesStayViewportBounded() {
     series.value[777'777] = 4321.0;
     QElapsedTimer timer;
     timer.start();
-    model.setSeries(std::move(series));
+    model.setSeries(shared(std::move(series)));
     const auto& buckets = model.buckets(1200);
     const qint64 elapsed = timer.elapsed();
 

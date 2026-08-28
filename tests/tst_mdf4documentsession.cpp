@@ -1,4 +1,3 @@
-#include "adapters/mdf4adapter.h"
 #include "models/signalplotmodel.h"
 #include "models/treemodel.h"
 #include "sessions/mdf4documentsession.h"
@@ -8,6 +7,7 @@
 #include <QThread>
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 
@@ -30,6 +30,20 @@ mdf4::File makeDocument(std::uint64_t sampleCount = 4) {
         channel->set_data_type(mdf4::FLOAT_LE);
         channel->set_bit_count(64);
     }
+    return document;
+}
+
+// The group's own time axis, appended after the two signals.
+mdf4::File documentWithMaster(std::uint64_t sampleCount = 4) {
+    mdf4::File document = makeDocument(sampleCount);
+    mdf4::Channel* master = document.mutable_groups(0)->add_channels();
+    master->set_name("Acquisition time");
+    master->set_unit("ms");
+    master->set_sample_count(sampleCount);
+    master->set_is_master(true);
+    master->set_sync_type(1);
+    master->set_cn_type(2);
+    master->set_decodable(true);
     return document;
 }
 
@@ -56,8 +70,12 @@ class TestMdf4DocumentSession : public QObject {
 private slots:
     void decodeUsesMetadataRangeAndCachesResult();
     void timeMasterLabelsPlotDomain();
+    void masterChannelIsAnAxisNotASignal();
+    void nonMonotonicDomainFallsBackToRecordIndex();
     void staleDecodeCannotReplaceNewSelection();
-    void siblingWriterFileOpensAndPlots();
+    void supersededDecodeIsCachedNotDiscarded();
+    void reselectingAnInFlightChannelDecodesOnce();
+    void leastRecentlyUsedChannelIsEvictedAtBudget();
 };
 
 void TestMdf4DocumentSession::decodeUsesMetadataRangeAndCachesResult() {
@@ -106,20 +124,10 @@ void TestMdf4DocumentSession::decodeUsesMetadataRangeAndCachesResult() {
 }
 
 void TestMdf4DocumentSession::timeMasterLabelsPlotDomain() {
-    mdf4::File document = makeDocument();
-    mdf4::Channel* master = document.mutable_groups(0)->add_channels();
-    master->set_name("Acquisition time");
-    master->set_unit("ms");
-    master->set_sample_count(4);
-    master->set_is_master(true);
-    master->set_sync_type(1);
-    master->set_cn_type(2);
-    master->set_decodable(true);
-
     Mdf4DocumentSession session(
         QStringLiteral("timed.mf4"),
         QStringLiteral("timed.mf4"),
-        std::move(document),
+        documentWithMaster(),
         {},
         [](const QString&, std::uint32_t, std::uint32_t,
            std::uint64_t, std::uint64_t) { return fourSamples(10.0); });
@@ -129,6 +137,63 @@ void TestMdf4DocumentSession::timeMasterLabelsPlotDomain() {
     QTRY_VERIFY_WITH_TIMEOUT(!model->busy(), 2000);
     QCOMPARE(model->series().domainName, QStringLiteral("Acquisition time"));
     QCOMPARE(model->series().domainUnit, QStringLiteral("ms"));
+}
+
+void TestMdf4DocumentSession::masterChannelIsAnAxisNotASignal() {
+    std::atomic<int> calls{0};
+    Mdf4DocumentSession session(
+        QStringLiteral("timed.mf4"),
+        QStringLiteral("timed.mf4"),
+        documentWithMaster(),
+        {},
+        [&](const QString&, std::uint32_t, std::uint32_t,
+            std::uint64_t, std::uint64_t) {
+            ++calls;
+            return fourSamples(10.0);
+        });
+
+    TreeModel* tree = session.treeModel();
+    const QModelIndex group = tree->index(0, 0, tree->index(0, 0));
+    const QModelIndex master = tree->index(2, 0, group);
+    QCOMPARE(tree->data(master, TreeModel::TitleRole).toString(),
+             QStringLiteral("Acquisition time"));
+    QCOMPARE(tree->data(master, TreeModel::SemanticKindRole).toInt(),
+             static_cast<int>(SemanticKind::Attribute));
+    QVERIFY(tree->data(master, TreeModel::SubtitleRole).toString()
+                .contains(QStringLiteral("Master channel")));
+
+    auto* model = static_cast<SignalPlotModel*>(session.centerPanelModel());
+    session.selectNode(channelKey(session, 2));
+    QTest::qWait(50);
+    QVERIFY(!model->busy());
+    QVERIFY(!model->hasSeries());
+    QCOMPARE(model->name(), QStringLiteral("Acquisition time"));
+    QCOMPARE(calls.load(), 0);
+}
+
+void TestMdf4DocumentSession::nonMonotonicDomainFallsBackToRecordIndex() {
+    Mdf4DocumentSession session(
+        QStringLiteral("unsorted.mf4"),
+        QStringLiteral("unsorted.mf4"),
+        documentWithMaster(),
+        {},
+        [](const QString&, std::uint32_t, std::uint32_t,
+           std::uint64_t, std::uint64_t) {
+            PlotSeries series;
+            series.time = {0.0, 2.0, 1.0, 3.0};
+            series.value = {10.0, 11.0, 12.0, 13.0};
+            return series;
+        });
+
+    auto* model = static_cast<SignalPlotModel*>(session.centerPanelModel());
+    session.selectNode(channelKey(session, 0));
+    QTRY_VERIFY_WITH_TIMEOUT(!model->busy(), 2000);
+
+    QCOMPARE(model->series().domainName, QStringLiteral("Record index"));
+    QVERIFY(model->series().domainUnit.isEmpty());
+    QCOMPARE(model->series().time[1], 1.0);
+    QCOMPARE(model->series().time[2], 2.0);
+    QCOMPARE(model->series().value[1], 11.0);
 }
 
 void TestMdf4DocumentSession::staleDecodeCannotReplaceNewSelection() {
@@ -167,41 +232,128 @@ void TestMdf4DocumentSession::staleDecodeCannotReplaceNewSelection() {
     QCOMPARE(model->series().value.front(), 200.0);
 }
 
-void TestMdf4DocumentSession::siblingWriterFileOpensAndPlots() {
-    const QString path = qEnvironmentVariable("MDF4_WRITER_SAMPLE");
-    if (path.isEmpty()) {
-        QSKIP("Set MDF4_WRITER_SAMPLE to run the sibling writer-file smoke");
-    }
+void TestMdf4DocumentSession::supersededDecodeIsCachedNotDiscarded() {
+    QSemaphore firstStarted;
+    std::atomic<int> calls{0};
 
-    Mdf4Adapter adapter;
-    LoadResult result = adapter.load(path);
-    QVERIFY2(result.session != nullptr, qPrintable(
-        result.diagnostics.isEmpty() ? QStringLiteral("MDF4 session was not created")
-                                     : result.diagnostics.front().detail));
-
-    TreeModel* tree = result.session->treeModel();
-    const QModelIndex file = tree->index(0, 0);
-    QVERIFY(file.isValid());
-
-    quint64 plottableKey = 0;
-    for (int groupRow = 0; groupRow < tree->rowCount(file) && plottableKey == 0; ++groupRow) {
-        const QModelIndex group = tree->index(groupRow, 0, file);
-        for (int channelRow = 0; channelRow < tree->rowCount(group); ++channelRow) {
-            const QModelIndex channel = tree->index(channelRow, 0, group);
-            if (tree->data(channel, TreeModel::SemanticKindRole).toInt() ==
-                static_cast<int>(SemanticKind::Entity)) {
-                plottableKey = tree->data(channel, TreeModel::NodeKeyRole).toULongLong();
-                break;
+    Mdf4DocumentSession session(
+        QStringLiteral("superseded.mf4"),
+        QStringLiteral("superseded.mf4"),
+        makeDocument(),
+        {},
+        [&](const QString&, std::uint32_t, std::uint32_t channel,
+            std::uint64_t, std::uint64_t) {
+            ++calls;
+            if (channel == 0) {
+                firstStarted.release();
+                QThread::msleep(150);
+                return fourSamples(100.0);
             }
-        }
-    }
-    QVERIFY2(plottableKey != 0, "writer file contains no plottable channel");
+            return fourSamples(200.0);
+        });
 
-    auto* model = static_cast<SignalPlotModel*>(result.session->centerPanelModel());
-    result.session->selectNode(plottableKey);
-    QTRY_VERIFY_WITH_TIMEOUT(!model->busy(), 5000);
-    QVERIFY(model->hasSeries());
-    QCOMPARE(model->series().time.size(), model->series().value.size());
+    auto* model = static_cast<SignalPlotModel*>(session.centerPanelModel());
+    session.selectNode(channelKey(session, 0));
+    QVERIFY(firstStarted.tryAcquire(1, 2000));
+    session.selectNode(channelKey(session, 1));
+    QTRY_VERIFY_WITH_TIMEOUT(!model->busy(), 2000);
+    QCOMPARE(model->series().name, QStringLiteral("VehicleSpeed"));
+
+    // Let the superseded decode of channel 0 land in the cache.
+    QTest::qWait(300);
+    QCOMPARE(calls.load(), 2);
+
+    session.selectNode(channelKey(session, 0));
+    QVERIFY(!model->busy());
+    QCOMPARE(calls.load(), 2);
+    QCOMPARE(model->series().name, QStringLiteral("EngineSpeed"));
+    QCOMPARE(model->series().value.front(), 100.0);
+}
+
+void TestMdf4DocumentSession::reselectingAnInFlightChannelDecodesOnce() {
+    QSemaphore firstStarted;
+    std::atomic<int> calls{0};
+
+    Mdf4DocumentSession session(
+        QStringLiteral("inflight.mf4"),
+        QStringLiteral("inflight.mf4"),
+        makeDocument(),
+        {},
+        [&](const QString&, std::uint32_t, std::uint32_t channel,
+            std::uint64_t, std::uint64_t) {
+            ++calls;
+            if (channel == 0) {
+                firstStarted.release();
+                QThread::msleep(150);
+                return fourSamples(100.0);
+            }
+            return fourSamples(200.0);
+        });
+
+    auto* model = static_cast<SignalPlotModel*>(session.centerPanelModel());
+    session.selectNode(channelKey(session, 0));
+    QVERIFY(firstStarted.tryAcquire(1, 2000));
+    session.selectNode(channelKey(session, 1));
+    session.selectNode(channelKey(session, 0));
+
+    QTRY_VERIFY_WITH_TIMEOUT(!model->busy(), 3000);
+    QCOMPARE(model->series().name, QStringLiteral("EngineSpeed"));
+    QCOMPARE(model->series().value.front(), 100.0);
+    QTest::qWait(100);
+    QCOMPARE(calls.load(), 2);
+}
+
+// The cache budget is 256 MiB, so proving eviction needs series that really
+// cross it: three channels of 6M samples are 96 MiB each at 16 bytes/sample.
+void TestMdf4DocumentSession::leastRecentlyUsedChannelIsEvictedAtBudget() {
+    constexpr std::uint64_t samples = 6'000'000;
+    std::atomic<int> calls{0};
+
+    mdf4::File document = makeDocument(samples);
+    mdf4::Channel* third = document.mutable_groups(0)->add_channels();
+    third->set_name("CoolantTemp");
+    third->set_unit("degC");
+    third->set_sample_count(samples);
+    third->set_decodable(true);
+    third->set_data_type(mdf4::FLOAT_LE);
+    third->set_bit_count(64);
+
+    Mdf4DocumentSession session(
+        QStringLiteral("huge.mf4"),
+        QStringLiteral("huge.mf4"),
+        std::move(document),
+        {},
+        [&](const QString&, std::uint32_t, std::uint32_t channel,
+            std::uint64_t, std::uint64_t count) {
+            ++calls;
+            PlotSeries series;
+            series.time.resize(static_cast<std::size_t>(count));
+            series.value.resize(static_cast<std::size_t>(count));
+            for (std::size_t i = 0; i < series.time.size(); ++i) {
+                series.time[i] = static_cast<double>(i);
+            }
+            series.value.front() = static_cast<double>(channel);
+            return series;
+        });
+
+    auto* model = static_cast<SignalPlotModel*>(session.centerPanelModel());
+    for (int channel = 0; channel < 3; ++channel) {
+        session.selectNode(channelKey(session, channel));
+        QTRY_VERIFY_WITH_TIMEOUT(!model->busy(), 30000);
+    }
+    QCOMPARE(calls.load(), 3);
+
+    // Channel 1 is still resident; channel 0 was the least recently used when
+    // the third series pushed the cache over budget.
+    session.selectNode(channelKey(session, 1));
+    QVERIFY(!model->busy());
+    QCOMPARE(calls.load(), 3);
+    QCOMPARE(model->series().value.front(), 1.0);
+
+    session.selectNode(channelKey(session, 0));
+    QTRY_VERIFY_WITH_TIMEOUT(!model->busy(), 30000);
+    QCOMPARE(calls.load(), 4);
+    QCOMPARE(model->series().value.front(), 0.0);
 }
 
 QTEST_MAIN(TestMdf4DocumentSession)

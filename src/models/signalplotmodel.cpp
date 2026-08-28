@@ -10,19 +10,19 @@ SignalPlotModel::SignalPlotModel(QObject* parent)
 }
 
 int SignalPlotModel::rowCount(const QModelIndex& parent) const {
-    return parent.isValid() ? 0 : static_cast<int>(_series.time.size());
+    return parent.isValid() ? 0 : static_cast<int>(_series->time.size());
 }
 
 QVariant SignalPlotModel::data(const QModelIndex& index, int role) const {
     if (!index.isValid() || index.row() < 0 ||
-        index.row() >= static_cast<int>(_series.time.size())) {
+        index.row() >= static_cast<int>(_series->time.size())) {
         return {};
     }
 
     const auto sample = static_cast<std::size_t>(index.row());
     switch (role) {
-    case TimeRole: return _series.time[sample];
-    case ValueRole: return _series.value[sample];
+    case TimeRole: return _series->time[sample];
+    case ValueRole: return _series->value[sample];
     }
     return {};
 }
@@ -34,15 +34,15 @@ QHash<int, QByteArray> SignalPlotModel::roleNames() const {
     };
 }
 
-const PlotSeries& SignalPlotModel::series() const { return _series; }
-QString SignalPlotModel::name() const { return _series.name; }
-QString SignalPlotModel::unit() const { return _series.unit; }
-QString SignalPlotModel::domainName() const { return _series.domainName; }
-QString SignalPlotModel::domainUnit() const { return _series.domainUnit; }
+const PlotSeries& SignalPlotModel::series() const { return *_series; }
+QString SignalPlotModel::name() const { return _series->name; }
+QString SignalPlotModel::unit() const { return _series->unit; }
+QString SignalPlotModel::domainName() const { return _series->domainName; }
+QString SignalPlotModel::domainUnit() const { return _series->domainUnit; }
 quint64 SignalPlotModel::sampleCount() const {
-    return static_cast<quint64>(_series.time.size());
+    return static_cast<quint64>(_series->time.size());
 }
-bool SignalPlotModel::hasSeries() const { return !_series.time.empty(); }
+bool SignalPlotModel::hasSeries() const { return !_series->time.empty(); }
 bool SignalPlotModel::busy() const { return _busy; }
 
 double SignalPlotModel::fullStart() const { return _full_start; }
@@ -56,24 +56,20 @@ bool SignalPlotModel::cursorVisible() const { return _cursor_index >= 0; }
 qint64 SignalPlotModel::cursorIndex() const { return _cursor_index; }
 double SignalPlotModel::cursorTime() const {
     return _cursor_index >= 0
-        ? _series.time[static_cast<std::size_t>(_cursor_index)] : 0.0;
+        ? _series->time[static_cast<std::size_t>(_cursor_index)] : 0.0;
 }
 double SignalPlotModel::cursorValue() const {
     return _cursor_index >= 0
-        ? _series.value[static_cast<std::size_t>(_cursor_index)] : 0.0;
+        ? _series->value[static_cast<std::size_t>(_cursor_index)] : 0.0;
 }
 
-void SignalPlotModel::setSeries(PlotSeries series) {
-    const std::size_t count = std::min(series.time.size(), series.value.size());
-    series.time.resize(count);
-    series.value.resize(count);
-
+void SignalPlotModel::setSeries(PlotSeriesPtr series) {
     beginResetModel();
-    _series = std::move(series);
+    _series = series ? std::move(series) : std::make_shared<const PlotSeries>();
     _cursor_index = -1;
     rebuildSummaries();
 
-    if (_series.time.empty()) {
+    if (_series->time.empty()) {
         _full_start = 0.0;
         _full_end = 0.0;
         _view_start = 0.0;
@@ -82,8 +78,8 @@ void SignalPlotModel::setSeries(PlotSeries series) {
         _view_maximum = 1.0;
         _minimum_view_span = 0.0;
     } else {
-        _full_start = _series.time.front();
-        _full_end = _series.time.back();
+        _full_start = _series->time.front();
+        _full_end = _series->time.back();
         rebuildTimeSpacing();
         if (_full_end > _full_start) {
             _view_start = _full_start;
@@ -111,7 +107,7 @@ void SignalPlotModel::setBusy(bool busy) {
 }
 
 void SignalPlotModel::resetView() {
-    if (_series.time.empty()) {
+    if (_series->time.empty()) {
         return;
     }
 
@@ -133,7 +129,7 @@ void SignalPlotModel::resetView() {
 }
 
 void SignalPlotModel::setVisibleRange(double start, double end) {
-    if (_series.time.empty() || !(end > start) || !std::isfinite(start) || !std::isfinite(end)) {
+    if (_series->time.empty() || !(end > start) || !std::isfinite(start) || !std::isfinite(end)) {
         return;
     }
 
@@ -169,7 +165,7 @@ void SignalPlotModel::setVisibleRange(double start, double end) {
 }
 
 void SignalPlotModel::zoomAt(double anchor, double scale) {
-    if (_series.time.empty() || !(scale > 0.0) || !std::isfinite(scale)) {
+    if (_series->time.empty() || !(scale > 0.0) || !std::isfinite(scale)) {
         return;
     }
 
@@ -193,19 +189,19 @@ void SignalPlotModel::panBy(double delta) {
 }
 
 void SignalPlotModel::setCursorTime(double time) {
-    if (_series.time.empty() || !std::isfinite(time)) {
+    if (_series->time.empty() || !std::isfinite(time)) {
         clearCursor();
         return;
     }
 
-    const auto it = std::lower_bound(_series.time.begin(), _series.time.end(), time);
+    const auto it = std::lower_bound(_series->time.begin(), _series->time.end(), time);
     std::size_t index = 0;
-    if (it == _series.time.end()) {
-        index = _series.time.size() - 1;
+    if (it == _series->time.end()) {
+        index = _series->time.size() - 1;
     } else {
-        index = static_cast<std::size_t>(std::distance(_series.time.begin(), it));
+        index = static_cast<std::size_t>(std::distance(_series->time.begin(), it));
         if (index > 0 &&
-            time - _series.time[index - 1] <= _series.time[index] - time) {
+            time - _series->time[index - 1] <= _series->time[index] - time) {
             --index;
         }
     }
@@ -227,15 +223,15 @@ void SignalPlotModel::clearCursor() {
 }
 
 std::pair<std::size_t, std::size_t> SignalPlotModel::visibleSampleRange() const {
-    if (_series.time.empty()) {
+    if (_series->time.empty()) {
         return {0, 0};
     }
 
-    const auto first = std::lower_bound(_series.time.begin(), _series.time.end(), _view_start);
-    const auto last = std::upper_bound(first, _series.time.end(), _view_end);
+    const auto first = std::lower_bound(_series->time.begin(), _series->time.end(), _view_start);
+    const auto last = std::upper_bound(first, _series->time.end(), _view_end);
     return {
-        static_cast<std::size_t>(std::distance(_series.time.begin(), first)),
-        static_cast<std::size_t>(std::distance(_series.time.begin(), last)),
+        static_cast<std::size_t>(std::distance(_series->time.begin(), first)),
+        static_cast<std::size_t>(std::distance(_series->time.begin(), last)),
     };
 }
 
@@ -247,7 +243,7 @@ const std::vector<PlotBucket>& SignalPlotModel::buckets(int pixelWidth) const {
 
     _bucket_width = pixelWidth;
     _bucket_cache.clear();
-    if (_series.time.empty() || !(_view_end > _view_start)) {
+    if (_series->time.empty() || !(_view_end > _view_start)) {
         return _bucket_cache;
     }
 
@@ -268,10 +264,10 @@ const std::vector<PlotBucket>& SignalPlotModel::buckets(int pixelWidth) const {
         if (column == pixelWidth - 1) {
             last = visible.second;
         } else {
-            const auto it = std::lower_bound(_series.time.begin() + static_cast<std::ptrdiff_t>(first),
-                                             _series.time.begin() + static_cast<std::ptrdiff_t>(visible.second),
+            const auto it = std::lower_bound(_series->time.begin() + static_cast<std::ptrdiff_t>(first),
+                                             _series->time.begin() + static_cast<std::ptrdiff_t>(visible.second),
                                              bucketEnd);
-            last = static_cast<std::size_t>(std::distance(_series.time.begin(), it));
+            last = static_cast<std::size_t>(std::distance(_series->time.begin(), it));
         }
 
         if (last > first) {
@@ -314,12 +310,12 @@ void SignalPlotModel::Extrema::include(double minimumValue, double maximumValue)
 
 void SignalPlotModel::rebuildSummaries() {
     const std::size_t blockCount =
-        (_series.value.size() + kSummaryBlockSize - 1) / kSummaryBlockSize;
+        (_series->value.size() + kSummaryBlockSize - 1) / kSummaryBlockSize;
     _block_minimum.assign(blockCount, std::numeric_limits<double>::infinity());
     _block_maximum.assign(blockCount, -std::numeric_limits<double>::infinity());
 
-    for (std::size_t i = 0; i < _series.value.size(); ++i) {
-        const double value = _series.value[i];
+    for (std::size_t i = 0; i < _series->value.size(); ++i) {
+        const double value = _series->value[i];
         if (!std::isfinite(value)) {
             continue;
         }
@@ -331,14 +327,14 @@ void SignalPlotModel::rebuildSummaries() {
 
 void SignalPlotModel::rebuildTimeSpacing() {
     const double fullSpan = _full_end - _full_start;
-    if (!(fullSpan > 0.0) || _series.time.size() < 2) {
+    if (!(fullSpan > 0.0) || _series->time.size() < 2) {
         _minimum_view_span = 0.0;
         return;
     }
 
     double minimumSpacing = std::numeric_limits<double>::infinity();
-    for (std::size_t i = 1; i < _series.time.size(); ++i) {
-        const double spacing = _series.time[i] - _series.time[i - 1];
+    for (std::size_t i = 1; i < _series->time.size(); ++i) {
+        const double spacing = _series->time[i] - _series->time[i - 1];
         if (spacing > 0.0 && std::isfinite(spacing)) {
             minimumSpacing = std::min(minimumSpacing, spacing);
         }
@@ -358,12 +354,12 @@ void SignalPlotModel::rebuildTimeSpacing() {
 
 void SignalPlotModel::updateValueRange() {
     auto range = visibleSampleRange();
-    if (range.first == range.second && !_series.time.empty()) {
-        const auto it = std::lower_bound(_series.time.begin(), _series.time.end(),
+    if (range.first == range.second && !_series->time.empty()) {
+        const auto it = std::lower_bound(_series->time.begin(), _series->time.end(),
                                          _view_start + (_view_end - _view_start) * 0.5);
-        const std::size_t nearest = it == _series.time.end()
-            ? _series.time.size() - 1
-            : static_cast<std::size_t>(std::distance(_series.time.begin(), it));
+        const std::size_t nearest = it == _series->time.end()
+            ? _series->time.size() - 1
+            : static_cast<std::size_t>(std::distance(_series->time.begin(), it));
         range = {nearest, nearest + 1};
     }
 
@@ -397,11 +393,11 @@ double SignalPlotModel::minimumViewSpan() const {
 SignalPlotModel::Extrema SignalPlotModel::extremaForRange(std::size_t first,
                                                           std::size_t last) const {
     Extrema result;
-    last = std::min(last, _series.value.size());
+    last = std::min(last, _series->value.size());
     first = std::min(first, last);
 
     while (first < last && first % kSummaryBlockSize != 0) {
-        result.include(_series.value[first++]);
+        result.include(_series->value[first++]);
     }
     while (first + kSummaryBlockSize <= last) {
         const std::size_t block = first / kSummaryBlockSize;
@@ -409,7 +405,7 @@ SignalPlotModel::Extrema SignalPlotModel::extremaForRange(std::size_t first,
         first += kSummaryBlockSize;
     }
     while (first < last) {
-        result.include(_series.value[first++]);
+        result.include(_series->value[first++]);
     }
     return result;
 }

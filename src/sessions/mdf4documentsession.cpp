@@ -9,6 +9,8 @@
 #include <QObject>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include <algorithm>
+#include <cstddef>
 #include <utility>
 
 namespace {
@@ -39,13 +41,49 @@ QString channelTitle(const mdf4::Channel& channel, int index) {
         : text(channel.name());
 }
 
+// A master carries the group's domain, so it is described by what it is rather
+// than offered as a signal: decoding it returns its own samples in both time
+// and value, which plots as a 45-degree line.
 QString channelSubtitle(const mdf4::Channel& channel) {
     const QString unit = text(channel.unit());
-    if (channel.decodable()) {
+    QString role;
+    if (channel.is_master()) {
+        role = QStringLiteral("Master channel");
+    } else if (!channel.decodable()) {
+        role = QStringLiteral("Not plottable");
+    } else {
         return unit;
     }
-    return unit.isEmpty() ? QStringLiteral("Not plottable")
-                          : QStringLiteral("%1  ·  Not plottable").arg(unit);
+    return unit.isEmpty() ? role : QStringLiteral("%1  ·  %2").arg(unit, role);
+}
+
+// Rejects NaN as well as an out-of-order sample: both break a binary search.
+bool nonDecreasing(const std::vector<double>& domain) {
+    for (std::size_t i = 1; i < domain.size(); ++i) {
+        if (!(domain[i] >= domain[i - 1])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// decodeChannel is a parsed-file boundary, and the plot binary-searches the
+// domain it hands over. Trim the parallel arrays to a common length and, when
+// the domain is not usable as a search key, plot the channel against record
+// indices rather than silently mislocating its samples.
+void normalizeDecoded(PlotSeries& series) {
+    const std::size_t count = std::min(series.time.size(), series.value.size());
+    series.time.resize(count);
+    series.value.resize(count);
+    if (nonDecreasing(series.time)) {
+        return;
+    }
+
+    for (std::size_t i = 0; i < count; ++i) {
+        series.time[i] = static_cast<double>(i);
+    }
+    series.domainName = QStringLiteral("Record index");
+    series.domainUnit.clear();
 }
 
 struct DomainMetadata {
@@ -111,7 +149,6 @@ QAbstractListModel* Mdf4DocumentSession::centerPanelModel() {
 void Mdf4DocumentSession::selectNode(quint64 key) {
     AdapterSessionBase::selectNode(key);
 
-    ++_selection_generation;
     const NodeBinding* binding = _registry.resolve(NodeRef{FormatId::MDF4, key});
     if (!binding || !std::holds_alternative<Mdf4Path>(binding->payload)) {
         clearPlot();
@@ -160,9 +197,12 @@ void Mdf4DocumentSession::buildTree() {
 
         for (int channelIndex = 0; channelIndex < group.channels_size(); ++channelIndex) {
             const auto& channel = group.channels(channelIndex);
-            const SemanticKind semanticKind = channel.decodable()
-                ? SemanticKind::Entity
-                : SemanticKind::Diagnostic;
+            SemanticKind semanticKind = SemanticKind::Entity;
+            if (channel.is_master()) {
+                semanticKind = SemanticKind::Attribute;
+            } else if (!channel.decodable()) {
+                semanticKind = SemanticKind::Diagnostic;
+            }
             appendNode(
                 groupItem,
                 channelTitle(channel, channelIndex),
@@ -180,8 +220,48 @@ void Mdf4DocumentSession::buildTree() {
 }
 
 void Mdf4DocumentSession::clearPlot() {
+    _selected_channel.reset();
     _plot_model->setBusy(false);
     _plot_model->setSeries({});
+}
+
+PlotSeriesPtr Mdf4DocumentSession::cachedSeries(ChannelKey key) {
+    const auto entry = _decode_cache.find(key);
+    if (entry == _decode_cache.end()) {
+        return {};
+    }
+    entry->second.lastUse = ++_cache_clock;
+    return entry->second.series;
+}
+
+void Mdf4DocumentSession::cacheSeries(ChannelKey key, PlotSeriesPtr series) {
+    const std::uint64_t bytes =
+        (series->time.size() + series->value.size()) * sizeof(double);
+    CacheEntry& entry = _decode_cache[key];
+    _cache_bytes -= entry.bytes;
+    entry = CacheEntry{std::move(series), bytes, ++_cache_clock};
+    _cache_bytes += bytes;
+
+    // Evict least-recently-used channels until the budget holds. The channel on
+    // screen and the entry just stored are never the victim, so a single series
+    // larger than the whole budget stays cached alone and still plots.
+    while (_cache_bytes > kDecodeCacheBudget) {
+        auto victim = _decode_cache.end();
+        for (auto it = _decode_cache.begin(); it != _decode_cache.end(); ++it) {
+            if (it->first == key || _selected_channel == it->first) {
+                continue;
+            }
+            if (victim == _decode_cache.end() ||
+                it->second.lastUse < victim->second.lastUse) {
+                victim = it;
+            }
+        }
+        if (victim == _decode_cache.end()) {
+            return;
+        }
+        _cache_bytes -= victim->second.bytes;
+        _decode_cache.erase(victim);
+    }
 }
 
 void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
@@ -204,63 +284,68 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
     pending.domainName = domain.name;
     pending.domainUnit = domain.unit;
 
-    if (!channel.decodable()) {
+    // A master is the group's own domain, not a signal against it.
+    if (channel.is_master() || !channel.decodable()) {
+        _selected_channel.reset();
         _plot_model->setBusy(false);
-        _plot_model->setSeries(std::move(pending));
+        _plot_model->setSeries(std::make_shared<const PlotSeries>(std::move(pending)));
         return;
     }
 
-    const ChannelKey cacheKey{
+    const ChannelKey key{
         static_cast<std::uint32_t>(path.groupIndex),
         static_cast<std::uint32_t>(path.channelIndex),
     };
-    const auto cached = _decode_cache.find(cacheKey);
-    if (cached != _decode_cache.end()) {
+    _selected_channel = key;
+
+    if (PlotSeriesPtr cached = cachedSeries(key)) {
         _plot_model->setBusy(false);
-        _plot_model->setSeries(cached->second);
+        _plot_model->setSeries(std::move(cached));
         return;
     }
 
-    const std::uint64_t generation = _selection_generation;
     const std::uint64_t sampleCount = channel.sample_count();
-    const QString name = pending.name;
-    const QString unit = pending.unit;
-    const QString domainName = pending.domainName;
-    const QString domainUnit = pending.domainUnit;
-
     if (sampleCount == 0) {
-        _decode_cache.emplace(cacheKey, pending);
-        _plot_model->setSeries(std::move(pending));
         _plot_model->setBusy(false);
+        _plot_model->setSeries(std::make_shared<const PlotSeries>(std::move(pending)));
         return;
     }
 
-    _plot_model->setSeries(std::move(pending));
+    _plot_model->setSeries(std::make_shared<const PlotSeries>(pending));
     _plot_model->setBusy(true);
+
+    // Re-selecting a channel whose decode is still running waits for that one
+    // rather than starting a duplicate.
+    if (!_decodes_in_flight.insert(key).second) {
+        return;
+    }
+
     const QString pathText = sourcePath();
     const DecodeFunction decode = _decode;
     auto* watcher = new QFutureWatcher<PlotSeries>(_plot_model.get());
     QObject::connect(watcher, &QFutureWatcher<PlotSeries>::finished, _plot_model.get(),
-                     [this, watcher, cacheKey, generation, name, unit,
-                      domainName, domainUnit]() {
-        PlotSeries series = watcher->result();
+                     [this, watcher, key, header = std::move(pending)]() mutable {
+        PlotSeries decoded = watcher->future().takeResult();
         watcher->deleteLater();
+        _decodes_in_flight.erase(key);
 
-        if (generation != _selection_generation) {
-            return;
+        PlotSeries series = std::move(header);
+        series.time = std::move(decoded.time);
+        series.value = std::move(decoded.value);
+        normalizeDecoded(series);
+
+        // The samples are valid for their channel whatever is selected now, so
+        // the work is always kept; only the plot update follows the selection.
+        PlotSeriesPtr stored = std::make_shared<const PlotSeries>(std::move(series));
+        cacheSeries(key, stored);
+        if (_selected_channel == key) {
+            _plot_model->setSeries(std::move(stored));
+            _plot_model->setBusy(false);
         }
-
-        series.name = name;
-        series.unit = unit;
-        series.domainName = domainName;
-        series.domainUnit = domainUnit;
-        _decode_cache.emplace(cacheKey, series);
-        _plot_model->setSeries(std::move(series));
-        _plot_model->setBusy(false);
     });
 
     watcher->setFuture(QtConcurrent::run(
-        [decode, pathText, cacheKey, sampleCount]() {
-            return decode(pathText, cacheKey.first, cacheKey.second, 0, sampleCount);
+        [decode, pathText, key, sampleCount]() {
+            return decode(pathText, key.first, key.second, 0, sampleCount);
         }));
 }

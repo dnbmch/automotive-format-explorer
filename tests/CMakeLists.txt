@@ -60,3 +60,14 @@ explorer_add_test(tst_mdf4documentsession
     protobuf::libprotobuf
     mdf4parser
 )
+
+# Needs a real recording named by MDF4_WRITER_SAMPLE; the executable exits 77
+# without one so the case reports as Skipped instead of silently passing.
+explorer_add_test(tst_mdf4writerfile
+    explorer-core
+    explorer-mdf4-backend
+    Qt6::Concurrent
+    protobuf::libprotobuf
+    mdf4parser
+)
+set_tests_properties(tst_mdf4writerfile PROPERTIES SKIP_RETURN_CODE 77)

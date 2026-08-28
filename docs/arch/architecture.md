@@ -75,7 +75,7 @@ A `DocumentSession` (interface in `src/sessions/documentsession.h`) is the per-d
 | `centerPanelModel()` | `QAbstractListModel*` for the center panel; null when there is no center panel |
 | `moveModelsToThread(QThread*)` | moves the session's models to the given thread |
 
-`AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides the common machinery (NodeRegistry hookup, tree construction skeleton, diagnostics collection). The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`, `Mdf4DocumentSession`) inherit from it and supply format-specific tree building, detail sections, and center-panel choice. MDF4 open is metadata-only; its session requests an explicit sample range on a worker only when a decodable channel is selected, caches completed channels, and rejects results whose selection generation is stale.
+`AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides the common machinery (NodeRegistry hookup, tree construction skeleton, diagnostics collection). The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`, `Mdf4DocumentSession`) inherit from it and supply format-specific tree building, detail sections, and center-panel choice. MDF4 open is metadata-only; its session requests an explicit sample range on a worker only when a plottable channel is selected, caches every completed decode under a byte budget, and applies a result to the plot only while its channel is still the selection.
 
 The nav panel never binds a session's `TreeModel` directly: `AppController::currentTreeModel()` returns a per-session `TreeFilterModel` (`src/models/treefiltermodel.h`) — a `QSortFilterProxyModel` with recursive filtering and auto-accepted child rows that also exposes `nodeKeyRole` and a source-mapped `indexForNodeKey()` to QML. One proxy per session keeps the filter text per tab and preserves NavPanel's model-identity-keyed expand/selection/scroll state; the proxies live in `AppController` and are dropped when their tab closes. Sessions and backends know nothing about filtering.
 
@@ -157,7 +157,7 @@ qml/
   Main.qml      root layout with SplitView, tabs, Loader
   components/   NavPanel, MemoryView, SignalMapView, SignalPlotView,
                 SplashOverlay, Theme, Toast, DiagnosticsPopup
-cmake/          FetchParserLib, DeployMsys2Deps
+cmake/          FetchParserLib, DeployRuntimeDeps
 ```
 
 Each format's detail rendering lives in its own `DetailPresenter` subclass — `a2ldetailpresenter.{h,cpp}`, `dbcdetailpresenter.{h,cpp}`, `ldfdetailpresenter.{h,cpp}`, `mdf4detailpresenter.{h,cpp}` — kept separate from the session files so no session carries both construction/query and the bulk of the detail-building helpers. A2L additionally splits its IF_DATA helpers into `a2ldetailpresenter_ifdata.cpp`. Cross-format text and detail helpers (`text`, `boolText`, `hexId`/`hexValue`, `addField`, `pushSection`, `joinStrings`, `messageToJsonText`) live in `sessions/presentertext.h`, shared by every presenter and document session; `text` decodes protobuf bytes as strict UTF-8 (via `QStringDecoder`, stateless) and falls back to Latin-1 only on a genuine decode error. Format-specific number formatting stays in the per-format headers.

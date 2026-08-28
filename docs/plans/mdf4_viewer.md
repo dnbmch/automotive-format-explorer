@@ -171,8 +171,8 @@ struct PlotSeries {
   reset-zoom), plot item, status bar; returned by `centerPanelSource()`; registered in
   `qt_add_qml_module`.
 - **Selection flow**: `selectNode(channel)` → session cache check → on miss,
-  `decodeChannel` via `QtConcurrent` + `QFutureWatcher`, plot shows busy state, stale
-  results (selection moved on) are dropped.
+  `decodeChannel` via `QtConcurrent` + `QFutureWatcher`, plot shows busy state; a result
+  is always cached but reaches the plot only while its channel is still selected.
 - **Reuse note**: the plot module is a candidate for later lift into the proprietary apps
   (live view off the UDP feed). Keep it contribution-clean — operator-authored only — so
   self-relicensing stays possible.

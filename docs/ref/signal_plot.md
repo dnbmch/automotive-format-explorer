@@ -13,10 +13,15 @@ supplies the complete selected range with
 `setBusy()`. View bounds, value bounds, cursor state, and rendering summaries
 belong to the plot model.
 
-The model trims mismatched vectors to their common length at the boundary. It
-assumes the domain is monotonic, as guaranteed by recording backends. Domain
-metadata prevents record-index fallback or a future non-time producer from being
-mislabelled as seconds.
+Normalization happens at the producer's own parse boundary, in one pass over a
+freshly decoded series: the parallel vectors are trimmed to their common length
+and the domain is checked to be non-decreasing. A series that fails the check is
+re-domained onto record indices. The model therefore binary-searches a sorted
+axis without any check in the render or cursor path. Domain metadata prevents an
+index domain or a future non-time producer from being mislabelled as seconds.
+
+`setSeries()` takes an immutable shared series, so a producer's cache and the
+model hold one buffer instead of a copy each.
 
 ## Rendering
 
@@ -50,9 +55,22 @@ with padding for readability. Non-finite values do not contribute to extrema.
 
 ## MDF4 selection lifecycle
 
-Opening an MDF4 file extracts only its metadata graph. Selecting a decodable
+Opening an MDF4 file extracts only its metadata graph. Selecting a plottable
 channel starts `decodeChannel(path, group, channel, firstSample, sampleCount)`
-on a worker with the metadata-derived range. Completed series are cached by
-group/channel. Every selection advances a generation token; a completion whose
-token is no longer current is discarded, including its cache entry, so rapid
-selection changes cannot flash or retain stale data.
+on a worker with the metadata-derived range; a channel whose decode is already
+running is not decoded a second time.
+
+A finished decode is always cached by group/channel — the samples are valid for
+their channel whatever is selected by the time they arrive — while the plot is
+updated only when that channel is still the selection. Rapid selection changes
+therefore neither flash stale data nor throw completed work away.
+
+The cache is bounded by bytes rather than entries: past a 256 MiB budget it
+evicts least-recently-used channels, never the one on screen, and keeps a single
+series larger than the whole budget so that channel still plots. Re-selecting a
+cached channel refreshes its position.
+
+A group's master channel carries the domain rather than a signal against it —
+decoding a master returns its own samples in both time and value — so the tree
+lists it as the group's axis channel, with its detail view intact, and never
+decodes it.

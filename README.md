@@ -90,14 +90,15 @@ Bit-level visualization of CAN and LIN message payloads. Each signal is rendered
 Select a numeric MDF4 channel to decode and plot physical values against its
 resolved time master, or against the reader's record-index fallback when no time
 master exists. File open remains metadata-only; channel samples are decoded over
-an explicit range on a worker and cached after completion.
+an explicit range on a worker and held in a size-bounded cache.
 
 - Responsive min/max bucketing for dense and million-sample recordings
 - Direct polylines at sparse zoom levels so individual samples remain exact
 - Wheel zoom around the pointer and drag pan
 - Nearest-sample cursor readout with correctly labeled domain, value, and units
 - Unsupported channels stay browsable and explain why they are not plottable
-- Late worker results are discarded after the selection changes
+- A group's master channel is listed as its axis rather than offered as a signal
+- Late worker results are kept for their channel but never replace a newer selection
 
 ### Bidirectional Selection
 
@@ -174,7 +175,8 @@ seeded bits are the siblings' working trees, not the pinned releases.
 - [docs/ref/signal_map.md](docs/ref/signal_map.md) — DBC/LDF signal grid visual + interaction reference.
 - [docs/ref/signal_plot.md](docs/ref/signal_plot.md) — format-neutral time-series plot reference.
 - [docs/ref/keyboard.md](docs/ref/keyboard.md) — application + grid keyboard shortcuts.
-- [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — `fetch_parser_lib` mechanics, MSYS2 deploy, shared-vs-static backend model.
+- [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — `fetch_parser_lib` mechanics, runtime dependency closure, shared-vs-static backend model.
+- [docs/ref/release_packaging.md](docs/ref/release_packaging.md) — Windows package path, headless launch gates, release publish gating.
 - [roadmap.md](roadmap.md) — direction and planned work.
 - [project_status.md](project_status.md) — current state of play.
 - [docs/backlog.md](docs/backlog.md) — known issues / planned changes.

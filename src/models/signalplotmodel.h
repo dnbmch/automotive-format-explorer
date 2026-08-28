@@ -77,8 +77,11 @@ public:
     double cursorTime() const;
     double cursorValue() const;
 
-    // Document-session provider contract.
-    void setSeries(PlotSeries series);
+    // Document-session provider contract. The series arrives already normalized
+    // (equal-length arrays, non-decreasing domain) and immutable, so the
+    // provider's cache and this model share one buffer. A null pointer clears
+    // the plot.
+    void setSeries(PlotSeriesPtr series);
     void setBusy(bool busy);
 
     // View and cursor operations used by SignalPlotItem.
@@ -119,7 +122,7 @@ private:
     double minimumViewSpan() const;
     Extrema extremaForRange(std::size_t first, std::size_t last) const;
 
-    PlotSeries _series;
+    PlotSeriesPtr _series = std::make_shared<const PlotSeries>();
     bool _busy = false;
 
     double _full_start = 0.0;
