@@ -15,8 +15,10 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   `SignalPlotItem`) with summary-backed min/max bucketing, zoom, pan, and
   nearest-sample cursor readout.
 - MDF4 metadata-only open, channel-group/channel detail cards, and lazy explicit-
-  range decode on a worker. Completed channels are cached and late results from
-  stale selections are discarded.
+  range decode on a worker. Completed decodes land in a byte-budget LRU cache
+  shared with the plot model; a result reaches the plot only while its channel
+  is still selected. Non-monotonic domains fall back to record indices at the
+  session seam; group masters are listed as axis channels, not signals.
 - Memory grid: overlap hatching (bytes claimed by more than one object),
   click-drag byte-range selection with status readout, and hover tooltips with
   record layout / conversion — see [docs/ref/memory_view.md](docs/ref/memory_view.md).
