@@ -88,26 +88,47 @@ keys.
 
 The C++ runtime must come from the toolchain that compiled the binaries. A standalone Qt mingw distribution bundles its own `libgcc_s_seh-1.dll` and `libstdc++-6.dll`, built by an older MinGW than the msys2 gcc used here — msys2's `libstdc++-6.dll` exports symbols Qt's does not. If Qt's copy wins the DLL search, the loader binds a runtime older than the binaries were compiled against and the process dies with `STATUS_ENTRYPOINT_NOT_FOUND` (`0xc0000139`) before `main()`, with no diagnostic.
 
-Two places enforce this, and both must keep doing so:
+Three places enforce this, and all must keep doing so:
 
 - [tests/CMakeLists.txt](../../tests/CMakeLists.txt) puts the compiler's own directory — derived from `CMAKE_CXX_COMPILER` — ahead of Qt's on the ctest `PATH`.
 - [scripts/package_windows.sh](../../scripts/package_windows.sh) passes `--no-compiler-runtime` to `windeployqt`; the later closure walk fills the deliberately absent compiler runtime from msys2 before considering Qt.
+- [cmake/DeployRuntimeDeps.cmake](../../cmake/DeployRuntimeDeps.cmake) gives the closure walk the compiler's own directory as `--search` and Qt only as `--provided`, so the runtime deployed next to a build-tree binary is the toolchain's.
 
 Only binaries referencing a symbol absent from Qt's older runtime fail, so the fault appears in one target while its neighbours pass.
 
-## Windows DLL deploy (`deploy_msys2_deps`)
+## The dependency closure walk
 
-Defined in [cmake/DeployMsys2Deps.cmake](../../cmake/DeployMsys2Deps.cmake) and used in the top-level `CMakeLists.txt` under the `WIN32` branch.
+[scripts/deploy_closure.sh](../../scripts/deploy_closure.sh) is the only place a Windows runtime dependency is resolved, and it names none. It walks `objdump -p` over the binaries it is given, breadth-first (one `objdump` run per level — process spawns dominate), and resolves each import in this order:
 
-This is a **local-build convenience only**. It copies the protobuf/abseil dependency chain and the MinGW runtime — `libprotobuf.dll`, `libutf8_validity.dll`, `libutf8_range.dll`, `zlib1.dll`, `libgcc_s_seh-1.dll`, `libstdc++-6.dll`, `libwinpthread-1.dll`, and the `libabsl_*.dll` glob — from the host MSYS2 `bin` (`C:\msys64\mingw64\bin`) into the build output directory next to the explorer `.exe`, so a developer can run the freshly built binary without MSYS2 on `PATH`. It does **not** copy any Qt6 DLLs or QML modules.
+1. already deployed — any binary the walk started from, plus anything it has copied
+2. `C:/Windows/System32`, and the `api-ms-*` / `ext-ms-*` virtual names — skipped
+3. each `--search` directory in turn — a hit is copied into `--dest` and walked itself
+4. each `--provided` directory — satisfies the import without copying it, for a directory the loader reaches on its own
 
-The deploy step uses `cmake -E copy_if_different` for each known dependency. To add a new dependency, append it to the list in `DeployMsys2Deps.cmake`. The deploy runs at build time as a `POST_BUILD` step on the `automotive-format-explorer` target.
+Anything left over is printed and fails the script. `--search` before `--provided` is what keeps the C++ runtime coming from the toolchain that compiled the binaries rather than from Qt's older copy of the same file name.
 
-Release packaging is separate: [scripts/package_windows.sh](../../scripts/package_windows.sh) assembles the redistributable Windows bundle, and the local helper does not produce one.
+Both deploy paths call it:
 
-The packaging script names no dependency. It deploys Qt with `windeployqt --qmldir qml --no-compiler-runtime`, then walks the dependency closure — `objdump -p` over every binary in the output, breadth-first, resolving each import against what is already packaged, then the system directory, then msys2 and Qt. Unresolved imports fail the script. msys2 is searched ahead of Qt so the toolchain that compiled the binaries supplies the C++ runtime; Qt bundles an older MinGW runtime, and `--no-compiler-runtime` keeps it out of the way.
+| | roots | `--dest` | `--search` | `--provided` |
+|---|---|---|---|---|
+| Package ([scripts/package_windows.sh](../../scripts/package_windows.sh)) | `dist/`, scanned recursively | `dist/` | msys2 `bin`, Qt `bin` | — |
+| Build tree ([cmake/DeployRuntimeDeps.cmake](../../cmake/DeployRuntimeDeps.cmake)) | the executable, `explorer-core`, and every backend | the executable's directory | the compiler's own `bin` | Qt `bin` |
 
-Ordering is load-bearing: `windeployqt --no-compiler-runtime` first leaves the runtime absent, then the closure walk resolves that absence from msys2. It does not rely on overwriting a Qt copy.
+### Package
+
+`package_windows.sh` runs the walk over the whole of `dist/` once `windeployqt` has populated it, so the Qt plugins windeployqt just dropped in are walked too.
+
+Ordering is load-bearing: `windeployqt --no-compiler-runtime` leaves the compiler runtime deliberately absent, and the walk then fills it from msys2. It does not rely on overwriting a Qt copy.
+
+The rest of the packaging path — payload, launch gates, and release publication — is [release_packaging.md](release_packaging.md).
+
+### Build tree
+
+`deploy_runtime_deps()` is called from the top-level `CMakeLists.txt` and is a no-op off MinGW. It adds one `POST_BUILD` step on `automotive-format-explorer` that runs the same walk, so a freshly built binary runs without msys2 on `PATH`. The backends are loaded at runtime rather than imported, so they are passed as roots of their own; `add_dependencies` on the Windows branch guarantees they exist by then.
+
+Qt is `--provided` here: build-tree runs resolve Qt from its own install, as ctest does, and no Qt DLL is copied into the build directory.
+
+The step needs msys2's `bash`, located two levels above the compiler (`<msys2>/mingw64/bin/g++.exe` → `<msys2>/usr/bin/bash.exe`) rather than on `PATH`, which on Windows would also offer System32's WSL launcher. Without it the deploy warns at configure time and is skipped. `objdump` is taken from `--search` when the build environment does not put it on `PATH`.
 
 ## Backend linking model — shared vs static
 

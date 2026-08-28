@@ -2,9 +2,10 @@
 #
 # Package the Windows build into a self-contained dist/ directory.
 #
-# Qt is deployed with windeployqt; everything else is resolved by walking the
-# dependency closure of the binaries themselves. No dependency is named by
-# hand, and an import that cannot be resolved fails the script.
+# Qt is deployed with windeployqt; everything else is resolved by
+# scripts/deploy_closure.sh, which walks the dependency closure of the binaries
+# themselves. No dependency is named by hand, and an import that cannot be
+# resolved fails the script.
 #
 # Usage:
 #   bash scripts/package_windows.sh [build-dir] [dist-dir]
@@ -32,13 +33,9 @@ command -v cygpath >/dev/null && QT_PREFIX="$(cygpath -u "$QT_PREFIX")"
 command -v cygpath >/dev/null && MINGW_BIN="$(cygpath -u "$MINGW_BIN")"
 
 QT_BIN="$QT_PREFIX/bin"
-SYSTEM_DIR="/c/Windows/System32"
 WINDEPLOYQT="$QT_BIN/windeployqt.exe"
 
-command -v objdump >/dev/null || { echo "objdump not on PATH" >&2; exit 1; }
 [ -x "$WINDEPLOYQT" ] || { echo "windeployqt not found at $WINDEPLOYQT" >&2; exit 1; }
-
-lower() { tr 'A-Z' 'a-z'; }
 
 # --- Application payload -------------------------------------------------
 
@@ -69,58 +66,13 @@ PATH="$QT_BIN:$PATH" "$WINDEPLOYQT" \
 
 # --- Dependency closure --------------------------------------------------
 #
-# Breadth-first over every binary under dist/. Each import is resolved against
-# what is already packaged, then the system directory, then msys2 and Qt.
-#
-# msys2 is searched before Qt so the toolchain that compiled these binaries
-# supplies the C++ runtime. Qt's own libraries never reach this search — they
-# are already in dist/ from windeployqt.
+# Every binary under dist/ is walked, including the Qt plugins windeployqt just
+# dropped in. msys2 is searched before Qt so the toolchain that compiled these
+# binaries supplies the C++ runtime; Qt's own libraries never reach the search,
+# they are already in dist/ from windeployqt.
 
-search_dirs=("$MINGW_BIN" "$QT_BIN")
-
-declare -A have seen
-queue=()
-
-while IFS= read -r f; do
-    have["$(basename "$f" | lower)"]=1
-    queue+=("$f")
-done < <(find "$DIST" -type f \( -iname '*.exe' -o -iname '*.dll' \))
-
-missing=()
-
-while [ ${#queue[@]} -gt 0 ]; do
-    bin="${queue[0]}"
-    queue=("${queue[@]:1}")
-
-    while read -r dep; do
-        key="$(printf '%s' "$dep" | lower)"
-        [ -n "${seen[$key]+x}" ] && continue
-        seen["$key"]=1
-
-        [ -n "${have[$key]+x}" ] && continue
-        [ -e "$SYSTEM_DIR/$dep" ] && continue
-        case "$key" in api-ms-*|ext-ms-*) continue ;; esac
-
-        found=""
-        for d in "${search_dirs[@]}"; do
-            [ -e "$d/$dep" ] && { found="$d/$dep"; break; }
-        done
-
-        if [ -n "$found" ]; then
-            cp "$found" "$DIST/"
-            name="$(basename "$found")"
-            have["$(printf '%s' "$name" | lower)"]=1
-            queue+=("$DIST/$name")
-        else
-            missing+=("$dep")
-        fi
-    done < <(objdump -p "$bin" 2>/dev/null | awk '/DLL Name:/ {print $3}')
-done
-
-if [ ${#missing[@]} -gt 0 ]; then
-    printf 'unresolved dependency: %s\n' "${missing[@]}" >&2
-    echo "packaging failed: ${#missing[@]} unresolved" >&2
-    exit 1
-fi
-
-echo "dependency closure complete"
+bash scripts/deploy_closure.sh \
+    --dest "$DIST" \
+    --search "$MINGW_BIN" \
+    --search "$QT_BIN" \
+    "$DIST"

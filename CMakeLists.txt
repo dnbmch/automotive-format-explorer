@@ -14,7 +14,7 @@ find_package(ZLIB REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(FetchParserLib)
-include(DeployMsys2Deps)
+include(DeployRuntimeDeps)
 
 # Parser -lib release tags. Bumped in lockstep with the re-cut republish releases
 # (the proto contracts changed). Override at configure time if the operator cuts
@@ -300,7 +300,13 @@ add_custom_command(TARGET automotive-format-explorer POST_BUILD
     COMMENT "Staging sample files"
 )
 
-deploy_msys2_deps(automotive-format-explorer)
+deploy_runtime_deps(automotive-format-explorer
+    explorer-core
+    explorer-a2l-backend
+    explorer-dbc-backend
+    explorer-ldf-backend
+    explorer-mdf4-backend
+)
 
 enable_testing()
 add_subdirectory(tests)

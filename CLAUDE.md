@@ -190,7 +190,7 @@ qml/
                   Toast, SplashOverlay, DiagnosticsPopup
 docs/             design docs, screenshots
 samples/          bundled text-format sample files + SAMPLES.md provenance
-cmake/            FetchParserLib, DeployMsys2Deps
+cmake/            FetchParserLib, DeployRuntimeDeps
 ```
 
 ### Build
@@ -214,12 +214,13 @@ See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-works
 - `release.yml` triggers on `v*` tags: builds the Windows zip + Linux AppImage, then a `publish` job gated on both creates the GitHub release. A platform failure means no release object exists
 - Windows CI and release build against the same standalone Qt as local development (`install-qt-action`); msys2 supplies gcc, ninja, cmake, and protobuf
 - Do NOT re-tag unless the workflow is verified. Each release build takes ~3 min
+- Packaging path, launch gates, and publish gating: [docs/ref/release_packaging.md](docs/ref/release_packaging.md)
 
 ### Platform differences
 
 | | Windows | Linux |
 |---|---------|-------|
 | Backends | SHARED (.dll), loaded via QLibrary | STATIC, linked into exe, registered at startup |
-| Qt deploy | `windeployqt` + dependency-closure walk (`scripts/package_windows.sh`) | AppImage via linuxdeploy |
+| Qt deploy | `windeployqt` + dependency-closure walk (`scripts/deploy_closure.sh`, shared by the package and the build-tree deploy) | AppImage via linuxdeploy |
 | Protobuf JSON | `google/protobuf/util/json_util.h` (stable API, works on both v3 and v4+) | |
 | Define | — | `BACKENDS_STATIC` |
