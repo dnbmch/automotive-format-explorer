@@ -1,8 +1,9 @@
 // End-to-end smoke: a real writer-produced .mf4 opens, builds a tree, and
-// plots. No binary fixture belongs in git, so the recording is named by
-// MDF4_WRITER_SAMPLE. Without it the executable exits 77 and ctest reports the
-// case as Skipped — a QSKIP would have counted as a pass and hidden the fact
-// that the only end-to-end case never ran.
+// plots. ctest points MDF4_WRITER_SAMPLE at the bundled samples/
+// demo_recording.mf4; set it to another recording to smoke that instead. When
+// the variable resolves to nothing the executable exits 77 and ctest reports
+// the case as Skipped — a QSKIP would have counted as a pass and hidden the
+// fact that the only end-to-end case never ran.
 //
 //   MDF4_WRITER_SAMPLE=<file>.mf4 ./build/tst_mdf4writerfile
 

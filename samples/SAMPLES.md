@@ -9,6 +9,7 @@ them under "open a sample" when no file is open.
 | `demo_ecu.a2l` | ASAP2 (A2L) | Hand-authored synthetic engine-ECU description, written for this project. Not derived from ASAM material. | Same as this repository (GPL-3.0) |
 | `demo_seat.ldf` | LIN (LDF) | Hand-authored synthetic seat-control cluster, written for this project. Not derived from the LIN specification example. | Same as this repository (GPL-3.0) |
 | `tesla_can.dbc` | CAN (DBC) | [comma.ai opendbc](https://github.com/commaai/opendbc) project, unmodified. | MIT (see below) |
+| `demo_recording.mf4` | ASAM MDF 4.2 | Synthetic recording emitted by `dnbmch/mdf4-writer` (`emit_minimal_mf4`), written for this project. One channel group: a `t` time master and a `speed` sine — select `speed` to see the plot; `t` is the group's axis channel and does not plot. | Same as this repository (GPL-3.0) |
 
 `tesla_can.dbc` deliberately carries one dangling `VAL_` entry (message ID 568
 has no matching definition), so opening it shows the diagnostics badge with

@@ -189,7 +189,7 @@ qml/
   components/     NavPanel, MemoryView, SignalMapView, SignalPlotView, Theme,
                   Toast, SplashOverlay, DiagnosticsPopup
 docs/             design docs, screenshots
-samples/          bundled text-format sample files + SAMPLES.md provenance
+samples/          bundled sample files (one per format) + SAMPLES.md provenance
 cmake/            FetchParserLib, DeployRuntimeDeps
 ```
 

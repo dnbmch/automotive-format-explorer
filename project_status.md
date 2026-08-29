@@ -25,16 +25,18 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - Bidirectional selection (tree ↔ detail ↔ center) keyed by `NodeRegistry`.
 - Per-tab tree filter (`TreeFilterModel` proxy, `Ctrl+F`) with recursive matching
   and pre-filter state restore.
-- Bundled samples (one per text format, `samples/`) with "open a sample" links in the
-  empty sidebar; provenance in `samples/SAMPLES.md`.
+- Bundled samples (one per format, `samples/`, including a writer-authored
+  `.mf4` recording) with "open a sample" links in the empty sidebar; provenance
+  in `samples/SAMPLES.md`.
 - Splash overlay + DWM cloak startup.
 - Links the four parser libraries — fetched from GitHub releases at configure
   time, or staged from the sibling working trees by `seed-parser-deps.sh`. GPL-3.0.
 - QTest coverage for tree filtering, memory and signal-plot models, A2L/MDF4
   detail presenters, and MDF4 ranged-decode, cache eviction, domain validation
   and race behavior, registered with ctest and run in CI. The end-to-end
-  writer-file smoke needs a recording in `MDF4_WRITER_SAMPLE` and reports as a
-  ctest skip without one.
+  writer-file smoke runs against the bundled `samples/demo_recording.mf4`;
+  `MDF4_WRITER_SAMPLE` points it at a different recording, and it reports as a
+  ctest skip when that resolves to nothing.
 - CI (Windows MinGW + Ubuntu, also on `release/**`) + `release.yml` (Windows zip
   + Linux AppImage). Windows CI and release build against the same standalone Qt
   as local development.
