@@ -250,12 +250,21 @@ ApplicationWindow {
                                         font.pixelSize: Theme.fontSizeM
                                         color: tabs.currentIndex === tabDelegate.index
                                             ? Theme.textWhite : Theme.textSecondary
+                                        // Elide needs a bound; leave room for the
+                                        // row padding, close button, and warning
+                                        // badge inside the capped tab width.
+                                        width: Math.min(implicitWidth,
+                                                        Theme.tabWidthMax - 48
+                                                        - (tabDiagLabel.visible
+                                                           ? tabDiagLabel.implicitWidth + tabRow.spacing
+                                                           : 0))
                                         elide: Text.ElideRight
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
 
                                     // Diagnostics indicator \u2014 opens the app-level popup
                                     Label {
+                                        id: tabDiagLabel
                                         text: "\u26A0"
                                         visible: tabDelegate.hasDiagnostics
                                         font.pixelSize: Theme.fontSizeM

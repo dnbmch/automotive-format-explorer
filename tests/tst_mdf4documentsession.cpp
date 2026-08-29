@@ -168,6 +168,8 @@ void TestMdf4DocumentSession::masterChannelIsAnAxisNotASignal() {
     QVERIFY(!model->busy());
     QVERIFY(!model->hasSeries());
     QCOMPARE(model->name(), QStringLiteral("Acquisition time"));
+    QCOMPARE(model->placeholderText(),
+             QStringLiteral("Master channel — this group's time axis"));
     QCOMPARE(calls.load(), 0);
 }
 

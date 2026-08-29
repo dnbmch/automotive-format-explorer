@@ -286,6 +286,9 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
 
     // A master is the group's own domain, not a signal against it.
     if (channel.is_master() || !channel.decodable()) {
+        pending.placeholderText = channel.is_master()
+            ? QStringLiteral("Master channel — this group's time axis")
+            : QStringLiteral("This channel type is not plottable");
         _selected_channel.reset();
         _plot_model->setBusy(false);
         _plot_model->setSeries(std::make_shared<const PlotSeries>(std::move(pending)));
@@ -306,6 +309,7 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
 
     const std::uint64_t sampleCount = channel.sample_count();
     if (sampleCount == 0) {
+        pending.placeholderText = QStringLiteral("No samples recorded");
         _plot_model->setBusy(false);
         _plot_model->setSeries(std::make_shared<const PlotSeries>(std::move(pending)));
         return;

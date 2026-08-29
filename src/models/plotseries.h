@@ -14,6 +14,10 @@ struct PlotSeries {
     QString unit;
     QString domainName;
     QString domainUnit;
+    // Set by the producer when it knows why there are no samples (axis channel,
+    // unsupported type, empty recording); plot surfaces show it instead of the
+    // generic empty-state message.
+    QString placeholderText;
     std::vector<double> time;
     std::vector<double> value;
 };

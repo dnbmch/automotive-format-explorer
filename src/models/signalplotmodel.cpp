@@ -39,6 +39,7 @@ QString SignalPlotModel::name() const { return _series->name; }
 QString SignalPlotModel::unit() const { return _series->unit; }
 QString SignalPlotModel::domainName() const { return _series->domainName; }
 QString SignalPlotModel::domainUnit() const { return _series->domainUnit; }
+QString SignalPlotModel::placeholderText() const { return _series->placeholderText; }
 quint64 SignalPlotModel::sampleCount() const {
     return static_cast<quint64>(_series->time.size());
 }

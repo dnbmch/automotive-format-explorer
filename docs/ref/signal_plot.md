@@ -23,6 +23,10 @@ index domain or a future non-time producer from being mislabelled as seconds.
 `setSeries()` takes an immutable shared series, so a producer's cache and the
 model hold one buffer instead of a copy each.
 
+A producer that knows why a series is empty says so through the series'
+`placeholderText` (axis channel, unsupported type, empty recording); the plot
+surfaces show it in place of the generic "No samples available".
+
 ## Rendering
 
 The model precomputes min/max summaries in fixed-size sample blocks. For each

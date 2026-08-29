@@ -194,6 +194,8 @@ Item {
                                  + plotView.numberText(mapModel.viewStart) + " \u2014 "
                                  + plotView.numberText(mapModel.viewEnd) + domainSuffix
                         }
+                        if (mapModel.placeholderText.length > 0)
+                            return mapModel.placeholderText
                         if (mapModel.name.length > 0)
                             return "No samples available"
                         return "Choose a signal in the tree to begin"

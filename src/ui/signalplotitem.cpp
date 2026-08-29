@@ -43,12 +43,15 @@ void SignalPlotItem::paint(QPainter* painter) {
 
     drawAxes(painter, rect);
     if (!_model || !_model->hasSeries()) {
-        drawCenteredMessage(painter, rect,
-                            _model && _model->busy()
-                                ? QStringLiteral("Decoding samples\u2026")
-                                : _model && !_model->name().isEmpty()
-                                    ? QStringLiteral("No samples available")
-                                    : QStringLiteral("Select a plottable channel"));
+        QString message = QStringLiteral("Select a plottable channel");
+        if (_model && _model->busy()) {
+            message = QStringLiteral("Decoding samples\u2026");
+        } else if (_model && !_model->placeholderText().isEmpty()) {
+            message = _model->placeholderText();
+        } else if (_model && !_model->name().isEmpty()) {
+            message = QStringLiteral("No samples available");
+        }
+        drawCenteredMessage(painter, rect, message);
         return;
     }
 

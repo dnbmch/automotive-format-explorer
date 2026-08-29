@@ -30,6 +30,7 @@ class EXPLORER_CORE_EXPORT SignalPlotModel : public QAbstractListModel {
     Q_PROPERTY(QString unit READ unit NOTIFY seriesChanged)
     Q_PROPERTY(QString domainName READ domainName NOTIFY seriesChanged)
     Q_PROPERTY(QString domainUnit READ domainUnit NOTIFY seriesChanged)
+    Q_PROPERTY(QString placeholderText READ placeholderText NOTIFY seriesChanged)
     Q_PROPERTY(qulonglong sampleCount READ sampleCount NOTIFY seriesChanged)
     Q_PROPERTY(bool hasSeries READ hasSeries NOTIFY seriesChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
@@ -61,6 +62,7 @@ public:
     QString unit() const;
     QString domainName() const;
     QString domainUnit() const;
+    QString placeholderText() const;
     quint64 sampleCount() const;
     bool hasSeries() const;
     bool busy() const;
