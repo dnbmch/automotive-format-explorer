@@ -1,39 +1,54 @@
 # automotive-format-explorer — handoff
 
-## 2026-08-28 — plot/session and packaging backlog batch landed — DONE
+## 2026-08-29 — first operator drive: two UI defects fixed, silent deploy no-op fixed, MDF4 sample bundled — OPEN
 
-BL-P1..P5, BL-K3, and BL-K4 are implemented, tested, and committed (`eba2014` packaging,
-`0748633` plot/session).
+The first live click-to-plot drive surfaced defects; all fixed and committed (`5897424`
+packaging, `86165ac` ui, `6aa7aa9` samples).
 
-**Plot/session.** Decoded series live in a 256 MiB byte-budget LRU cache that shares one
-immutable buffer with the plot model (`PlotSeriesPtr`); the on-screen channel is never
-evicted. Selection identity replaced the generation token: a finished decode is always
-cached, only the plot update follows the current selection, and an in-flight channel is
-never decoded twice. Decode results are normalized once at the session seam — arrays
-trimmed, domain checked non-decreasing (NaN fails), record-index fallback on violation —
-so the plot binary-searches with no hot-path checks. Group time masters are axis channels,
-not plottable signals. The writer-file smoke moved to `tst_mdf4writerfile` with an exit-77
-ctest skip: an unset `MDF4_WRITER_SAMPLE` now reports `Skipped`, never `Passed`.
-Reference: [docs/ref/signal_plot.md](ref/signal_plot.md).
+**Tab titles clipped** without an ellipsis — the title label sat in a plain `Row` where
+`elide` never engages; it now gets a bounded width inside the capped tab (`qml/Main.qml`).
 
-**Packaging.** `scripts/deploy_closure.sh` is the single dependency-closure walk, shared by
-`package_windows.sh` and the new `cmake/DeployRuntimeDeps.cmake` (replacing the hand-listed
-`DeployMsys2Deps.cmake`, which had already drifted). Qt is `--provided` in the build tree so
-the msys2 toolchain keeps runtime ownership. Normative packaging facts harvested from
-`docs/archive/` into [docs/ref/release_packaging.md](ref/release_packaging.md).
+**"No samples available" everywhere** decomposed into three findings:
+- Masters legitimately don't plot since the axis-channel change, but said the same thing as a
+  failure. Empty plots now state why via the series' `placeholderText` — "Master channel — this
+  group's time axis" / "This channel type is not plottable" / "No samples recorded" — in the
+  plot area and footer ([docs/ref/signal_plot.md](ref/signal_plot.md)).
+- Foreign files' exotic channels (VLSD/strings/arrays/MLSD/unsorted variants) are a reader
+  coverage boundary, honestly labeled — not a defect. Operator confirmed seeing "not plottable"
+  on some files; whether their numeric channels plot is still awaited.
+- The C++ chain was exonerated end-to-end: the writer smoke passes against the same DLLs.
 
-**Verified:** `ctest` 7/7 (6 passed + `tst_mdf4writerfile` honestly Skipped); the smoke also
-run *with* a writer recording, direct and through ctest, both green. The packaging walk
-reproduces the shipped v0.2.1 `dist/` file set exactly; the build-tree deploy ran as the
-exe's POST_BUILD in a green build. First CI run of the shared walk happens on the next push.
+**The build-tree DLL deploy was a silent no-op** — Git for Windows' `find` shadowing msys2's on
+PATH glob-expanded quoted patterns (foreign-msys-runtime command-line re-parse), the failure was
+invisible inside a process substitution, and the walk printed "dependency closure complete"
+having deployed nothing; masked only by DLLs the old hand-list deploy left in `build/`.
+`deploy_closure.sh` now prepends its own runtime's tools and fails loudly on enumeration or
+import-scan failure. Proven by deleting `zlib1.dll` and watching the walk restore it under the
+hostile PATH, plus a loud negative test.
 
-**Landmines:** runtime provenance is load-bearing in three places (ctest `PATH`, closure
-order in packaging, `--search`-before-`--provided` in the build-tree deploy) — documented in
-[docs/ref/cmake_build_system.md](ref/cmake_build_system.md). BL-K5: `cp -u` can keep a stale
-build-tree DLL after a pacman *downgrade*; `dist/` is immune.
+**`samples/demo_recording.mf4` bundled** (writer-authored: `t` master + `speed` sine; provenance
+in `samples/SAMPLES.md`); the sidebar scanner already matched `*.mf4`. The writer smoke now runs
+against it on every ctest — 7/7 Passed, no permanent skip; `MDF4_WRITER_SAMPLE` still overrides.
 
-UNVERIFIED (carried, operator-visual): the live QML click-to-plot drive — open a writer
-`.mf4`, click `speed`: sine ±100 within ~0.1 s, wheel zoom, drag pan, hover readout, "Reset
-view" restores; the master channel now shows as an axis entry (open circle, "Master
-channel" subtitle) and must not plot. Memory-grid click-through. Fail = blank plot, stuck
-busy veil, or a QML type error.
+**Verified:** full build + ctest 7/7 Passed after every batch. `build/samples/` staged by hand
+(the copy runs only on exe relink). Several commits are unpushed; the next push is also the
+first CI run of the shared closure walk and the always-on writer smoke.
+
+**Landmines:** runtime provenance is load-bearing in three places (ctest `PATH`, packaging
+closure order, `--search`-before-`--provided`) — [docs/ref/cmake_build_system.md](ref/cmake_build_system.md).
+Same-named tools from a different msys runtime re-parse command lines — any script CMake/ninja
+invokes must pin its own runtime's tools first. BL-K5 (`cp -u` keeps a stale build-tree DLL
+after a pacman downgrade) parked in [docs/backlog.md](backlog.md).
+
+UNVERIFIED (operator-visual, one relaunch): long tab names elide with "…"; the
+`demo_recording.mf4` sidebar link opens; `speed` plots the sine with zoom/pan/hover/reset; `t`
+shows the master-channel notice; on foreign files numeric channels plot while exotic ones say
+"not plottable". Memory-grid click-through carried. Fail = clipped tabs, missing sample link,
+empty plot on `speed`, stuck busy veil.
+
+**NEXT-SESSION KICKOFF:** operator reports the drive result. If a real-world `.mf4` comes back
+mostly non-plottable and matters, dump it with `mdf4-parser/build/mdf4_json.exe`, map each
+non-decodable channel class to the reader increment that unlocks it (VLSD / unsorted / arrays /
+MLSD / bus logging), and spec the chosen increments as a locked plan for Opus-subagent
+implementation in `mdf4-parser` with round-trip and asammdf gates — reader breadth is bought,
+not assumed.
