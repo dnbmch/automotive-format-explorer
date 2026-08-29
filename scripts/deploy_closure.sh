@@ -22,9 +22,13 @@
 
 set -euo pipefail
 
-# find/xargs/awk/cp ship next to the shell running this script; CMake invokes it
-# from a build process whose PATH need not carry them.
-PATH="${PATH:+$PATH:}${BASH%/*}"
+# find/xargs/awk/cp must come from the runtime of the bash running this script.
+# A same-named tool from a different msys runtime (Git for Windows ships one)
+# re-parses the received command line with its own runtime, glob-expanding
+# patterns this script passes quoted. Prepend, so a foreign copy earlier on the
+# caller's PATH cannot win; CMake invokes this from a build process whose PATH
+# need not carry these tools at all.
+PATH="${BASH%/*}${PATH:+:$PATH}"
 
 dest=""
 search_dirs=()
@@ -69,18 +73,39 @@ SYSTEM_DIR="/c/Windows/System32"
 declare -A have seen
 frontier=()
 
+# Failures inside a process substitution are invisible to set -e, and an empty
+# frontier would let the walk report success having deployed nothing — so the
+# enumeration and each import scan are captured and checked.
+listing="$(find "${roots[@]}" -type f \( -iname '*.exe' -o -iname '*.dll' \))" || {
+    echo "failed to enumerate binaries under: ${roots[*]}" >&2
+    exit 1
+}
+
 while IFS= read -r f; do
+    [ -n "$f" ] || continue
     name="${f##*/}"
     have["${name,,}"]=1
     frontier+=("$f")
-done < <(find "${roots[@]}" -type f \( -iname '*.exe' -o -iname '*.dll' \))
+done <<< "$listing"
+
+if [ ${#frontier[@]} -eq 0 ]; then
+    echo "no binaries found under: ${roots[*]}" >&2
+    exit 1
+fi
 
 missing=()
 
 while [ ${#frontier[@]} -gt 0 ]; do
     next=()
 
+    deps="$(printf '%s\0' "${frontier[@]}" | xargs -0 "$objdump" -p 2>/dev/null \
+            | awk '/DLL Name:/ {print $3}')" || {
+        echo "import scan failed on level: ${frontier[*]}" >&2
+        exit 1
+    }
+
     while read -r dep; do
+        [ -n "$dep" ] || continue
         key="${dep,,}"
         [ -n "${seen[$key]+x}" ] && continue
         seen["$key"]=1
@@ -106,7 +131,7 @@ while [ ${#frontier[@]} -gt 0 ]; do
             if [ -e "$d/$dep" ]; then found="$d/$dep"; break; fi
         done
         [ -n "$found" ] || missing+=("$dep")
-    done < <(printf '%s\0' "${frontier[@]}" | xargs -0 "$objdump" -p 2>/dev/null | awk '/DLL Name:/ {print $3}')
+    done <<< "$deps"
 
     frontier=("${next[@]}")
 done
