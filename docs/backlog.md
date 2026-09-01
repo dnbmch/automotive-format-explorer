@@ -17,6 +17,18 @@ its semantics ever need to change together.
 
 **Size:** S for the diagnostic helper; the explicit load flows are a deliberate keep.
 
+### BL-E3: mdf4 presenter labels for the new proto enum values
+
+The sibling `mdf4-parser` proto gained `DataType` `UINT_BE`/`SINT_BE`/`FLOAT_BE`
+and `ConversionKind` `ALGEBRAIC`/`TAB_RANGE` (plus `Conversion.formula`). The
+`mdf4detailpresenter.cpp` switches don't name them and fall through to their
+`"Unknown (%1)"` default — correct but unlabeled. The cases cannot be added while
+the explorer compiles against the published v0.1.0 `-lib` artifacts, which
+predate the enum values; add the labels (and optionally show the formula text)
+in the same batch as the next parser `-lib` release pickup.
+
+**Size:** XS, gated on a fresh `mdf4-parser-lib` release.
+
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant
