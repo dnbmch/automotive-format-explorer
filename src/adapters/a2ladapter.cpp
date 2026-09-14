@@ -4,14 +4,11 @@
 
 #pragma push_macro("signals")
 #undef signals
+#include "a2l/extract.h"
 #include "a2l/a2lfile.h"
 #pragma pop_macro("signals")
 
 #include <QFileInfo>
-
-namespace a2l::extract {
-a2l::A2lFile extractFile(a2lfile::A2lFile* file);
-}
 
 namespace {
 DiagnosticMessage toDiagnostic(const a2l::Diagnostic& d) {
