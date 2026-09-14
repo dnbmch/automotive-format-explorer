@@ -10,7 +10,7 @@ The explorer is plugin-based at the architecture level: each format ships an ada
 |---|---|
 | `src/adapters/<fmt>adapter.h` + `.cpp` | `class <Fmt>Adapter final : public FormatAdapter` + `extern "C" FormatAdapter* create<Fmt>AdapterPlugin()` factory |
 | `src/sessions/<fmt>documentsession.h` + `.cpp` | `class <Fmt>DocumentSession : public AdapterSessionBase` (or directly `DocumentSession`) — owns the parsed proto document, builds the `TreeModel`, populates the `DetailModel` per node click, optionally exposes a center-panel model |
-| `cmake/FetchParserLib.cmake` call in `CMakeLists.txt` | Resolves the parser headers + static lib from the public `-lib` release artifacts |
+| Canonical parser target in `CMakeLists.txt` | Supplies matched headers and static library from source composition or an installed package |
 | Registration in `src/core/appcontroller.cpp` static block | Under `#ifdef BACKENDS_STATIC` (Linux), call `_format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(create<Fmt>AdapterPlugin()))` |
 
 The four existing implementations under `src/adapters/` and `src/sessions/`
@@ -81,13 +81,9 @@ On Windows (`.dll` plugin discovery) `QLibrary::resolve()` looks up this exact s
 Each format compiles into its own backend library — `explorer-<fmt>-backend`, built `SHARED` on Windows and `STATIC` on Linux via `${_backend_lib_type}`. The parser lib links **into that backend**, never into the `automotive-format-explorer` exe directly. The exe pulls backends in differently per platform: `add_dependencies` on Windows (the `.dll` is loaded at runtime by `QLibrary`), a direct static link on Linux.
 
 ```cmake
-# CMakeLists.txt — fetch the parser dependency (once per format)
-fetch_parser_lib(
-    TARGET  <fmt>parser
-    REPO    dnbmch/<fmt>-parser-lib
-    VERSION "${<FMT>_PARSER_VERSION}"   # match CMakeLists.txt
-    HEADER  <fmt>/<fmt>file.h
-)
+# Package mode resolves the producer export; source mode requires the
+# same target from the workspace composition.
+find_package(<fmt>parser CONFIG REQUIRED)
 
 # Per-format backend library — built SHARED (Windows) or STATIC (Linux)
 qt_add_library(explorer-<fmt>-backend ${_backend_lib_type}
@@ -102,7 +98,7 @@ target_link_libraries(explorer-<fmt>-backend
         Qt6::Core
         protobuf::libprotobuf
         explorer-core
-        <fmt>parser          # parser links INTO the backend, not the exe
+        <fmt>parser::<fmt>parser # parser links INTO the backend, not the exe
 )
 set_target_properties(explorer-<fmt>-backend PROPERTIES
     AUTOMOC OFF
@@ -117,7 +113,7 @@ else()
 endif()
 ```
 
-`fetch_parser_lib` is implemented in [cmake/FetchParserLib.cmake](../../cmake/FetchParserLib.cmake). It downloads the renamed `<fmt>parser-*` release artifact from the public `-lib` repo's GitHub Releases at configure time. On Linux, `BACKENDS_STATIC` is defined on the exe and the `create<Fmt>AdapterPlugin()` factory is registered at startup; on Windows the backend `.dll` is discovered and loaded lazily on first open.
+Parser acquisition and selection are described in [the build reference](../ref/cmake_build_system.md). On Linux, `BACKENDS_STATIC` is defined on the exe and the `create<Fmt>AdapterPlugin()` factory is registered at startup; on Windows the backend `.dll` is discovered and loaded lazily on first open.
 
 ## Center panel
 

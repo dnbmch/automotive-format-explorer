@@ -157,7 +157,7 @@ qml/
   Main.qml      root layout with SplitView, tabs, Loader
   components/   NavPanel, MemoryView, SignalMapView, SignalPlotView,
                 SplashOverlay, Theme, Toast, DiagnosticsPopup
-cmake/          FetchParserLib, DeployRuntimeDeps
+cmake/          DeployRuntimeDeps
 ```
 
 Each format's detail rendering lives in its own `DetailPresenter` subclass — `a2ldetailpresenter.{h,cpp}`, `dbcdetailpresenter.{h,cpp}`, `ldfdetailpresenter.{h,cpp}`, `mdf4detailpresenter.{h,cpp}` — kept separate from the session files so no session carries both construction/query and the bulk of the detail-building helpers. A2L additionally splits its IF_DATA helpers into `a2ldetailpresenter_ifdata.cpp`. Cross-format text and detail helpers (`text`, `boolText`, `hexId`/`hexValue`, `addField`, `pushSection`, `joinStrings`, `messageToJsonText`) live in `sessions/presentertext.h`, shared by every presenter and document session; `text` decodes protobuf bytes as strict UTF-8 (via `QStringDecoder`, stateless) and falls back to Latin-1 only on a genuine decode error. Format-specific number formatting stays in the per-format headers.

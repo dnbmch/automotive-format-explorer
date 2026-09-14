@@ -7,7 +7,18 @@ on:
     branches: [master]
 
 jobs:
+  package-tools:
+    name: Parser package acquisition
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m unittest discover -s scripts -p test_acquire_parser_packages.py -v
+
   windows-mingw:
+    if: vars.PARSER_PACKAGE_LOCK != ''
     name: Windows MinGW
     runs-on: windows-latest
     defaults:
@@ -35,10 +46,23 @@ jobs:
           modules: 'qtshadertools'
           cache: true
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Acquire pinned parser packages
+        shell: bash
+        env:
+          PARSER_PACKAGE_LOCK: ${{ vars.PARSER_PACKAGE_LOCK }}
+        run: |
+          python -c 'import os; from pathlib import Path; Path("parser-package-lock.json").write_text(os.environ["PARSER_PACKAGE_LOCK"])'
+          python scripts/acquire_parser_packages.py parser-package-lock.json x86_64-windows-mingw parser-prefix
+
       - name: Configure
         run: |
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="$(cygpath -m "$QT_ROOT_DIR")"
+            -DAFF_PARSER_MODE=PACKAGE \
+            -DCMAKE_PREFIX_PATH="$(cygpath -m "$PWD/parser-prefix");$(cygpath -m "$QT_ROOT_DIR")"
 
       - name: Build
         run: cmake --build build
@@ -55,6 +79,7 @@ jobs:
         run: bash scripts/smoke_windows.sh dist
 
   linux:
+    if: vars.PARSER_PACKAGE_LOCK != ''
     name: Linux x86_64
     runs-on: ubuntu-24.04
 
@@ -73,8 +98,20 @@ jobs:
           sudo apt-get install -y ninja-build protobuf-compiler libprotobuf-dev libabsl-dev \
             libgl1-mesa-dev libxkbcommon-dev
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Acquire pinned parser packages
+        shell: bash
+        env:
+          PARSER_PACKAGE_LOCK: ${{ vars.PARSER_PACKAGE_LOCK }}
+        run: |
+          python -c 'import os; from pathlib import Path; Path("parser-package-lock.json").write_text(os.environ["PARSER_PACKAGE_LOCK"])'
+          python scripts/acquire_parser_packages.py parser-package-lock.json x86_64-linux-gnu parser-prefix
+
       - name: Configure
-        run: cmake -B build -G Ninja
+        run: cmake -B build -G Ninja -DAFF_PARSER_MODE=PACKAGE -DCMAKE_PREFIX_PATH="$PWD/parser-prefix;$QT_ROOT_DIR"
 
       - name: Build
         run: cmake --build build

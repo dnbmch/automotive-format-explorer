@@ -21,10 +21,10 @@ endif()
 # explorer-core / backend binaries resolve at runtime.
 function(explorer_add_test name)
     add_executable(${name} ${name}.cpp)
-    target_include_directories(${name} PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_include_directories(${name} PRIVATE "${PROJECT_SOURCE_DIR}/src")
     target_link_libraries(${name} PRIVATE Qt6::Test ${ARGN})
     set_target_properties(${name} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
         WIN32_EXECUTABLE FALSE
     )
     add_test(NAME ${name} COMMAND ${name})
@@ -43,14 +43,14 @@ explorer_add_test(tst_a2ldetailpresenter
     explorer-core
     explorer-a2l-backend
     protobuf::libprotobuf
-    a2lparser
+    a2lparser::a2lparser
 )
 
 explorer_add_test(tst_mdf4detailpresenter
     explorer-core
     explorer-mdf4-backend
     protobuf::libprotobuf
-    mdf4parser
+    mdf4parser::mdf4parser
 )
 
 explorer_add_test(tst_mdf4documentsession
@@ -58,7 +58,7 @@ explorer_add_test(tst_mdf4documentsession
     explorer-mdf4-backend
     Qt6::Concurrent
     protobuf::libprotobuf
-    mdf4parser
+    mdf4parser::mdf4parser
 )
 
 # Runs against the bundled writer-authored recording; MDF4_WRITER_SAMPLE
@@ -70,8 +70,8 @@ explorer_add_test(tst_mdf4writerfile
     explorer-mdf4-backend
     Qt6::Concurrent
     protobuf::libprotobuf
-    mdf4parser
+    mdf4parser::mdf4parser
 )
 set_tests_properties(tst_mdf4writerfile PROPERTIES SKIP_RETURN_CODE 77)
 set_property(TEST tst_mdf4writerfile APPEND PROPERTY ENVIRONMENT
-    "MDF4_WRITER_SAMPLE=${CMAKE_SOURCE_DIR}/samples/demo_recording.mf4")
+    "MDF4_WRITER_SAMPLE=${PROJECT_SOURCE_DIR}/samples/demo_recording.mf4")

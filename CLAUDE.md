@@ -190,17 +190,17 @@ qml/
                   Toast, SplashOverlay, DiagnosticsPopup
 docs/             design docs, screenshots
 samples/          bundled sample files (one per format) + SAMPLES.md provenance
-cmake/            FetchParserLib, DeployRuntimeDeps
+cmake/            DeployRuntimeDeps
 ```
 
 ### Build
 
 ```bash
-cmake -B build -G Ninja
-cmake --build build
+cmake -B build-package -G Ninja -DCMAKE_PREFIX_PATH="/path/to/parser-prefix;/path/to/Qt"
+cmake --build build-package
 ```
 
-Qt 6.5+, CMake 3.21+, Protobuf required. Configure fetches the pinned parser `-lib` release artifacts from GitHub; in this workspace `seed-parser-deps.sh` stages the sibling parser working trees first so the fetch is skipped.
+Qt 6.5+, CMake 3.21+, Protobuf required. Standalone builds consume complete installed parser packages via `CMAKE_PREFIX_PATH`; workspace source builds use `AFF_BUILD_EXPLORER=ON`. Configure is offline. Acquisition and workflow lock setup: [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md).
 
 ### Code conventions
 

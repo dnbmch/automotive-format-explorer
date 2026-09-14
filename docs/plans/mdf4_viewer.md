@@ -126,7 +126,7 @@ the open parser for verification, never the reverse.
 
 - **CMake**: `fetch_parser_lib(TARGET mdf4parser REPO dnbmch/mdf4-parser-lib VERSION
   v0.1.0 HEADER mdf4/extract.h)`; new `explorer-mdf4-backend` library block mirroring the
-  existing three; exe wiring per platform. Add an mdf4 line to `seed-parser-deps.sh:41-43`
+  existing three; exe wiring per platform. Use the canonical `mdf4parser::mdf4parser` target in both dependency modes
   so the explorer builds against the unreleased sibling working tree.
 - **Dispatch**: `BackendSpec` entry for `.mf4` (`src/core/appcontroller.cpp:36-51`),
   `BACKENDS_STATIC` registration (`src/core/appcontroller.cpp:60-64`), `FileDialog` name

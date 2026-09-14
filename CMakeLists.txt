@@ -6,76 +6,28 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Gui Qml Quick QuickControls2 QuickDialogs2)
+# Explorer uses protobuf reflection and JSON utilities directly.
 find_package(Protobuf CONFIG QUIET)
 if(NOT TARGET protobuf::libprotobuf)
     find_package(Protobuf REQUIRED)
 endif()
-find_package(ZLIB REQUIRED)
-
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-include(FetchParserLib)
 include(DeployRuntimeDeps)
 
-# Parser -lib release tags. Bumped in lockstep with the re-cut republish releases
-# (the proto contracts changed). Override at configure time if the operator cuts
-# different tags.
-set(A2L_PARSER_VERSION "v0.4.0" CACHE STRING "a2l-parser-lib release tag")
-set(DBC_PARSER_VERSION "v0.4.0" CACHE STRING "dbc-parser-lib release tag")
-set(LDF_PARSER_VERSION "v0.5.0" CACHE STRING "ldf-parser-lib release tag")
-set(MDF4_PARSER_VERSION "v0.1.0" CACHE STRING "mdf4-parser-lib release tag")
-
-# Integrity pins for the fetched -lib release assets, from the published tarballs:
-#   gh release download <tag> --repo dnbmch/a2l-parser-lib \
-#     --pattern 'a2lparser-headers-<tag>.tar.gz' && sha256sum a2lparser-headers-<tag>.tar.gz
-# The headers archive hash is platform-independent and pinned to the tags above;
-# refill whenever the version pins move. The binary archive hash is per-platform,
-# so BINARY_SHA256 stays empty (no check) unless you pin it at configure time for
-# the platform you build on.
-set(A2L_HEADERS_SHA256 "d4b1950a00d40cfef7135bf556e1fec59f0dc5eff6a5a04420f25caeb78a1f36" CACHE STRING "sha256 of a2lparser-headers-<tag>.tar.gz")
-set(A2L_BINARY_SHA256  "" CACHE STRING "sha256 of the a2lparser binary archive for this platform")
-set(DBC_HEADERS_SHA256 "0db8b48014358aa3f77adff2c8b2708a70d3f15948598f9f65c485ed1c30537d" CACHE STRING "sha256 of dbcparser-headers-<tag>.tar.gz")
-set(DBC_BINARY_SHA256  "" CACHE STRING "sha256 of the dbcparser binary archive for this platform")
-set(LDF_HEADERS_SHA256 "c6e0cfce2d98954003f315bab0ff0b5df9b77df5a1dedcf78f4bcba96d7bb1d1" CACHE STRING "sha256 of ldfparser-headers-<tag>.tar.gz")
-set(LDF_BINARY_SHA256  "" CACHE STRING "sha256 of the ldfparser binary archive for this platform")
-set(MDF4_HEADERS_SHA256 "6103a8e0b26113c5943b1885b8190ba48e5c656e39080eff8f6292bce01fe27a" CACHE STRING "sha256 of mdf4parser-headers-<tag>.tar.gz")
-set(MDF4_BINARY_SHA256  "" CACHE STRING "sha256 of the mdf4parser binary archive for this platform")
-
-fetch_parser_lib(
-    TARGET  a2lparser
-    REPO    dnbmch/a2l-parser-lib
-    VERSION "${A2L_PARSER_VERSION}"
-    HEADER  a2l/a2lfile.h
-    HEADERS_SHA256 "${A2L_HEADERS_SHA256}"
-    BINARY_SHA256  "${A2L_BINARY_SHA256}"
-)
-
-fetch_parser_lib(
-    TARGET  dbcparser
-    REPO    dnbmch/dbc-parser-lib
-    VERSION "${DBC_PARSER_VERSION}"
-    HEADER  dbc/dbcfile.h
-    HEADERS_SHA256 "${DBC_HEADERS_SHA256}"
-    BINARY_SHA256  "${DBC_BINARY_SHA256}"
-)
-
-fetch_parser_lib(
-    TARGET  ldfparser
-    REPO    dnbmch/ldf-parser-lib
-    VERSION "${LDF_PARSER_VERSION}"
-    HEADER  ldf/ldffile.h
-    HEADERS_SHA256 "${LDF_HEADERS_SHA256}"
-    BINARY_SHA256  "${LDF_BINARY_SHA256}"
-)
-
-fetch_parser_lib(
-    TARGET  mdf4parser
-    REPO    dnbmch/mdf4-parser-lib
-    VERSION "${MDF4_PARSER_VERSION}"
-    HEADER  mdf4/extract.h
-    HEADERS_SHA256 "${MDF4_HEADERS_SHA256}"
-    BINARY_SHA256  "${MDF4_BINARY_SHA256}"
-    LINK_LIBRARIES ZLIB::ZLIB
-)
+# Workspace composition supplies source targets; standalone builds consume
+# complete installed packages via CMAKE_PREFIX_PATH. Configure is offline.
+set(AFF_PARSER_MODE "PACKAGE" CACHE STRING "Parser dependencies: SOURCE or PACKAGE")
+set_property(CACHE AFF_PARSER_MODE PROPERTY STRINGS SOURCE PACKAGE)
+if(NOT AFF_PARSER_MODE MATCHES "^(SOURCE|PACKAGE)$")
+    message(FATAL_ERROR "AFF_PARSER_MODE must be SOURCE or PACKAGE")
+endif()
+foreach(_parser a2lparser dbcparser ldfparser mdf4parser)
+    if(AFF_PARSER_MODE STREQUAL "PACKAGE")
+        find_package(${_parser} CONFIG REQUIRED)
+    elseif(NOT TARGET ${_parser}::${_parser})
+        message(FATAL_ERROR "SOURCE mode requires ${_parser}::${_parser}; configure the workspace with AFF_BUILD_EXPLORER=ON")
+    endif()
+endforeach()
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -168,7 +120,7 @@ target_link_libraries(explorer-a2l-backend
         Qt6::Core
         protobuf::libprotobuf
         explorer-core
-        a2lparser
+        a2lparser::a2lparser
 )
 
 target_link_libraries(explorer-dbc-backend
@@ -176,7 +128,7 @@ target_link_libraries(explorer-dbc-backend
         Qt6::Core
         protobuf::libprotobuf
         explorer-core
-        dbcparser
+        dbcparser::dbcparser
 )
 
 target_link_libraries(explorer-ldf-backend
@@ -184,7 +136,7 @@ target_link_libraries(explorer-ldf-backend
         Qt6::Core
         protobuf::libprotobuf
         explorer-core
-        ldfparser
+        ldfparser::ldfparser
 )
 
 target_link_libraries(explorer-mdf4-backend
@@ -193,7 +145,7 @@ target_link_libraries(explorer-mdf4-backend
         Qt6::Concurrent
         protobuf::libprotobuf
         explorer-core
-        mdf4parser
+        mdf4parser::mdf4parser
 )
 
 target_link_libraries(automotive-format-explorer PRIVATE
@@ -308,5 +260,8 @@ deploy_runtime_deps(automotive-format-explorer
     explorer-mdf4-backend
 )
 
-enable_testing()
-add_subdirectory(tests)
+option(EXPLORER_BUILD_TESTS "Build explorer tests" ON)
+if(EXPLORER_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

@@ -125,8 +125,7 @@ The explorer consumes four parser libraries from [Danube Mechatronics](https://d
 | LDF | [ldf-parser-lib](https://github.com/dnbmch/ldf-parser-lib) | [Releases](https://github.com/dnbmch/ldf-parser-lib/releases) |
 | MDF4 | [mdf4-parser-lib](https://github.com/dnbmch/mdf4-parser-lib) | [Releases](https://github.com/dnbmch/mdf4-parser-lib/releases) |
 
-Each library parses its respective format into Protocol Buffer messages. At CMake configure time the explorer pulls available parser `-lib` release artifacts pinned in `CMakeLists.txt` from GitHub. In this multi-repo workspace the pinned tags may be ahead of what is published, so the build is driven from the sibling parser working trees instead -- `bash seed-parser-deps.sh` stages them and the fetch is skipped (see [Offline build](#offline-build-sibling-working-trees)).
-
+Each library parses its format into Protocol Buffer messages. Explorer links canonical CMake targets supplied by the source workspace or by complete installed parser packages. Configuration is offline; package acquisition is an explicit step.
 The parser libraries are **dual licensed: GPL-2.0 or Commercial**. See their repositories for details, or contact [Danube Mechatronics](https://danube-mechatronics.com) for commercial licensing.
 
 ---
@@ -139,28 +138,34 @@ The parser libraries are **dual licensed: GPL-2.0 or Commercial**. See their rep
 - CMake 3.21+
 - Protobuf development package (visible to CMake via CONFIG or MODULE mode)
 - zlib development package (for MDF4 compressed data blocks)
-- Parser libraries: either the sibling parser working trees staged via `seed-parser-deps.sh` (see [Offline build](#offline-build-sibling-working-trees)), or — once the pinned tags are published — internet access to fetch the `-lib` release artifacts at configure time
+- Complete installed parser packages with matching compiler/runtime and protobuf versions, or the sibling source workspace
 
-### Build
-
-```bash
-cmake -B build -G Ninja
-cmake --build build
-```
-
-Parser library versions are pinned in `CMakeLists.txt`. To override:
+### Build with installed packages
 
 ```bash
-cmake -B build -DA2L_PARSER_VERSION=v0.4.0 -DDBC_PARSER_VERSION=v0.4.0 -DLDF_PARSER_VERSION=v0.5.0 -DMDF4_PARSER_VERSION=v0.1.0
+cmake -S . -B build-package -G Ninja -DAFF_PARSER_MODE=PACKAGE \
+  -DCMAKE_PREFIX_PATH="/path/to/parser-prefix;/path/to/Qt"
+cmake --build build-package
+ctest --test-dir build-package --output-on-failure
 ```
 
-### Offline build (sibling working trees)
+For downloaded archives, acquire the SHA256-pinned complete packages before
+configuring. The lock format and workflow setup are documented in
+[the build reference](docs/ref/cmake_build_system.md#parser-dependencies).
 
-In the multi-repo workspace, `bash seed-parser-deps.sh` stages the sibling
-parser repos' current build outputs into `build/_parser_deps/` in the exact
-release-artifact layout; the configure-time fetch then skips all downloads.
-Use it to build against unpublished parser changes or without network. The
-seeded bits are the siblings' working trees, not the pinned releases.
+### Build from sibling sources
+
+From the `automotive-file-formats` workspace root:
+
+```bash
+cmake -S . -B build-workspace -G Ninja -DAFF_BUILD_EXPLORER=ON \
+  -DAFF_PARSER_MODE=SOURCE -DCMAKE_PREFIX_PATH="/path/to/Qt"
+cmake --build build-workspace
+ctest --test-dir build-workspace --output-on-failure
+```
+
+The workspace adds each parser once. Its current sources and generated headers
+are used directly through the same public targets as installed packages.
 
 ### Platform Notes
 
@@ -175,7 +180,7 @@ seeded bits are the siblings' working trees, not the pinned releases.
 - [docs/ref/signal_map.md](docs/ref/signal_map.md) — DBC/LDF signal grid visual + interaction reference.
 - [docs/ref/signal_plot.md](docs/ref/signal_plot.md) — format-neutral time-series plot reference.
 - [docs/ref/keyboard.md](docs/ref/keyboard.md) — application + grid keyboard shortcuts.
-- [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — `fetch_parser_lib` mechanics, runtime dependency closure, shared-vs-static backend model.
+- [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — canonical parser dependencies, runtime dependency closure, shared-vs-static backend model.
 - [docs/ref/release_packaging.md](docs/ref/release_packaging.md) — Windows package path, headless launch gates, release publish gating.
 - [roadmap.md](roadmap.md) — direction and planned work.
 - [project_status.md](project_status.md) — current state of play.
@@ -185,4 +190,4 @@ seeded bits are the siblings' working trees, not the pinned releases.
 
 GPL-3.0-or-later. See [LICENSE](LICENSE).
 
-The parser libraries this app loads are dual-licensed (GPL-2.0 or Commercial); they are linked via their public release artifacts, not via source dependency.
+The parser libraries this app loads are dual-licensed (GPL-2.0 or Commercial); source and installed builds retain the parser libraries' licensing terms.

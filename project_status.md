@@ -29,8 +29,8 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   `.mf4` recording) with "open a sample" links in the empty sidebar; provenance
   in `samples/SAMPLES.md`.
 - Splash overlay + DWM cloak startup.
-- Links the four parser libraries — fetched from GitHub releases at configure
-  time, or staged from the sibling working trees by `seed-parser-deps.sh`. GPL-3.0.
+- Links the four canonical parser targets, from complete installed packages or
+  source workspace composition. GPL-3.0.
 - QTest coverage for tree filtering, memory and signal-plot models, A2L/MDF4
   detail presenters, and MDF4 ranged-decode, cache eviction, domain validation
   and race behavior, registered with ctest and run in CI. The end-to-end

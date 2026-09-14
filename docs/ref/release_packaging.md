@@ -5,6 +5,16 @@ The explorer ships as a Windows zip and a Linux AppImage, both produced by
 tag. Every package resolves its own dependency closure and is launched headless
 before a release object exists.
 
+## Parser package inputs
+
+App builds acquire complete parser install archives before configuring CMake.
+The repository variable `PARSER_PACKAGE_LOCK` supplies platform-specific URLs
+and mandatory SHA256 pins. Parser headers and archives stay paired with their
+producer identity. See [package selection](cmake_build_system.md#parser-dependencies).
+CI app jobs skip until this explicit input is set; acquisition-script tests run
+independently. Release jobs require the lock and cannot publish without a
+successful package build. Source workspace builds need no release artifacts.
+
 ## One Qt everywhere
 
 Windows CI, the Windows release job, and local development all build against the
