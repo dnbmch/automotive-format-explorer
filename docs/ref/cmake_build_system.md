@@ -102,7 +102,7 @@ The rest of the packaging path — payload, launch gates, and release publicatio
 
 `deploy_runtime_deps()` is called from the top-level `CMakeLists.txt` and is a no-op off MinGW. It adds one `POST_BUILD` step on `automotive-format-explorer` that runs the same walk, so a freshly built binary runs without msys2 on `PATH`. The backends are loaded at runtime rather than imported, so they are passed as roots of their own; `add_dependencies` on the Windows branch guarantees they exist by then.
 
-Qt is `--provided` here: build-tree runs resolve Qt from its own install, as ctest does, and no Qt DLL is copied into the build directory.
+Qt is `--provided` here: build-tree runs resolve Qt from its own install, as ctest does, and no Qt DLL is copied into the build directory. Launching the build-tree binary by hand therefore needs Qt's `bin` on `PATH` (`<Qt>/<version>/mingw_64/bin`); the msys2 runtime and the backends are already next to it.
 
 The step needs msys2's `bash`, located two levels above the compiler (`<msys2>/mingw64/bin/g++.exe` → `<msys2>/usr/bin/bash.exe`) rather than on `PATH`, which on Windows would also offer System32's WSL launcher. Without it the deploy warns at configure time and is skipped. `objdump` is taken from `--search` when the build environment does not put it on `PATH`.
 
