@@ -1,5 +1,52 @@
 # automotive-format-explorer — handoff
 
+## 2026-09-23 — static format composition and controller-owned load shutdown — ACCEPTED
+
+Workspace cleanup batch G1, accepted by parent review with its load-ownership
+correction and current-tab notification check —
+[review](../../docs/audit/dbc_explorer_review.md#final-acceptance-2026-09-25).
+G2 is not started. The application composes one format list (`src/builtinformats.cpp`, target
+`explorer-formats`) and moves it into `AppController`; suffix lookup, the Open
+dialog filters (`AppController.fileDialogFilters`, bound in `qml/Main.qml`) and the
+sample list derive from it. `explorer-core`, the four backends and `explorer-formats`
+are static on every platform. Deleted: `QLibrary` loading, the `extern "C"` adapter
+factories, `FormatRegistry`, `BACKENDS_STATIC`, `formatId/formatName/extensions` on
+adapters, `explorercoreexport.h` with the `SignalPlotModel` import decoration, the
+`WINDOWS_EXPORT_ALL_SYMBOLS` properties, and the Explorer-DLL copy in
+`scripts/package_windows.sh`. `AppController::shutdown()` (from `aboutToQuit` and the
+destructor, or any observer) stops opens, disconnects delivery, joins a load it still
+owns and destroys an undelivered session on the GUI thread before the adapters go.
+`fileLoading` is true exactly while the controller owns an unconsumed load; the
+controller re-reads its state after the open/completion notification calls,
+including between the current-tab helper's two signals, so an observer that shuts
+the controller down from `currentTabIndexChanged` receives neither
+`currentSessionChanged` nor `fileLoaded`. Contracts:
+[architecture](arch/architecture.md#format-composition), [build](ref/cmake_build_system.md#static-composition),
+[packaging](ref/release_packaging.md).
+
+Verified: standalone PACKAGE build against the matching parser package 9/9
+(`tst_appcontroller` 14 cases, six of them notification re-entry regressions that
+each fail on the candidate they were written against); incremental workspace
+SOURCE suite 227/227 before the current-tab check; fresh
+Windows package with no Explorer DLL, complete closure and msys2 runtime
+provenance; the packaged app launched with only System32 on `PATH` showed its
+window for 15 s. The first pass's headless smoke result is void — the package has no
+offscreen platform plugin (BL-K6). Commands and identities are in the
+[workspace handoff](../../docs/handoff.md) and the review.
+
+Landmines: `tst_appcontroller` synchronises on `QThreadPool::globalInstance()->waitForDone()`
+to hold a result in the finished-but-undelivered state; a future test that leaves
+unrelated pool work running would make that wait cover it too. On Windows,
+`qt_standard_project_setup()` already emits every executable, tests included, into
+the build root.
+
+UNVERIFIED: Linux build, AppImage packaging and launch gate for the static composition
+(CI has not run); a headless Windows launch of the package (BL-K6). Operator-visual, one Windows launch: File > Open lists "Automotive
+files (*.a2l *.dbc *.ldf *.mf4)", A2L, DBC, LDF, MDF4, All files, each narrowing the
+listing; the empty sidebar's four sample links open; closing the window during a
+large A2L load exits after the parse. Fail = missing/unfiltered entries, a dead link,
+or a crash or hang at exit.
+
 ## 2026-08-29 — first operator drive: two UI defects fixed, silent deploy no-op fixed, MDF4 sample bundled — OPEN
 
 The first live click-to-plot drive surfaced defects; all fixed and committed (`5897424`

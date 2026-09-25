@@ -125,13 +125,12 @@ the open parser for verification, never the reverse.
 ## Explorer backend
 
 - **CMake**: `fetch_parser_lib(TARGET mdf4parser REPO dnbmch/mdf4-parser-lib VERSION
-  v0.1.0 HEADER mdf4/extract.h)`; new `explorer-mdf4-backend` library block mirroring the
-  existing three; exe wiring per platform. Use the canonical `mdf4parser::mdf4parser` target in both dependency modes
+  v0.1.0 HEADER mdf4/extract.h)`; new static `explorer-mdf4-backend` library block mirroring the
+  existing three, linked through `explorer-formats`. Use the canonical `mdf4parser::mdf4parser` target in both dependency modes
   so the explorer builds against the unreleased sibling working tree.
-- **Dispatch**: `BackendSpec` entry for `.mf4` (`src/core/appcontroller.cpp:36-51`),
-  `BACKENDS_STATIC` registration (`src/core/appcontroller.cpp:60-64`), `FileDialog` name
-  filters (`qml/Main.qml:51-57`). `FormatId::MDF4` + display name already exist
-  (`src/core/formatid.h:10-14`) — reserved for exactly this read-back use.
+- **Dispatch**: the `{FormatId::MDF4, {"mf4"}, Mdf4Adapter}` entry in `builtInFormats()`
+  (`src/builtinformats.cpp`); suffix lookup, `FileDialog` name filters and the sample list
+  derive from it. `FormatId::MDF4` + display name live in `src/core/formatid.h`.
 - **Adapter** `src/adapters/mdf4adapter.{h,cpp}`: `load()` = `extractFile`, map proto
   diagnostics to `DiagnosticMessage`s, construct session.
 - **Session** `src/sessions/mdf4documentsession.{h,cpp}` (extends `AdapterSessionBase`):

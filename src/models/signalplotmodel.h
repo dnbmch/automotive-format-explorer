@@ -1,6 +1,5 @@
 #pragma once
 
-#include "core/explorercoreexport.h"
 #include "models/plotseries.h"
 
 #include <QAbstractListModel>
@@ -23,7 +22,7 @@ struct PlotBucket {
 // the painted plot. Providers only call setSeries() and setBusy(); zoom,
 // cursor, and bucket state belong here so repainting stays bounded by the
 // viewport rather than by the complete recording.
-class EXPLORER_CORE_EXPORT SignalPlotModel : public QAbstractListModel {
+class SignalPlotModel : public QAbstractListModel {
     Q_OBJECT
 
     Q_PROPERTY(QString name READ name NOTIFY seriesChanged)

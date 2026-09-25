@@ -1,6 +1,6 @@
 # automotive-format-explorer
 
-Qt/QML desktop app for inspecting A2L, DBC, LDF, and MDF4 automotive files. GPL-3.0. Plugin architecture (shared `.dll` on Windows, static on Linux) with format-specific document sessions backed by `QQuickPaintedItem` C++ renderers for the memory map, signal map, and format-neutral signal plot views.
+Qt/QML desktop app for inspecting A2L, DBC, LDF, and MDF4 automotive files. GPL-3.0. One statically composed executable: a built-in format list of per-format backends with format-specific document sessions backed by `QQuickPaintedItem` C++ renderers for the memory map, signal map, and format-neutral signal plot views.
 
 <!-- block: Guidelines Standard [id:1d67c7] -->
 ## Guidelines
@@ -117,7 +117,7 @@ No external consumers, or owned end-to-end by us: the contract (proto / API / fi
 
 ## Project notes
 
-**Release is on-demand; there are no active users.** The app ships as a GPL-3.0 GitHub release, but we release only to exercise the current build against fresh parser artifacts — not on every change. With no users there is no cross-release backward-compat obligation; keep the plugin ABI (FormatAdapter / DocumentSession / DetailPresenter) internally coherent and change it when the design improves. See workspace [CLAUDE.md](../CLAUDE.md) "Release cadence".
+**Release is on-demand; there are no active users.** The app ships as a GPL-3.0 GitHub release, but we release only to exercise the current build against fresh parser artifacts — not on every change. With no users there is no cross-release backward-compat obligation; keep the backend seam (FormatAdapter / DocumentSession / DetailPresenter) internally coherent and change it when the design improves. See workspace [CLAUDE.md](../CLAUDE.md) "Release cadence".
 
 ### Architecture
 
@@ -140,9 +140,9 @@ No external consumers, or owned end-to-end by us: the contract (proto / API / fi
             (QQuickPaintedItem, C++ rendering)
 ```
 
-### Plugin architecture
+### Format backends
 
-Format backends are shared libraries on Windows (loaded via `QLibrary` at runtime) and static on Linux (linked at build, registered in constructor). Each backend provides:
+Every format backend is a static library linked into the executable on all platforms. `builtInFormats()` (`src/builtinformats.cpp`) is the one list of format id, suffixes and adapter; `main.cpp` hands it to `AppController`, and suffix lookup, dialog filters and sample classification derive from it. `AppController::shutdown()` (also run by its destructor) joins a pending load before the adapters go. Details: [docs/arch/architecture.md](docs/arch/architecture.md) "Format composition". Each backend provides:
 
 - `FormatAdapter` — loads a file, returns a `DocumentSession`
 - `DocumentSession` — owns the protobuf document, tree model, detail presenter, and optional center panel model
@@ -177,11 +177,12 @@ Both `MemoryGridItem` and `SignalGridItem` extend `QQuickPaintedItem`:
 
 ```
 src/
-  core/           appcontroller, noderegistry, formatid, detailsection, detailpresenter
+  builtinformats  the application format list (only place concrete adapters are built)
+  core/           appcontroller, formatlist, noderegistry, formatid, detailsection, detailpresenter
   models/         treemodel, treefiltermodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel
   sessions/       documentsession (interface), adaptersessionbase, presentertext
                   (shared text/detail helpers), a2l/dbc/ldf/mdf4 sessions
-  adapters/       a2l/dbc/ldf/mdf4 adapter + factory (C plugin entry points)
+  adapters/       formatadapter (load interface), a2l/dbc/ldf/mdf4 adapters
   ui/             memorygriditem, signalgriditem, signalplotitem (painted renderers),
                   gridpalette (shared palette/shade/highlight-flash helpers)
 qml/
@@ -220,7 +221,5 @@ See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-works
 
 | | Windows | Linux |
 |---|---------|-------|
-| Backends | SHARED (.dll), loaded via QLibrary | STATIC, linked into exe, registered at startup |
 | Qt deploy | `windeployqt` + dependency-closure walk (`scripts/deploy_closure.sh`, shared by the package and the build-tree deploy) | AppImage via linuxdeploy |
 | Protobuf JSON | `google/protobuf/util/json_util.h` (stable API, works on both v3 and v4+) | |
-| Define | — | `BACKENDS_STATIC` |

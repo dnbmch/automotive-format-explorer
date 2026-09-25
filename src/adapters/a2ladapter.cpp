@@ -23,18 +23,6 @@ DiagnosticMessage toDiagnostic(const a2l::Diagnostic& d) {
 }
 } // namespace
 
-FormatId A2lAdapter::formatId() const {
-    return FormatId::A2L;
-}
-
-QString A2lAdapter::formatName() const {
-    return QStringLiteral("A2L");
-}
-
-QStringList A2lAdapter::extensions() const {
-    return {QStringLiteral("a2l")};
-}
-
 LoadResult A2lAdapter::load(const QString& path) const {
     QList<DiagnosticMessage> diagnostics;
 
@@ -60,8 +48,4 @@ LoadResult A2lAdapter::load(const QString& path) const {
         diagnostics);
 
     return LoadResult{std::move(session), diagnostics};
-}
-
-extern "C" FormatAdapter* createA2lAdapterPlugin() {
-    return new A2lAdapter();
 }

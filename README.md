@@ -169,18 +169,19 @@ are used directly through the same public targets as installed packages.
 
 ### Platform Notes
 
-- **Windows (MinGW)**: Primary development platform. Backends are shared libraries loaded at runtime.
-- **Linux**: Backends are linked statically into the executable. Tested on Ubuntu 24.04 with system protobuf.
+- Every format backend is linked statically into the one executable on all platforms.
+- **Windows (MinGW)**: Primary development platform.
+- **Linux**: Tested on Ubuntu 24.04 with system protobuf.
 
 ## Documentation
 
-- [docs/arch/architecture.md](docs/arch/architecture.md) — process layout, plugin loading, DocumentSession contract, NodeRegistry lifecycle, startup splash + DWM cloak.
+- [docs/arch/architecture.md](docs/arch/architecture.md) — process layout, format composition and load shutdown, DocumentSession contract, NodeRegistry lifecycle, startup splash + DWM cloak.
 - [docs/arch/adapter_contract.md](docs/arch/adapter_contract.md) — how to add a new format adapter.
 - [docs/ref/memory_view.md](docs/ref/memory_view.md) — A2L memory grid visual + interaction reference.
 - [docs/ref/signal_map.md](docs/ref/signal_map.md) — DBC/LDF signal grid visual + interaction reference.
 - [docs/ref/signal_plot.md](docs/ref/signal_plot.md) — format-neutral time-series plot reference.
 - [docs/ref/keyboard.md](docs/ref/keyboard.md) — application + grid keyboard shortcuts.
-- [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — canonical parser dependencies, runtime dependency closure, shared-vs-static backend model.
+- [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — canonical parser dependencies, runtime dependency closure, static backend composition.
 - [docs/ref/release_packaging.md](docs/ref/release_packaging.md) — Windows package path, headless launch gates, release publish gating.
 - [roadmap.md](roadmap.md) — direction and planned work.
 - [project_status.md](project_status.md) — current state of play.

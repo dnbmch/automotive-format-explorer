@@ -6,9 +6,13 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 ## Built
 
 - Qt 6 / QML desktop app: tree view + detail panel + format-specific center view.
-- Plugin-per-format backends (shared `.dll` on Windows via `QLibrary`, static on
-  Linux) for A2L, DBC, LDF, and MDF4, each providing `FormatAdapter` /
-  `DocumentSession` / `DetailPresenter`.
+- Static per-format backends for A2L, DBC, LDF, and MDF4, linked into one
+  executable on every platform and composed from a single built-in format list
+  (id, suffixes, adapter) that also derives the dialog filters and sample list;
+  each backend provides `FormatAdapter` / `DocumentSession` / `DetailPresenter`.
+- `AppController` owns its format list and its one pending load: shutdown stops
+  opens, suppresses late completions and joins the load before adapters go,
+  disposing any undelivered session on the GUI thread.
 - A2L memory-map view and DBC/LDF signal-map view via `QQuickPaintedItem`
   C++ renderers (`MemoryGridItem`, `SignalGridItem`) with FBO scrolling.
 - Format-neutral single-channel signal plot (`PlotSeries`, `SignalPlotModel`,
@@ -32,8 +36,11 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - Links the four canonical parser targets, from complete installed packages or
   source workspace composition. GPL-3.0.
 - QTest coverage for tree filtering, memory and signal-plot models, A2L/MDF4
-  detail presenters, and MDF4 ranged-decode, cache eviction, domain validation
-  and race behavior, registered with ctest and run in CI. The end-to-end
+  detail presenters, MDF4 ranged-decode, cache eviction, domain validation and
+  race behavior, the production format list (suffixes, dialog filters, sample
+  classification, one bundled sample per format opened through the controller)
+  and controller load/shutdown lifetimes through a fake adapter, registered with
+  ctest and run in CI. The end-to-end
   writer-file smoke runs against the bundled `samples/demo_recording.mf4`;
   `MDF4_WRITER_SAMPLE` points it at a different recording, and it reports as a
   ctest skip when that resolves to nothing.

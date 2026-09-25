@@ -3,69 +3,18 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
-#include <QLibrary>
 #include <QtConcurrent/QtConcurrentRun>
 
-#ifdef BACKENDS_STATIC
-extern "C" FormatAdapter* createA2lAdapterPlugin();
-extern "C" FormatAdapter* createDbcAdapterPlugin();
-extern "C" FormatAdapter* createLdfAdapterPlugin();
-extern "C" FormatAdapter* createMdf4AdapterPlugin();
-#endif
-
-namespace {
-
-using CreateAdapterFn = FormatAdapter* (*)();
-
-struct BackendSpec {
-    FormatId formatId;
-    QString extension;
-    QString libraryBaseName;
-    const char* createSymbol;
-};
-
-QString sharedLibraryFileName(const QString& baseName) {
-#if defined(Q_OS_WIN)
-    return baseName + QStringLiteral(".dll");
-#elif defined(Q_OS_MACOS)
-    return QStringLiteral("lib") + baseName + QStringLiteral(".dylib");
-#else
-    return QStringLiteral("lib") + baseName + QStringLiteral(".so");
-#endif
-}
-
-const BackendSpec* backendSpecForPath(const QString& path) {
-    static const BackendSpec specs[] = {
-        {FormatId::A2L, QStringLiteral("a2l"), QStringLiteral("explorer-a2l-backend"), "createA2lAdapterPlugin"},
-        {FormatId::DBC, QStringLiteral("dbc"), QStringLiteral("explorer-dbc-backend"), "createDbcAdapterPlugin"},
-        {FormatId::LDF, QStringLiteral("ldf"), QStringLiteral("explorer-ldf-backend"), "createLdfAdapterPlugin"},
-        {FormatId::MDF4, QStringLiteral("mf4"), QStringLiteral("explorer-mdf4-backend"), "createMdf4AdapterPlugin"},
-    };
-
-    const QString suffix = QFileInfo(path).suffix().toLower();
-    for (const auto& spec : specs) {
-        if (spec.extension == suffix) {
-            return &spec;
-        }
-    }
-
-    return nullptr;
-}
-
-} // namespace
-
-AppController::AppController(QObject* parent)
-    : QObject(parent) {
+AppController::AppController(FormatList formats, QObject* parent)
+    : QObject(parent),
+      _formats(std::move(formats)) {
     _empty_tree_filter.setSourceModel(&_empty_tree_model);
-    connect(&_load_watcher, &QFutureWatcher<std::shared_ptr<LoadResult>>::finished,
+    connect(&_load_watcher, &QFutureWatcher<LoadResult>::finished,
             this, &AppController::onLoadFinished);
+}
 
-#ifdef BACKENDS_STATIC
-    _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createA2lAdapterPlugin()));
-    _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createDbcAdapterPlugin()));
-    _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createLdfAdapterPlugin()));
-    _format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(createMdf4AdapterPlugin()));
-#endif
+AppController::~AppController() {
+    shutdown();
 }
 
 TabModel* AppController::tabModel() {
@@ -116,6 +65,9 @@ void AppController::setCurrentTabIndex(int index) {
 
     _current_tab_index = index;
     emit currentTabIndexChanged();
+    if (_shut_down) {
+        return;
+    }
     emit currentSessionChanged();
 }
 
@@ -123,8 +75,19 @@ QString AppController::lastError() const {
     return _last_error;
 }
 
+// Notifications call observers synchronously, and an observer may shut the
+// controller down or open another file. The pending load is therefore owned
+// before it is announced and released before completion is announced, and
+// state is re-read after every notification.
 void AppController::openFile(const QUrl& fileUrl) {
+    if (_shut_down) {
+        return;
+    }
+
     clearLastError();
+    if (_shut_down) {
+        return;
+    }
 
     if (_file_loading) {
         setLastError(QStringLiteral("Another file is already loading."));
@@ -137,43 +100,68 @@ void AppController::openFile(const QUrl& fileUrl) {
         return;
     }
 
-    const FormatAdapter* adapter = ensureAdapterForPath(path);
-    if (!adapter) {
-        if (_last_error.isEmpty()) {
-            setLastError(QStringLiteral("No adapter is registered for %1").arg(path));
-        }
+    const FormatEntry* format = formatForPath(_formats, path);
+    if (!format) {
+        setLastError(QStringLiteral("Unsupported file type: %1").arg(QFileInfo(path).fileName()));
         return;
     }
 
+    // The adapter stays owned by _formats; shutdown() joins this task before
+    // the controller's members are destroyed. The session's models are handed
+    // to this thread before the result is published.
+    const FormatAdapter* adapter = format->adapter.get();
+    QThread* owner = thread();
+    _load_watcher.setFuture(QtConcurrent::run([adapter, path, owner]() {
+        LoadResult result = adapter->load(path);
+        if (result.session) {
+            result.session->moveModelsToThread(owner);
+        }
+        return result;
+    }));
     setFileLoading(true);
-
-    QThread* mainThread = thread();
-    auto future = QtConcurrent::run([adapter, path, mainThread]() -> std::shared_ptr<LoadResult> {
-        auto r = std::make_shared<LoadResult>(adapter->load(path));
-        if (r->session)
-            r->session->moveModelsToThread(mainThread);
-        return r;
-    });
-    _load_watcher.setFuture(future);
 }
 
 void AppController::onLoadFinished() {
+    LoadResult result = _load_watcher.future().takeResult();
     setFileLoading(false);
-
-    auto result = _load_watcher.result();
-    if (!result || !result->session) {
-        if (result && !result->diagnostics.isEmpty()) {
-            setLastError(result->diagnostics.first().detail);
-        } else {
-            setLastError(QStringLiteral("Failed to load file."));
-        }
+    if (_shut_down) {
         return;
     }
 
-    const QString name = result->session->displayName();
-    const int newIndex = _tab_model.addSession(std::move(result->session));
-    setCurrentTabIndex(newIndex);
-    emit fileLoaded(name);
+    if (!result.session) {
+        setLastError(result.diagnostics.isEmpty() ? QStringLiteral("Failed to load file.")
+                                                  : result.diagnostics.first().detail);
+        return;
+    }
+
+    const QString name = result.session->displayName();
+    const int newIndex = _tab_model.addSession(std::move(result.session));
+    if (!_shut_down) {
+        setCurrentTabIndex(newIndex);
+    }
+    if (!_shut_down) {
+        emit fileLoaded(name);
+    }
+}
+
+void AppController::shutdown() {
+    if (_shut_down) {
+        return;
+    }
+    _shut_down = true;
+
+    // No completion reaches the UI after this point. A load the controller
+    // still owns is waited for here; its worker never needs this thread's event
+    // loop. The result, finished or still queued for delivery, is destroyed on
+    // this thread, which owns its models. Shutdown notifies no one.
+    disconnect(&_load_watcher, nullptr, this, nullptr);
+    if (!_file_loading) {
+        return;
+    }
+    QFuture<LoadResult> pending = _load_watcher.future();
+    pending.waitForFinished();
+    const LoadResult undelivered = pending.takeResult();
+    _file_loading = false;
 }
 
 bool AppController::fileLoading() const {
@@ -236,62 +224,6 @@ void AppController::clearLastError() {
     emit lastErrorChanged();
 }
 
-const FormatAdapter* AppController::ensureAdapterForPath(const QString& path) {
-    const FormatAdapter* adapter = _format_registry.adapterForPath(path);
-    if (adapter) {
-        return adapter;
-    }
-
-    if (!loadBackendForPath(path)) {
-        return nullptr;
-    }
-
-    return _format_registry.adapterForPath(path);
-}
-
-bool AppController::loadBackendForPath(const QString& path) {
-    const BackendSpec* spec = backendSpecForPath(path);
-    if (!spec) {
-        setLastError(QStringLiteral("No backend is implemented for %1 files yet.").arg(QFileInfo(path).suffix().toUpper()));
-        return false;
-    }
-
-    // Already loaded for this format
-    if (_format_registry.adapterForPath(path)) {
-        return true;
-    }
-
-    return loadBackend(spec->formatId, spec->libraryBaseName, spec->createSymbol);
-}
-
-bool AppController::loadBackend(FormatId formatId, const QString& libraryBaseName, const char* createSymbol) {
-    auto library = std::make_unique<QLibrary>(
-        QDir(QCoreApplication::applicationDirPath()).filePath(sharedLibraryFileName(libraryBaseName)));
-
-    if (!library->load()) {
-        setLastError(QStringLiteral("Failed to load %1 backend library: %2")
-                         .arg(formatDisplayName(formatId), library->errorString()));
-        return false;
-    }
-
-    const auto createAdapter = reinterpret_cast<CreateAdapterFn>(library->resolve(createSymbol));
-    if (!createAdapter) {
-        setLastError(QStringLiteral("Failed to resolve %1 backend factory: %2")
-                         .arg(formatDisplayName(formatId), library->errorString()));
-        return false;
-    }
-
-    std::unique_ptr<FormatAdapter> adapter(createAdapter());
-    if (!adapter) {
-        setLastError(QStringLiteral("The %1 backend factory returned no adapter.").arg(formatDisplayName(formatId)));
-        return false;
-    }
-
-    _format_registry.registerAdapter(std::move(adapter));
-    _loaded_backends.push_back(std::move(library));
-    return true;
-}
-
 bool AppController::startupLoading() const {
     return _startup_loading;
 }
@@ -321,31 +253,29 @@ void AppController::setStartupStatusText(const QString& text) {
 QVariantList AppController::sampleFiles() const {
     // Bundled sample files live next to the executable (release zip), one level
     // up (dev build tree), or under share/ (AppImage). First hit wins.
-    static const QVariantList samples = [] {
-        const QDir appDir(QCoreApplication::applicationDirPath());
-        for (const QString& rel : {QStringLiteral("samples"),
-                                   QStringLiteral("../samples"),
-                                   QStringLiteral("../share/automotive-format-explorer/samples")}) {
-            const QDir dir(appDir.filePath(rel));
-            const auto entries = dir.entryInfoList(
-                {QStringLiteral("*.a2l"), QStringLiteral("*.dbc"), QStringLiteral("*.ldf"), QStringLiteral("*.mf4")},
-                QDir::Files, QDir::Name);
-            if (entries.isEmpty()) {
-                continue;
-            }
-
-            QVariantList list;
-            for (const auto& entry : entries) {
-                list.push_back(QVariantMap{
-                    {QStringLiteral("title"), entry.fileName()},
-                    {QStringLiteral("url"), QUrl::fromLocalFile(entry.absoluteFilePath())},
-                });
-            }
-            return list;
+    const QDir appDir(QCoreApplication::applicationDirPath());
+    for (const QString& rel : {QStringLiteral("samples"),
+                               QStringLiteral("../samples"),
+                               QStringLiteral("../share/automotive-format-explorer/samples")}) {
+        const QFileInfoList entries = supportedFiles(_formats, QDir(appDir.filePath(rel)));
+        if (entries.isEmpty()) {
+            continue;
         }
-        return QVariantList{};
-    }();
-    return samples;
+
+        QVariantList list;
+        for (const auto& entry : entries) {
+            list.push_back(QVariantMap{
+                {QStringLiteral("title"), entry.fileName()},
+                {QStringLiteral("url"), QUrl::fromLocalFile(entry.absoluteFilePath())},
+            });
+        }
+        return list;
+    }
+    return QVariantList{};
+}
+
+QStringList AppController::fileDialogFilters() const {
+    return ::fileDialogFilters(_formats);
 }
 
 void AppController::setLastError(const QString& errorText) {

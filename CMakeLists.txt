@@ -31,8 +31,11 @@ endforeach()
 
 qt_standard_project_setup(REQUIRES 6.5)
 
-qt_add_library(explorer-core SHARED
-    src/core/formatregistry.cpp
+# Every Explorer library is static and linked into the one executable. Each
+# backend stays its own target so focused tests link a single format.
+qt_add_library(explorer-core STATIC
+    src/core/appcontroller.cpp
+    src/core/formatlist.cpp
     src/core/noderegistry.cpp
     src/models/detailmodel.cpp
     src/models/memorymapmodel.cpp
@@ -44,40 +47,38 @@ qt_add_library(explorer-core SHARED
     src/sessions/adaptersessionbase.cpp
 )
 
-if(WIN32)
-    set(_backend_lib_type SHARED)
-else()
-    set(_backend_lib_type STATIC)
-endif()
-
-qt_add_library(explorer-a2l-backend ${_backend_lib_type}
+qt_add_library(explorer-a2l-backend STATIC
     src/adapters/a2ladapter.cpp
     src/sessions/a2ldocumentsession.cpp
     src/sessions/a2ldetailpresenter.cpp
     src/sessions/a2ldetailpresenter_ifdata.cpp
 )
 
-qt_add_library(explorer-dbc-backend ${_backend_lib_type}
+qt_add_library(explorer-dbc-backend STATIC
     src/adapters/dbcadapter.cpp
     src/sessions/dbcdocumentsession.cpp
     src/sessions/dbcdetailpresenter.cpp
 )
 
-qt_add_library(explorer-ldf-backend ${_backend_lib_type}
+qt_add_library(explorer-ldf-backend STATIC
     src/adapters/ldfadapter.cpp
     src/sessions/ldfdocumentsession.cpp
     src/sessions/ldfdetailpresenter.cpp
 )
 
-qt_add_library(explorer-mdf4-backend ${_backend_lib_type}
+qt_add_library(explorer-mdf4-backend STATIC
     src/adapters/mdf4adapter.cpp
     src/sessions/mdf4documentsession.cpp
     src/sessions/mdf4detailpresenter.cpp
 )
 
+# The application's format list: the one place concrete adapters are constructed.
+qt_add_library(explorer-formats STATIC
+    src/builtinformats.cpp
+)
+
 qt_add_executable(automotive-format-explorer
     src/main.cpp
-    src/core/appcontroller.cpp
     src/ui/memorygriditem.cpp
     src/ui/signalgriditem.cpp
     src/ui/signalplotitem.cpp
@@ -88,32 +89,12 @@ target_include_directories(explorer-core PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
-target_include_directories(explorer-a2l-backend PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
-)
-
-target_include_directories(explorer-dbc-backend PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
-)
-
-target_include_directories(explorer-ldf-backend PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
-)
-
-target_include_directories(explorer-mdf4-backend PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
-)
-
-target_include_directories(automotive-format-explorer PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
-)
-
 target_link_libraries(explorer-core
     PUBLIC
         Qt6::Core
+    PRIVATE
+        Qt6::Concurrent
 )
-
-target_compile_definitions(explorer-core PRIVATE EXPLORER_CORE_LIBRARY)
 
 target_link_libraries(explorer-a2l-backend
     PRIVATE
@@ -148,36 +129,26 @@ target_link_libraries(explorer-mdf4-backend
         mdf4parser::mdf4parser
 )
 
+target_link_libraries(explorer-formats
+    PUBLIC
+        explorer-core
+    PRIVATE
+        explorer-a2l-backend
+        explorer-dbc-backend
+        explorer-ldf-backend
+        explorer-mdf4-backend
+)
+
 target_link_libraries(automotive-format-explorer PRIVATE
     Qt6::Core
-    Qt6::Concurrent
     Qt6::Gui
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::QuickDialogs2
-    explorer-core
+    explorer-formats
+    $<$<PLATFORM_ID:Windows>:dwmapi>
 )
-
-if(WIN32)
-    target_link_libraries(automotive-format-explorer PRIVATE dwmapi)
-    # On Windows, backends are shared libraries loaded at runtime via QLibrary.
-    add_dependencies(automotive-format-explorer
-        explorer-a2l-backend
-        explorer-dbc-backend
-        explorer-ldf-backend
-        explorer-mdf4-backend
-    )
-else()
-    # On Linux, backends are static — link directly and register at startup.
-    target_link_libraries(automotive-format-explorer PRIVATE
-        explorer-a2l-backend
-        explorer-dbc-backend
-        explorer-ldf-backend
-        explorer-mdf4-backend
-    )
-    target_compile_definitions(automotive-format-explorer PRIVATE BACKENDS_STATIC)
-endif()
 
 set_source_files_properties(qml/components/Theme.qml
     PROPERTIES QT_QML_SINGLETON_TYPE TRUE
@@ -220,27 +191,15 @@ set_target_properties(automotive-format-explorer PROPERTIES
 
 set_target_properties(explorer-core PROPERTIES
     AUTOMOC_COMPILER_PREDEFINES OFF
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 
-set_target_properties(explorer-a2l-backend PROPERTIES
-    AUTOMOC OFF
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
-)
-
-set_target_properties(explorer-dbc-backend PROPERTIES
-    AUTOMOC OFF
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
-)
-
-set_target_properties(explorer-ldf-backend PROPERTIES
-    AUTOMOC OFF
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
-)
-
-set_target_properties(explorer-mdf4-backend PROPERTIES
-    AUTOMOC OFF
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
+set_target_properties(
+    explorer-a2l-backend
+    explorer-dbc-backend
+    explorer-ldf-backend
+    explorer-mdf4-backend
+    explorer-formats
+    PROPERTIES AUTOMOC OFF
 )
 
 # Bundled sample files, staged next to the executable so the "open a sample"
@@ -252,13 +211,7 @@ add_custom_command(TARGET automotive-format-explorer POST_BUILD
     COMMENT "Staging sample files"
 )
 
-deploy_runtime_deps(automotive-format-explorer
-    explorer-core
-    explorer-a2l-backend
-    explorer-dbc-backend
-    explorer-ldf-backend
-    explorer-mdf4-backend
-)
+deploy_runtime_deps(automotive-format-explorer)
 
 option(EXPLORER_BUILD_TESTS "Build explorer tests" ON)
 if(EXPLORER_BUILD_TESTS)

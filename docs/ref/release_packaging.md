@@ -53,10 +53,9 @@ never hardcoded.
 
 Three steps, in this order:
 
-1. **Payload** — the executable, `explorer-core.dll`, every
-   `explorer-*-backend.dll` matched by glob, and `samples/`. The glob is why a
-   newly added backend ships without touching the script; an empty match is a
-   hard error.
+1. **Payload** — the executable and `samples/`. The Explorer core and every
+   format backend are static libraries inside the executable, so a newly added
+   backend ships without touching the script.
 2. **Qt** — `windeployqt --qmldir qml --release --no-translations
    --no-compiler-runtime` against the copied executable.
    `--no-compiler-runtime` keeps Qt's own MinGW runtime out of `dist/`.
@@ -70,9 +69,9 @@ absent and step 3 fills it from msys2, so the runtime is deployed by provenance
 instead of by overwriting a Qt copy.
 
 Nothing in the path names a dependency. A hand-written list drifts silently —
-versioned file names roll with the toolchain, Qt redistributes classes across
-libraries between releases, and a newly added backend is simply forgotten —
-while a closure derived from import tables cannot disagree with the binaries. An
+versioned file names roll with the toolchain and Qt redistributes classes across
+libraries between releases — while a closure derived from import tables cannot
+disagree with the binaries. An
 import that resolves nowhere exits non-zero and fails the job.
 
 ## Launch gates
@@ -121,6 +120,7 @@ a tag is cut.
 - `scripts/package_windows.sh` produces a `dist/` with an empty unresolved set,
   run locally before a tag is pushed.
 - `scripts/smoke_windows.sh` passes against that `dist/`.
-- `dist/` holds one `explorer-<fmt>-backend.dll` per format adapter built.
+- `dist/` holds no Explorer library: the executable imports only Qt, toolchain,
+  protobuf/Abseil/zlib and system DLLs.
 - `dist/libstdc++-6.dll` and `dist/libgcc_s_seh-1.dll` are msys2's, not Qt's.
 - A failure in either platform job leaves no GitHub release behind.

@@ -1,6 +1,6 @@
 # CMake build system
 
-How the explorer's CMake assembles parser dependencies, deploys Windows runtime DLLs, and switches between shared and static backend models.
+How the explorer's CMake assembles parser dependencies, links its static libraries into one executable, and deploys Windows runtime DLLs.
 
 ## Parser dependencies
 
@@ -88,7 +88,7 @@ Both deploy paths call it:
 | | roots | `--dest` | `--search` | `--provided` |
 |---|---|---|---|---|
 | Package ([scripts/package_windows.sh](../../scripts/package_windows.sh)) | `dist/`, scanned recursively | `dist/` | msys2 `bin`, Qt `bin` | — |
-| Build tree ([cmake/DeployRuntimeDeps.cmake](../../cmake/DeployRuntimeDeps.cmake)) | the executable, `explorer-core`, and every backend | the executable's directory | the compiler's own `bin` | Qt `bin` |
+| Build tree ([cmake/DeployRuntimeDeps.cmake](../../cmake/DeployRuntimeDeps.cmake)) | the executable | the executable's directory | the compiler's own `bin` | Qt `bin` |
 
 ### Package
 
@@ -100,19 +100,22 @@ The rest of the packaging path — payload, launch gates, and release publicatio
 
 ### Build tree
 
-`deploy_runtime_deps()` is called from the top-level `CMakeLists.txt` and is a no-op off MinGW. It adds one `POST_BUILD` step on `automotive-format-explorer` that runs the same walk, so a freshly built binary runs without msys2 on `PATH`. The backends are loaded at runtime rather than imported, so they are passed as roots of their own; `add_dependencies` on the Windows branch guarantees they exist by then.
+`deploy_runtime_deps()` is called from the top-level `CMakeLists.txt` and is a no-op off MinGW. It adds one `POST_BUILD` step on `automotive-format-explorer` that runs the same walk over the executable, so a freshly built binary runs without msys2 on `PATH`. The Explorer's own libraries are static archives inside the executable; no archive is handed to the PE walk.
 
-Qt is `--provided` here: build-tree runs resolve Qt from its own install, as ctest does, and no Qt DLL is copied into the build directory. Launching the build-tree binary by hand therefore needs Qt's `bin` on `PATH` (`<Qt>/<version>/mingw_64/bin`); the msys2 runtime and the backends are already next to it.
+Qt is `--provided` here: build-tree runs resolve Qt from its own install, as ctest does, and no Qt DLL is copied into the build directory. Launching the build-tree binary by hand therefore needs Qt's `bin` on `PATH` (`<Qt>/<version>/mingw_64/bin`); the msys2 runtime is already next to it.
 
 The step needs msys2's `bash`, located two levels above the compiler (`<msys2>/mingw64/bin/g++.exe` → `<msys2>/usr/bin/bash.exe`) rather than on `PATH`, which on Windows would also offer System32's WSL launcher. Without it the deploy warns at configure time and is skipped. `objdump` is taken from `--search` when the build environment does not put it on `PATH`.
 
-## Backend linking model — shared vs static
+## Static composition
 
-Two assembly paths, selected at configure time via the `BACKENDS_STATIC` define.
+One assembly path on every platform. `explorer-core` (controller, format list, models,
+session base), the four `explorer-<fmt>-backend` libraries and `explorer-formats` (the
+application's format list, [src/builtinformats.cpp](../../src/builtinformats.cpp)) are
+`STATIC` targets; the executable links `explorer-formats`, which links every backend
+and `explorer-core`. Each backend links its parser, so the parser archives and their
+protobuf dependency reach the executable through it. Backend targets stay separate so
+focused tests can link one format. Qt, protobuf, Abseil and zlib keep their own
+package linkage: on MinGW they remain DLLs resolved by the closure walk above.
 
-| Model | Platform | What ships |
-|---|---|---|
-| Shared (default on Windows) | Windows MinGW | The four adapters become individual `.dll` backends (`explorer-<fmt>-backend.dll`) deployed next to the `.exe`. On the first open of a format, `AppController` constructs that backend's exact DLL name and loads it via `QLibrary`, resolving the `create<Fmt>AdapterPlugin` factory — lazy per format, no eager directory scan. The main `.exe` does not link against the parser libraries directly. |
-| Static (default on Linux) | Linux | The four backend libraries are linked into the executable. `BACKENDS_STATIC` is defined as a compile flag, and [src/core/appcontroller.cpp](../../src/core/appcontroller.cpp) registers the four `extern "C" create<Fmt>AdapterPlugin()` factories at startup instead of scanning for DLLs. |
-
-Adding another format adapter requires updating both branches — see [docs/arch/adapter_contract.md](../arch/adapter_contract.md).
+Adding another format adapter touches its backend target, `explorer-formats` and the
+format list — see [docs/arch/adapter_contract.md](../arch/adapter_contract.md).

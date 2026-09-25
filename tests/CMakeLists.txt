@@ -1,8 +1,8 @@
 find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
 
-# On Windows the test executables resolve explorer-core / the backend DLLs from
-# their own directory, but Qt's DLLs live in the Qt install. Hand ctest a PATH
-# that includes them so the suite runs without developer shell setup.
+# On Windows the test executables resolve Qt's DLLs from the Qt install and the
+# toolchain's from the compiler's directory. Hand ctest a PATH that includes
+# both so the suite runs without developer shell setup.
 #
 # The compiler's own bin comes first: a standalone Qt mingw distribution bundles
 # its own libgcc/libstdc++, built by an older MinGW than the one compiling here.
@@ -17,16 +17,10 @@ if(WIN32)
     string(REPLACE ";" "\\;" _test_path "${_test_path}")
 endif()
 
-# Test executables are emitted next to the libraries they link so the shared
-# explorer-core / backend binaries resolve at runtime.
 function(explorer_add_test name)
     add_executable(${name} ${name}.cpp)
-    target_include_directories(${name} PRIVATE "${PROJECT_SOURCE_DIR}/src")
     target_link_libraries(${name} PRIVATE Qt6::Test ${ARGN})
-    set_target_properties(${name} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
-        WIN32_EXECUTABLE FALSE
-    )
+    set_target_properties(${name} PROPERTIES WIN32_EXECUTABLE FALSE)
     add_test(NAME ${name} COMMAND ${name})
     if(WIN32)
         set_tests_properties(${name} PROPERTIES ENVIRONMENT "PATH=${_test_path}")
@@ -38,6 +32,13 @@ explorer_add_test(tst_treefiltermodel explorer-core)
 explorer_add_test(tst_memorymapmodel explorer-core)
 
 explorer_add_test(tst_signalplotmodel explorer-core)
+
+explorer_add_test(tst_appcontroller explorer-core)
+
+# The production format list, opening each bundled sample through the controller.
+explorer_add_test(tst_builtinformats explorer-formats)
+target_compile_definitions(tst_builtinformats PRIVATE
+    EXPLORER_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")
 
 explorer_add_test(tst_a2ldetailpresenter
     explorer-core

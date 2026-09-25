@@ -12,10 +12,10 @@ integrated in a single binary.
 ```
 QGuiApplication
   AppController (C++, QML singleton)
-    FormatRegistry        — backend lookup by format id
-    NodeRegistry          — node-key allocation and reverse lookup
+    FormatList            — owned format entries: id, suffixes, adapter
+    pending load          — at most one, joined on shutdown
     TabModel              — open documents
-    DocumentSession[]     — one per open file
+    DocumentSession[]     — one per open file, each with its NodeRegistry
     TreeFilterModel[]     — per-session filter proxy over the session's TreeModel
   QQmlApplicationEngine
     Main.qml
@@ -25,7 +25,7 @@ QGuiApplication
       Detail            — DetailModel (sections, fields, references)
 ```
 
-`AppController` is constructed before the QML engine in `src/main.cpp` and registered as a singleton (`qmlRegisterSingletonInstance`). The QML engine is destroyed first on app exit.
+`src/main.cpp` constructs `AppController` from `builtInFormats()` before the QML engine and registers it as a singleton (`qmlRegisterSingletonInstance`). `QCoreApplication::aboutToQuit` calls `AppController::shutdown()`; the QML engine is destroyed next, then the controller.
 
 ## Startup: Splash + DWM Cloak
 
@@ -39,22 +39,75 @@ The QML side complements this with [SplashOverlay.qml](../../qml/components/Spla
 
 Non-Windows builds skip the DWMWA dance and call `window->show()` directly.
 
-## Plugin / Backend Loading
+## Format composition
 
-Each parser (a2l, dbc, ldf, mdf4) is exposed to the explorer as a "backend" via a small C-ABI factory:
+The application composes its formats once, at the composition boundary:
+`builtInFormats()` (`src/builtinformats.cpp`, target `explorer-formats`) returns a
+`FormatList` — one `FormatEntry { FormatId id; QStringList extensions;
+std::unique_ptr<FormatAdapter> adapter; }` per format, in dialog order: A2L `a2l`,
+DBC `dbc`, LDF `ldf`, MDF4 `mf4`. It is the only code that names a concrete adapter.
+`main.cpp` moves the list into `AppController`'s constructor, which owns it for its
+whole lifetime. Tests compose the same constructor with the production list or with
+a fake adapter; there is no second registration path.
 
-- **Windows** — backends are shared libraries (`.dll`) loaded at runtime via `QLibrary`. Each DLL exports `extern "C"` entry points that the explorer resolves to construct the backend's `FormatAdapter`. Each backend DLL (`explorer-<fmt>-backend.dll`) is deployed next to the executable and loaded by exact name from `QCoreApplication::applicationDirPath()` in `AppController::loadBackend()` — there is no `plugins/<format>/` subdirectory.
-- **Linux** — backends are static libraries linked into the executable. With `BACKENDS_STATIC` defined, `AppController` explicitly calls and registers the four `create<Fmt>AdapterPlugin()` factories at startup.
+Everything format-specific the shell needs derives from that list
+(`src/core/formatlist.h`):
 
-The `FormatRegistry` (`src/core/formatregistry.h`) is the single lookup point: given a `FormatId`, return the `FormatAdapter*` that can load files of that type. The platform difference is invisible above this layer.
+- `formatForPath()` matches a path's suffix case-insensitively. A path no entry
+  claims is refused with `Unsupported file type: <name>` in `lastError`.
+- `fileDialogFilters()` builds the Open dialog's filters — every supported suffix,
+  then one filter per format labelled with `formatDisplayName(id)`, then all files —
+  exposed to QML as `AppController.fileDialogFilters`.
+- `supportedFiles()` lists the supported files of a directory by name.
+  `AppController::sampleFiles()` searches `samples/`, `../samples/` and
+  `../share/automotive-format-explorer/samples/` next to the executable and offers
+  the first non-empty result.
+
+`explorer-core` and the four `explorer-<fmt>-backend` targets are static libraries
+on every platform, linked into the one executable; each backend links its parser.
+`explorer-core` contains no concrete adapter and no parser. Format identity shown on
+a tab is the session's own (`DocumentSession::formatName()`).
 
 ### FormatAdapter contract
 
-A backend exposes:
+A backend's adapter has one job: `LoadResult load(const QString& path) const`
+returns an owning `DocumentSession` plus diagnostics (`session` is null on hard
+failure). Its format identity and suffixes live in the application's `FormatEntry`.
 
-- `FormatId formatId()` — stable enum id (A2L / DBC / LDF / …)
-- `QString formatName()` / `QStringList extensions()` — display name and the file extensions it claims (matched case-insensitively)
-- `LoadResult load(const QString& path)` — returns the loaded `DocumentSession` plus diagnostics (`session` is null on hard failure)
+## Opening files and shutdown
+
+`AppController` runs one open at a time: `openFile()` resolves the entry, then runs
+`adapter->load()` through `QtConcurrent::run` and watches it with a
+`QFutureWatcher<LoadResult>`. The worker moves the new session's models to the
+controller's thread before publishing the result; the watcher's `finished`
+delivery adds the tab on that thread. A second open while one is pending is refused
+with `Another file is already loading.`
+
+Notifications (`lastErrorChanged`, `fileLoadingChanged`, the tab model's row
+signals, `currentSessionChanged`, `fileLoaded`) call observers synchronously, and
+an observer may open a file or shut the controller down from inside one.
+`fileLoading` is therefore true exactly while the watcher holds a load the
+controller owns and has not yet consumed: `openFile()` installs the future before
+announcing busy, and completion takes its result before announcing idle, so an
+open from the idle notification starts the next load and both results are
+delivered once each. The controller checks shutdown after clearing errors,
+announcing idle and inserting a tab, between the current-tab helper's
+`currentTabIndexChanged` and `currentSessionChanged`, and after that helper
+returns.
+
+`AppController::shutdown()` is the one teardown path, called from `aboutToQuit`, from
+the destructor or from an observer; a repeated call does nothing. It stops accepting
+opens, disconnects the watcher's delivery, then waits on the controller's own future
+for a load it still owns and takes its result on the controller's thread, where the
+session and its models are destroyed — whether the worker was still parsing, had
+finished with its completion still queued, or had failed. A result already taken by
+an interrupted completion is destroyed there instead, on the same thread. Shutdown
+emits nothing; afterwards `fileLoading` is false. The worker never needs the controller's
+event loop, and a parse is not interruptible, so shutdown waits for the current
+parse to return: this is a lifetime guarantee, not a latency bound. On destruction
+the adapter list and every other member are destroyed only afterwards. Once shutdown
+has started, no completion adds a tab, changes the current tab, emits `fileLoaded`
+or reports an error, and `openFile()` does nothing.
 
 ## DocumentSession Contract
 
@@ -143,7 +196,8 @@ Both grid items mark cells claimed by more than one occupant. After filling a ce
 
 ```
 src/
-  core/         appcontroller, formatregistry, noderegistry, detailpresenter,
+  builtinformats  application format list (the only concrete-adapter construction)
+  core/         appcontroller, formatlist, noderegistry, detailpresenter,
                 detailsection, treeitem, formatid, diagnostics
   models/       treemodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel,
                 plotseries, signalplotmodel
@@ -151,7 +205,7 @@ src/
                 (shared text/detail helpers), a2l/dbc/ldf/mdf4 sessions and
                 detail presenters (a2l splits ifdata helpers into
                 a2ldetailpresenter_ifdata.cpp)
-  adapters/     a2l/dbc/ldf/mdf4 adapter + factory (C plugin entry points)
+  adapters/     formatadapter (load interface) and the a2l/dbc/ldf/mdf4 adapters
   ui/           memorygriditem, signalgriditem, signalplotitem (painted renderers)
 qml/
   Main.qml      root layout with SplitView, tabs, Loader
@@ -164,7 +218,7 @@ Each format's detail rendering lives in its own `DetailPresenter` subclass — `
 
 ## Memory Ownership
 
-- `AppController` owns `FormatRegistry`, `NodeRegistry`, `TabModel`, and the list of `DocumentSession`s (each as `std::unique_ptr`).
+- `AppController` owns its `FormatList` (and through it every adapter), the pending load, `TabModel` with its `DocumentSession`s (each as `std::unique_ptr`), and the per-session filter proxies. A pending load is joined before any of them is destroyed.
 - Each `DocumentSession` owns its tree model, detail presenter, and center-panel model. The session outlives every view that binds to those models; QML holds non-owning references via `QAbstractItemModel*`.
 - Closing a tab destroys the session, which destroys its `NodeRegistry`, which invalidates every node-key from that document. The UI binds to the new current session and rebuilds detail / center models from scratch.
 

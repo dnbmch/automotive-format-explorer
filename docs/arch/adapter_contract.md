@@ -2,16 +2,16 @@
 
 How to add another format to the explorer.
 
-The explorer is plugin-based at the architecture level: each format ships an adapter (loads a file → returns a session) and a session (owns the parsed document and exposes models to QML). On Windows adapters are shared libraries loaded by `QLibrary` at runtime; on Linux they are linked statically into the executable.
+Each format ships an adapter (loads a file → returns a session) and a session (owns the parsed document and exposes models to QML). Both compile into a static backend library that is linked into the one executable on every platform; the application's format list constructs the adapter.
 
 ## What you need to write
 
 | File | Purpose |
 |---|---|
-| `src/adapters/<fmt>adapter.h` + `.cpp` | `class <Fmt>Adapter final : public FormatAdapter` + `extern "C" FormatAdapter* create<Fmt>AdapterPlugin()` factory |
+| `src/adapters/<fmt>adapter.h` + `.cpp` | `class <Fmt>Adapter final : public FormatAdapter` implementing `load()` |
 | `src/sessions/<fmt>documentsession.h` + `.cpp` | `class <Fmt>DocumentSession : public AdapterSessionBase` (or directly `DocumentSession`) — owns the parsed proto document, builds the `TreeModel`, populates the `DetailModel` per node click, optionally exposes a center-panel model |
 | Canonical parser target in `CMakeLists.txt` | Supplies matched headers and static library from source composition or an installed package |
-| Registration in `src/core/appcontroller.cpp` static block | Under `#ifdef BACKENDS_STATIC` (Linux), call `_format_registry.registerAdapter(std::unique_ptr<FormatAdapter>(create<Fmt>AdapterPlugin()))` |
+| Entry in `src/builtinformats.cpp` | `{FormatId::<FMT>, {"<ext>"}, std::make_unique<<Fmt>Adapter>()}` — the format's identity, suffixes and adapter in one place |
 
 The four existing implementations under `src/adapters/` and `src/sessions/`
 are the working references. DBC is the smallest metadata-at-open template;
@@ -23,9 +23,6 @@ MDF4 is the reference for metadata-only open followed by lazy bulk-data work.
 class FormatAdapter {
 public:
     virtual ~FormatAdapter() = default;
-    virtual FormatId formatId() const = 0;            // enum value in src/core/formatid.h
-    virtual QString formatName() const = 0;           // human-readable, e.g. "DBC"
-    virtual QStringList extensions() const = 0;       // e.g. {"dbc"} — matched case-insensitively
     virtual LoadResult load(const QString& path) const = 0;
 };
 
@@ -35,7 +32,9 @@ struct LoadResult {
 };
 ```
 
-`load()` runs on a worker thread — `AppController::openFile()` dispatches it via `QtConcurrent::run()` and moves the resulting models back to the main thread on completion. Expect to be called with an absolute path; let parser-layer errors flow into `diagnostics` instead of throwing.
+`load()` runs on a worker thread — `AppController::openFile()` dispatches it via `QtConcurrent::run()`, and the worker moves the session's models to the controller's thread before the result is published. Expect to be called with an absolute path; let parser-layer errors flow into `diagnostics` instead of throwing. Do not depend on the GUI event loop inside `load()` or a session constructor: application shutdown waits for a pending load on the GUI thread. The adapter is owned by the controller's `FormatList` and outlives every load it runs.
+
+Format identity for the file dialog and suffix lookup comes from the `FormatEntry`; `formatDisplayName(FormatId)` labels the dialog filter. The session reports its own identity (`formatId()`, `formatName()`) for tabs.
 
 ## DocumentSession interface
 
@@ -63,57 +62,32 @@ public:
 
 `AdapterSessionBase` ([src/sessions/adaptersessionbase.h](../../src/sessions/adaptersessionbase.h)) provides the model plumbing and node-registry handling. Use it as the base class unless your format genuinely needs to bypass it.
 
-## Plugin entry point
-
-Each adapter exposes a single `extern "C"` factory:
-
-```cpp
-// in src/adapters/<fmt>adapter.cpp
-extern "C" FormatAdapter* create<Fmt>AdapterPlugin() {
-    return new <Fmt>Adapter();
-}
-```
-
-On Windows (`.dll` plugin discovery) `QLibrary::resolve()` looks up this exact symbol. On Linux the same function is linked into the binary and called directly from the static block in `AppController::AppController()`.
-
 ## CMake wiring
 
-Each format compiles into its own backend library — `explorer-<fmt>-backend`, built `SHARED` on Windows and `STATIC` on Linux via `${_backend_lib_type}`. The parser lib links **into that backend**, never into the `automotive-format-explorer` exe directly. The exe pulls backends in differently per platform: `add_dependencies` on Windows (the `.dll` is loaded at runtime by `QLibrary`), a direct static link on Linux.
+Each format compiles into its own static backend library, `explorer-<fmt>-backend`. The parser links **into that backend**; `explorer-formats` links every backend and the executable links `explorer-formats`. `explorer-core` never links a backend or a parser.
 
 ```cmake
 # Package mode resolves the producer export; source mode requires the
 # same target from the workspace composition.
 find_package(<fmt>parser CONFIG REQUIRED)
 
-# Per-format backend library — built SHARED (Windows) or STATIC (Linux)
-qt_add_library(explorer-<fmt>-backend ${_backend_lib_type}
+qt_add_library(explorer-<fmt>-backend STATIC
     src/adapters/<fmt>adapter.cpp
     src/sessions/<fmt>documentsession.cpp
-)
-target_include_directories(explorer-<fmt>-backend PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 target_link_libraries(explorer-<fmt>-backend
     PRIVATE
         Qt6::Core
         protobuf::libprotobuf
         explorer-core
-        <fmt>parser::<fmt>parser # parser links INTO the backend, not the exe
-)
-set_target_properties(explorer-<fmt>-backend PROPERTIES
-    AUTOMOC OFF
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
+        <fmt>parser::<fmt>parser # parser links INTO the backend
 )
 
-# Wire the backend into the exe — per platform
-if(WIN32)
-    add_dependencies(automotive-format-explorer explorer-<fmt>-backend)
-else()
-    target_link_libraries(automotive-format-explorer PRIVATE explorer-<fmt>-backend)
-endif()
+# Add the backend to explorer-formats' PRIVATE link list and to the
+# AUTOMOC OFF set_target_properties() list.
 ```
 
-Parser acquisition and selection are described in [the build reference](../ref/cmake_build_system.md). On Linux, `BACKENDS_STATIC` is defined on the exe and the `create<Fmt>AdapterPlugin()` factory is registered at startup; on Windows the backend `.dll` is discovered and loaded lazily on first open.
+Parser acquisition and selection are described in [the build reference](../ref/cmake_build_system.md).
 
 ## Center panel
 
@@ -146,12 +120,12 @@ plot QML component. This keeps the plot reusable by future recording backends.
 
 ## Checklist
 
-1. Add `FormatId::<FMT>` to `src/core/formatid.h`.
-2. Write the adapter pair: `src/adapters/<fmt>adapter.{h,cpp}` with the `extern "C"` factory.
+1. Add `FormatId::<FMT>` to `src/core/formatid.h`, with its `formatDisplayName()` label.
+2. Write the adapter pair: `src/adapters/<fmt>adapter.{h,cpp}` implementing `load()`.
 3. Write the session: `src/sessions/<fmt>documentsession.{h,cpp}` extending `AdapterSessionBase`. Implement `treeModel()`, `selectNode()`, and either a center-panel pair or leave the defaults.
-4. Call `fetch_parser_lib(TARGET <fmt>parser ...)` in `CMakeLists.txt`.
-5. Add an `explorer-<fmt>-backend` library (`qt_add_library(... ${_backend_lib_type})`) carrying the new adapter/session sources, link the parser plus `explorer-core` into it, then wire it to the exe — `add_dependencies` on Windows, `target_link_libraries` on Linux.
-6. Register the create-function in `AppController::AppController()` under `#ifdef BACKENDS_STATIC`.
+4. Resolve the canonical parser target in `CMakeLists.txt` (the `AFF_PARSER_MODE` loop).
+5. Add a static `explorer-<fmt>-backend` library carrying the adapter/session sources, link the parser plus `explorer-core` into it, and add it to `explorer-formats`.
+6. Add the format's entry to `builtInFormats()` in `src/builtinformats.cpp`; the dialog filters and sample list follow from it. Extend `tests/tst_builtinformats.cpp` with its suffixes and a bundled sample.
 7. Run the app, open a sample file (Ctrl+O or the NavPanel Open button), verify the tab opens and the tree populates.
 
-The format's own parser library (under `dnbmch/<fmt>-parser-lib`) must publish a `v*` release with the renamed `<fmt>parser-*` artifact name before the explorer can fetch it.
+Workspace source builds need no parser release; package builds consume the parser's complete install archive, selected as described in [the build reference](../ref/cmake_build_system.md#acquire-complete-installed-packages).

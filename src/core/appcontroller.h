@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/formatregistry.h"
+#include "core/formatlist.h"
 #include "models/detailmodel.h"
 #include "models/tabmodel.h"
 #include "models/treefiltermodel.h"
@@ -9,7 +9,7 @@
 #include <QAbstractListModel>
 #include <QFutureWatcher>
 #include <QObject>
-#include <QLibrary>
+#include <QStringList>
 #include <QVariantList>
 #include <memory>
 #include <unordered_map>
@@ -28,9 +28,11 @@ class AppController : public QObject {
     Q_PROPERTY(bool startupLoading READ startupLoading WRITE setStartupLoading NOTIFY startupLoadingChanged)
     Q_PROPERTY(QString startupStatusText READ startupStatusText WRITE setStartupStatusText NOTIFY startupStatusTextChanged)
     Q_PROPERTY(QVariantList sampleFiles READ sampleFiles CONSTANT)
+    Q_PROPERTY(QStringList fileDialogFilters READ fileDialogFilters CONSTANT)
 
 public:
-    explicit AppController(QObject* parent = nullptr);
+    explicit AppController(FormatList formats, QObject* parent = nullptr);
+    ~AppController() override;
 
     TabModel* tabModel();
     TreeFilterModel* currentTreeModel();
@@ -52,6 +54,14 @@ public:
     void setStartupStatusText(const QString& text);
 
     QVariantList sampleFiles() const;
+    QStringList fileDialogFilters() const;
+
+    // Stops accepting opens and suppresses delivery of a pending load, then
+    // waits for that load on this thread and destroys any result it produced.
+    // The parse itself is not interruptible. Emits nothing; afterwards
+    // fileLoading() is false. Idempotent, including from inside a notification;
+    // the destructor calls it.
+    void shutdown();
 
     Q_INVOKABLE void openFile(const QUrl& fileUrl);
     Q_INVOKABLE void closeTab(int index);
@@ -68,24 +78,21 @@ signals:
     void fileLoaded(const QString& displayName);
 
 private:
-    const FormatAdapter* ensureAdapterForPath(const QString& path);
-    bool loadBackendForPath(const QString& path);
-    bool loadBackend(FormatId formatId, const QString& libraryBaseName, const char* createSymbol);
     void setLastError(const QString& errorText);
     void onLoadFinished();
     void setFileLoading(bool loading);
 
-    FormatRegistry _format_registry;
+    const FormatList _formats;
     TabModel _tab_model;
     TreeModel _empty_tree_model;
     TreeFilterModel _empty_tree_filter;
     DetailModel _empty_detail_model;
     std::unordered_map<DocumentSession*, std::unique_ptr<TreeFilterModel>> _tree_filters;
-    std::vector<std::unique_ptr<QLibrary>> _loaded_backends;
     int _current_tab_index = -1;
     QString _last_error;
-    bool _file_loading = false;
-    QFutureWatcher<std::shared_ptr<LoadResult>> _load_watcher;
+    bool _file_loading = false;   // _load_watcher holds an owned, untaken result
+    QFutureWatcher<LoadResult> _load_watcher;
+    bool _shut_down = false;
     bool _startup_loading = true;
     QString _startup_status_text = QStringLiteral("Loading\u2026");
 };

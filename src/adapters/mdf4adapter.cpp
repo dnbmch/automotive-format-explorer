@@ -26,18 +26,6 @@ DiagnosticMessage toDiagnostic(const mdf4::Diagnostic& diagnostic) {
 
 } // namespace
 
-FormatId Mdf4Adapter::formatId() const {
-    return FormatId::MDF4;
-}
-
-QString Mdf4Adapter::formatName() const {
-    return QStringLiteral("MDF4");
-}
-
-QStringList Mdf4Adapter::extensions() const {
-    return {QStringLiteral("mf4")};
-}
-
 LoadResult Mdf4Adapter::load(const QString& path) const {
     QList<DiagnosticMessage> diagnostics;
     mdf4::File document = mdf4::extract::extractFile(path.toStdString());
@@ -51,8 +39,4 @@ LoadResult Mdf4Adapter::load(const QString& path) const {
         std::move(document),
         diagnostics);
     return LoadResult{std::move(session), diagnostics};
-}
-
-extern "C" FormatAdapter* createMdf4AdapterPlugin() {
-    return new Mdf4Adapter();
 }

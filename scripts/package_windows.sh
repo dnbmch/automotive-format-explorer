@@ -42,14 +42,8 @@ WINDEPLOYQT="$QT_BIN/windeployqt.exe"
 rm -rf "$DIST"
 mkdir -p "$DIST"
 
+# The Explorer core and every format backend are linked into the executable.
 cp "$BUILD_DIR/automotive-format-explorer.exe" "$DIST/"
-cp "$BUILD_DIR/explorer-core.dll" "$DIST/"
-
-backends=("$BUILD_DIR"/explorer-*-backend.dll)
-[ -e "${backends[0]}" ] || { echo "no backend DLLs in $BUILD_DIR" >&2; exit 1; }
-cp "${backends[@]}" "$DIST/"
-echo "backends packaged: ${#backends[@]}"
-
 cp -r samples "$DIST/samples"
 
 # --- Qt ------------------------------------------------------------------

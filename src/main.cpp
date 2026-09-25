@@ -1,3 +1,4 @@
+#include "builtinformats.h"
 #include "core/appcontroller.h"
 #include "ui/memorygriditem.h"
 #include "ui/signalgriditem.h"
@@ -32,7 +33,8 @@ int main(int argc, char* argv[]) {
     qmlRegisterType<SignalGridItem>("ExplorerApp", 1, 0, "SignalGridItem");
     qmlRegisterType<SignalPlotItem>("ExplorerApp", 1, 0, "SignalPlotItem");
 
-    AppController controller;
+    AppController controller(builtInFormats());
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &controller, &AppController::shutdown);
     qmlRegisterSingletonInstance("ExplorerApp", 1, 0, "AppController", &controller);
 
     QQmlApplicationEngine engine;

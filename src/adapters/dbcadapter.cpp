@@ -26,18 +26,6 @@ DiagnosticMessage toDiagnostic(const dbc::Diagnostic& d) {
 }
 } // namespace
 
-FormatId DbcAdapter::formatId() const {
-    return FormatId::DBC;
-}
-
-QString DbcAdapter::formatName() const {
-    return QStringLiteral("DBC");
-}
-
-QStringList DbcAdapter::extensions() const {
-    return {QStringLiteral("dbc")};
-}
-
 LoadResult DbcAdapter::load(const QString& path) const {
     QList<DiagnosticMessage> diagnostics;
 
@@ -63,8 +51,4 @@ LoadResult DbcAdapter::load(const QString& path) const {
         diagnostics);
 
     return LoadResult{std::move(session), diagnostics};
-}
-
-extern "C" FormatAdapter* createDbcAdapterPlugin() {
-    return new DbcAdapter();
 }

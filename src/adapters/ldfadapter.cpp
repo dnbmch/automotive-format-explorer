@@ -22,18 +22,6 @@ DiagnosticMessage toDiagnostic(const ldf::Diagnostic& d) {
 }
 } // namespace
 
-FormatId LdfAdapter::formatId() const {
-    return FormatId::LDF;
-}
-
-QString LdfAdapter::formatName() const {
-    return QStringLiteral("LDF");
-}
-
-QStringList LdfAdapter::extensions() const {
-    return {QStringLiteral("ldf")};
-}
-
 LoadResult LdfAdapter::load(const QString& path) const {
     QList<DiagnosticMessage> diagnostics;
 
@@ -59,8 +47,4 @@ LoadResult LdfAdapter::load(const QString& path) const {
         diagnostics);
 
     return LoadResult{std::move(session), diagnostics};
-}
-
-extern "C" FormatAdapter* createLdfAdapterPlugin() {
-    return new LdfAdapter();
 }
