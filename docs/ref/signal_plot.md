@@ -59,15 +59,19 @@ with padding for readability. Non-finite values do not contribute to extrema.
 
 ## MDF4 selection lifecycle
 
-Opening an MDF4 file extracts only its metadata graph. Selecting a plottable
-channel starts `decodeChannel(path, group, channel, firstSample, sampleCount)`
-on a worker with the metadata-derived range; a channel whose decode is already
-running is not decoded a second time.
+Opening an MDF4 file indexes only its metadata graph, once, into the session's
+`mdf4::Reader`. Selecting a plottable channel reads its whole metadata-derived
+range from that reader on a worker. One read runs at a time: a channel selected
+meanwhile waits as the single pending read, replacing any earlier one, and a
+channel whose read is running is not read a second time.
 
-A finished decode is always cached by group/channel — the samples are valid for
+A successful read is always cached by group/channel — the samples are valid for
 their channel whatever is selected by the time they arrive — while the plot is
 updated only when that channel is still the selection. Rapid selection changes
-therefore neither flash stale data nor throw completed work away.
+therefore neither flash stale data, nor throw completed work away, nor read every
+channel passed on the way. A failed read is shown with its reason and not cached;
+a successful empty read shows `No samples recorded`. Ownership and teardown:
+[architecture](../arch/architecture.md#mdf4-reads).
 
 The cache is bounded by bytes rather than entries: past a 256 MiB budget it
 evicts least-recently-used channels, never the one on screen, and keeps a single

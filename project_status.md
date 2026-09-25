@@ -18,11 +18,15 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - Format-neutral single-channel signal plot (`PlotSeries`, `SignalPlotModel`,
   `SignalPlotItem`) with summary-backed min/max bucketing, zoom, pan, and
   nearest-sample cursor readout.
-- MDF4 metadata-only open, channel-group/channel detail cards, and lazy explicit-
-  range decode on a worker. Completed decodes land in a byte-budget LRU cache
-  shared with the plot model; a result reaches the plot only while its channel
-  is still selected. Non-monotonic domains fall back to record indices at the
-  session seam; group masters are listed as axis channels, not signals.
+- MDF4 open indexes metadata once into one retained `mdf4::Reader` shared by the
+  tree, detail cards and every channel read. Channel reads run on a worker one at
+  a time, with a single replaceable pending selection; successful reads land in a
+  byte-budget LRU cache shared with the plot model and reach the plot only while
+  their channel is still selected. A failed read shows its reason (a changed file
+  asks for a reload) and is not cached; an empty success shows no samples. Closing
+  the tab waits for a running read. Non-monotonic domains fall back to record
+  indices at the session seam; group masters are listed as axis channels, not
+  signals.
 - Memory grid: overlap hatching (bytes claimed by more than one object),
   click-drag byte-range selection with status readout, and hover tooltips with
   record layout / conversion — see [docs/ref/memory_view.md](docs/ref/memory_view.md).
@@ -36,12 +40,14 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - Links the four canonical parser targets, from complete installed packages or
   source workspace composition. GPL-3.0.
 - QTest coverage for tree filtering, memory and signal-plot models, A2L/MDF4
-  detail presenters, MDF4 ranged-decode, cache eviction, domain validation and
-  race behavior, the production format list (suffixes, dialog filters, sample
+  detail presenters, MDF4 serialized reads, stale completions, failure versus
+  empty results, cache eviction, domain validation, worker-thread hand-off and
+  teardown from and during reads, the production format list (suffixes, dialog filters, sample
   classification, one bundled sample per format opened through the controller)
   and controller load/shutdown lifetimes through a fake adapter, registered with
   ctest and run in CI. The end-to-end
-  writer-file smoke runs against the bundled `samples/demo_recording.mf4`;
+  writer-file smoke opens and plots the bundled `samples/demo_recording.mf4`
+  through the production adapter, and a truncated copy asks for a reload;
   `MDF4_WRITER_SAMPLE` points it at a different recording, and it reports as a
   ctest skip when that resolves to nothing.
 - CI (Windows MinGW + Ubuntu, also on `release/**`) + `release.yml` (Windows zip

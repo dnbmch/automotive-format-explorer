@@ -1,33 +1,19 @@
 #include "sessions/mdf4documentsession.h"
 
-#include "mdf4/extract.h"
 #include "models/signalplotmodel.h"
 #include "sessions/mdf4detailpresenter.h"
 #include "sessions/presentertext.h"
 
-#include <QFutureWatcher>
 #include <QObject>
+#include <QPointer>
 #include <QtConcurrent/QtConcurrentRun>
 
-#include <algorithm>
 #include <cstddef>
 #include <utility>
 
 namespace {
 
-PlotSeries decodeSeries(const QString& path,
-                        std::uint32_t group,
-                        std::uint32_t channel,
-                        std::uint64_t firstSample,
-                        std::uint64_t sampleCount) {
-    mdf4::Series decoded = mdf4::extract::decodeChannel(
-        path.toStdString(), group, channel, firstSample, sampleCount);
-
-    PlotSeries series;
-    series.time = std::move(decoded.time);
-    series.value = std::move(decoded.value);
-    return series;
-}
+const QString kNoSamples = QStringLiteral("No samples recorded");
 
 QString groupTitle(const mdf4::ChannelGroup& group, int index) {
     return group.name().empty()
@@ -67,19 +53,15 @@ bool nonDecreasing(const std::vector<double>& domain) {
     return true;
 }
 
-// decodeChannel is a parsed-file boundary, and the plot binary-searches the
-// domain it hands over. Trim the parallel arrays to a common length and, when
-// the domain is not usable as a search key, plot the channel against record
-// indices rather than silently mislocating its samples.
-void normalizeDecoded(PlotSeries& series) {
-    const std::size_t count = std::min(series.time.size(), series.value.size());
-    series.time.resize(count);
-    series.value.resize(count);
+// A successful read has equal-length arrays, but the plot binary-searches its
+// domain. When the domain is not usable as a search key, plot the channel
+// against record indices rather than silently mislocating its samples.
+void normalizeDomain(PlotSeries& series) {
     if (nonDecreasing(series.time)) {
         return;
     }
 
-    for (std::size_t i = 0; i < count; ++i) {
+    for (std::size_t i = 0; i < series.time.size(); ++i) {
         series.time[i] = static_cast<double>(i);
     }
     series.domainName = QStringLiteral("Record index");
@@ -111,32 +93,54 @@ DomainMetadata domainMetadata(const mdf4::File& document, int groupIndex) {
         }
     }
 
-    // decodeChannel deliberately falls back to record indices when no time
+    // The reader deliberately falls back to record indices when no time
     // master can be resolved. Keep that useful degradation visible instead of
     // presenting an index/angle/distance domain as seconds.
     return {QStringLiteral("Record index"), {}};
+}
+
+// A failed read is shown with its reason, never cached as an empty channel.
+QString failureText(const mdf4::ReadResult& result) {
+    const QString reason = QString::fromUtf8(result.message);
+    return result.location.empty()
+        ? QStringLiteral("Samples could not be read: %1").arg(reason)
+        : QStringLiteral("Samples could not be read: %1 (%2)")
+              .arg(reason, QString::fromStdString(result.location));
 }
 
 } // namespace
 
 Mdf4DocumentSession::Mdf4DocumentSession(QString displayName,
                                          QString sourcePath,
-                                         mdf4::File document,
-                                         QList<DiagnosticMessage> diagnostics,
-                                         DecodeFunction decode)
+                                         std::shared_ptr<const mdf4::File> metadata,
+                                         ReadFunction read,
+                                         QList<DiagnosticMessage> diagnostics)
     : AdapterSessionBase(FormatId::MDF4,
                          QStringLiteral("MDF4"),
                          std::move(displayName),
                          std::move(sourcePath),
                          std::move(diagnostics)),
-      _document(std::move(document)),
-      _plot_model(std::make_unique<SignalPlotModel>()),
-      _decode(decode ? std::move(decode) : DecodeFunction{decodeSeries}) {
-    setDetailPresenter(std::make_unique<Mdf4DetailPresenter>(_document));
+      _metadata(std::move(metadata)),
+      _read(std::move(read)),
+      _plot_model(std::make_unique<SignalPlotModel>()) {
+    QObject::connect(&_read_watcher, &QFutureWatcher<mdf4::ReadResult>::finished,
+                     &_read_watcher, [this] { onReadFinished(); });
+    setDetailPresenter(std::make_unique<Mdf4DetailPresenter>(*_metadata));
     buildTree();
 }
 
-Mdf4DocumentSession::~Mdf4DocumentSession() = default;
+Mdf4DocumentSession::~Mdf4DocumentSession() {
+    // The task holds its own reference to the source and never touches this
+    // session, so it may still release that reference on its worker after the
+    // wait below.
+    QObject::disconnect(&_read_watcher, nullptr, nullptr, nullptr);
+    _pending_read.reset();
+    if (_active_read) {
+        QFuture<mdf4::ReadResult> active = _read_watcher.future();
+        active.waitForFinished();
+        const mdf4::ReadResult discarded = active.takeResult();
+    }
+}
 
 QUrl Mdf4DocumentSession::centerPanelSource() const {
     return QUrl(QStringLiteral("qrc:/qt/qml/ExplorerApp/qml/components/SignalPlotView.qml"));
@@ -167,6 +171,7 @@ void Mdf4DocumentSession::selectNode(quint64 key) {
 void Mdf4DocumentSession::moveModelsToThread(QThread* thread) {
     AdapterSessionBase::moveModelsToThread(thread);
     _plot_model->moveToThread(thread);
+    _read_watcher.moveToThread(thread);
 }
 
 void Mdf4DocumentSession::buildTree() {
@@ -177,14 +182,14 @@ void Mdf4DocumentSession::buildTree() {
     TreeItem* file = appendNode(
         root.get(),
         displayName(),
-        _document.version().empty() ? QStringLiteral("MDF4")
-                                    : QStringLiteral("MDF %1").arg(text(_document.version())),
+        _metadata->version().empty() ? QStringLiteral("MDF4")
+                                     : QStringLiteral("MDF %1").arg(text(_metadata->version())),
         QStringLiteral("file"),
         SemanticKind::Root,
         NodeBinding{SemanticKind::Root, Mdf4Path{Mdf4EntityKind::File, -1, -1}, true});
 
-    for (int groupIndex = 0; groupIndex < _document.groups_size(); ++groupIndex) {
-        const auto& group = _document.groups(groupIndex);
+    for (int groupIndex = 0; groupIndex < _metadata->groups_size(); ++groupIndex) {
+        const auto& group = _metadata->groups(groupIndex);
         TreeItem* groupItem = appendNode(
             file,
             groupTitle(group, groupIndex),
@@ -219,10 +224,39 @@ void Mdf4DocumentSession::buildTree() {
     setRootItem(std::move(root));
 }
 
+// Plot model observers run synchronously and may select another node or close
+// this session. Every flow therefore settles its state first and notifies last:
+// the series, then a busy state derived from the state as it is by then.
+void Mdf4DocumentSession::show(PlotSeriesPtr series) {
+    QPointer<SignalPlotModel> model(_plot_model.get());
+    model->setSeries(std::move(series));
+    if (model) {
+        model->setBusy(reading());
+    }
+}
+
+bool Mdf4DocumentSession::reading() const {
+    return _selected_channel &&
+           (_selected_channel == _active_read || _selected_channel == _pending_read);
+}
+
 void Mdf4DocumentSession::clearPlot() {
     _selected_channel.reset();
-    _plot_model->setBusy(false);
-    _plot_model->setSeries({});
+    _pending_read.reset();
+    show(nullptr);
+}
+
+PlotSeries Mdf4DocumentSession::seriesHeader(ChannelKey key) const {
+    const int groupIndex = static_cast<int>(key.first);
+    const int channelIndex = static_cast<int>(key.second);
+    const mdf4::Channel& channel = _metadata->groups(groupIndex).channels(channelIndex);
+    const DomainMetadata domain = domainMetadata(*_metadata, groupIndex);
+    PlotSeries header;
+    header.name = channelTitle(channel, channelIndex);
+    header.unit = text(channel.unit());
+    header.domainName = domain.name;
+    header.domainUnit = domain.unit;
+    return header;
 }
 
 PlotSeriesPtr Mdf4DocumentSession::cachedSeries(ChannelKey key) {
@@ -265,91 +299,103 @@ void Mdf4DocumentSession::cacheSeries(ChannelKey key, PlotSeriesPtr series) {
 }
 
 void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
-    if (path.groupIndex < 0 || path.groupIndex >= _document.groups_size()) {
+    if (path.groupIndex < 0 || path.groupIndex >= _metadata->groups_size()) {
         clearPlot();
         return;
     }
 
-    const auto& group = _document.groups(path.groupIndex);
+    const auto& group = _metadata->groups(path.groupIndex);
     if (path.channelIndex < 0 || path.channelIndex >= group.channels_size()) {
         clearPlot();
         return;
     }
 
     const auto& channel = group.channels(path.channelIndex);
-    const DomainMetadata domain = domainMetadata(_document, path.groupIndex);
-    PlotSeries pending;
-    pending.name = channelTitle(channel, path.channelIndex);
-    pending.unit = text(channel.unit());
-    pending.domainName = domain.name;
-    pending.domainUnit = domain.unit;
-
-    // A master is the group's own domain, not a signal against it.
-    if (channel.is_master() || !channel.decodable()) {
-        pending.placeholderText = channel.is_master()
-            ? QStringLiteral("Master channel — this group's time axis")
-            : QStringLiteral("This channel type is not plottable");
-        _selected_channel.reset();
-        _plot_model->setBusy(false);
-        _plot_model->setSeries(std::make_shared<const PlotSeries>(std::move(pending)));
-        return;
-    }
-
     const ChannelKey key{
         static_cast<std::uint32_t>(path.groupIndex),
         static_cast<std::uint32_t>(path.channelIndex),
     };
+    PlotSeries header = seriesHeader(key);
+
+    // A master is the group's own domain, not a signal against it.
+    if (channel.is_master() || !channel.decodable()) {
+        header.placeholderText = channel.is_master()
+            ? QStringLiteral("Master channel — this group's time axis")
+            : QStringLiteral("This channel type is not plottable");
+        _selected_channel.reset();
+        _pending_read.reset();
+        show(std::make_shared<const PlotSeries>(std::move(header)));
+        return;
+    }
+
     _selected_channel = key;
-
     if (PlotSeriesPtr cached = cachedSeries(key)) {
-        _plot_model->setBusy(false);
-        _plot_model->setSeries(std::move(cached));
+        _pending_read.reset();
+        show(std::move(cached));
         return;
     }
 
-    const std::uint64_t sampleCount = channel.sample_count();
-    if (sampleCount == 0) {
-        pending.placeholderText = QStringLiteral("No samples recorded");
-        _plot_model->setBusy(false);
-        _plot_model->setSeries(std::make_shared<const PlotSeries>(std::move(pending)));
+    if (channel.sample_count() == 0) {
+        _pending_read.reset();
+        header.placeholderText = kNoSamples;
+        show(std::make_shared<const PlotSeries>(std::move(header)));
         return;
     }
 
-    _plot_model->setSeries(std::make_shared<const PlotSeries>(pending));
-    _plot_model->setBusy(true);
-
-    // Re-selecting a channel whose decode is still running waits for that one
-    // rather than starting a duplicate.
-    if (!_decodes_in_flight.insert(key).second) {
-        return;
+    // One read at a time: the active one is reused, and a channel selected
+    // while another reads waits as the single pending request.
+    if (_active_read == key) {
+        _pending_read.reset();
+    } else if (_active_read) {
+        _pending_read = key;
+    } else {
+        startRead(key);
     }
+    show(std::make_shared<const PlotSeries>(std::move(header)));
+}
 
-    const QString pathText = sourcePath();
-    const DecodeFunction decode = _decode;
-    auto* watcher = new QFutureWatcher<PlotSeries>(_plot_model.get());
-    QObject::connect(watcher, &QFutureWatcher<PlotSeries>::finished, _plot_model.get(),
-                     [this, watcher, key, header = std::move(pending)]() mutable {
-        PlotSeries decoded = watcher->future().takeResult();
-        watcher->deleteLater();
-        _decodes_in_flight.erase(key);
+// The task owns a copy of the read function, and with it the source, plus plain
+// request values; it never reaches this session or its models.
+void Mdf4DocumentSession::startRead(ChannelKey key) {
+    const std::uint64_t sampleCount = _metadata->groups(static_cast<int>(key.first))
+                                          .channels(static_cast<int>(key.second))
+                                          .sample_count();
+    _active_read = key;
+    _read_watcher.setFuture(QtConcurrent::run([read = _read, key, sampleCount] {
+        return read(key.first, key.second, 0, sampleCount);
+    }));
+}
 
-        PlotSeries series = std::move(header);
-        series.time = std::move(decoded.time);
-        series.value = std::move(decoded.value);
-        normalizeDecoded(series);
+void Mdf4DocumentSession::onReadFinished() {
+    // Take the result and settle which read is active before notifying.
+    mdf4::ReadResult result = _read_watcher.future().takeResult();
+    const ChannelKey key = *_active_read;
+    _active_read.reset();
 
-        // The samples are valid for their channel whatever is selected now, so
-        // the work is always kept; only the plot update follows the selection.
-        PlotSeriesPtr stored = std::make_shared<const PlotSeries>(std::move(series));
-        cacheSeries(key, stored);
-        if (_selected_channel == key) {
-            _plot_model->setSeries(std::move(stored));
-            _plot_model->setBusy(false);
+    PlotSeries series = seriesHeader(key);
+    if (result.ok) {
+        series.time = std::move(result.series.time);
+        series.value = std::move(result.series.value);
+        normalizeDomain(series);
+        if (series.time.empty()) {
+            series.placeholderText = kNoSamples;
         }
-    });
+    } else {
+        series.placeholderText = failureText(result);
+    }
+    PlotSeriesPtr completed = std::make_shared<const PlotSeries>(std::move(series));
 
-    watcher->setFuture(QtConcurrent::run(
-        [decode, pathText, key, sampleCount]() {
-            return decode(pathText, key.first, key.second, 0, sampleCount);
-        }));
+    // Samples are valid for their channel whatever is selected now; only the
+    // plot follows the selection.
+    if (result.ok) {
+        cacheSeries(key, completed);
+    }
+    if (_pending_read) {
+        const ChannelKey next = *_pending_read;
+        _pending_read.reset();
+        startRead(next);
+    }
+    if (_selected_channel == key) {
+        show(std::move(completed));
+    }
 }

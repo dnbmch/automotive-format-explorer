@@ -126,9 +126,52 @@ A `DocumentSession` (interface in `src/sessions/documentsession.h`) is the per-d
 | `selectNode(quint64 key)` | selects the entity with the given node key |
 | `centerPanelSource()` | `QUrl` — QML component URL; empty means the layout collapses to two columns |
 | `centerPanelModel()` | `QAbstractListModel*` for the center panel; null when there is no center panel |
-| `moveModelsToThread(QThread*)` | moves the session's models to the given thread |
+| `moveModelsToThread(QThread*)` | moves the session's `QObject`s — its models, and for MDF4 the read watcher — to the given thread |
 
-`AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides the common machinery (NodeRegistry hookup, tree construction skeleton, diagnostics collection). The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`, `Mdf4DocumentSession`) inherit from it and supply format-specific tree building, detail sections, and center-panel choice. MDF4 open is metadata-only; its session requests an explicit sample range on a worker only when a plottable channel is selected, caches every completed decode under a byte budget, and applies a result to the plot only while its channel is still the selection.
+`AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides the common machinery (NodeRegistry hookup, tree construction skeleton, diagnostics collection). The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`, `Mdf4DocumentSession`) inherit from it and supply format-specific tree building, detail sections, and center-panel choice. MDF4 open indexes metadata only; channel samples are read on demand from the same opened file, as described in [MDF4 reads](#mdf4-reads).
+
+## MDF4 reads
+
+`Mdf4Adapter::load()` opens one `mdf4::Reader` per file. The session's tree, detail
+presenter and every channel read use that reader: the session holds its metadata
+through a `std::shared_ptr<const mdf4::File>` aliasing the reader, and a read
+function bound to it. Either keeps the reader alive; there is no second metadata
+copy and no path-based read. A file that cannot be opened or indexed still opens
+as a session showing its diagnostics, and its reads fail.
+
+A session runs at most one read at a time, so the reader is never used
+concurrently. Selecting an uncached channel starts a read when none runs; while
+one runs, the selection becomes the single pending read, replacing any earlier
+one. Reselecting the running channel keeps its read and drops the pending one.
+Selecting a cached channel, a master, an unsupported channel or a non-channel row
+settles the view at once and drops the pending read. When a read completes, a
+successful result enters the cache whatever is selected, the pending read starts,
+and the plot changes only if the completed channel is still selected. Channel
+switching can wait behind a whole-channel read; the reader offers no cancellation.
+
+The task captures a copy of the read function and plain request values, never
+the session or a model. A session-owned `QFutureWatcher` receives completions; it
+moves with the models when the open worker hands the session to the controller
+thread. Plot notifications reach observers synchronously, and an observer may
+select another node or close the session from them. Each flow therefore settles
+the active and pending read and takes the completed result before notifying,
+notifies last — the series, then the busy state recomputed from the state as it
+stands — and touches nothing after a notification that destroyed the session.
+Destroying a session from inside the plot model's own reset or series
+notifications is not supported; the completion's final notification is the busy
+change.
+
+A failed read (`mdf4::ReadResult::ok` false) is never cached. The plot shows
+`Samples could not be read: <reason> (<channel>)`, which for a file changed since
+it was opened asks for a reload. A successful empty read, like a channel with no
+recorded samples, shows `No samples recorded`. A successful read has equal-length
+arrays; a domain that is not non-decreasing is replaced by record indices.
+
+Destroying the session disconnects delivery, drops the pending read, and waits on
+this thread for the running read, whose result is released here. The task may
+drop its reference to the reader on the worker afterwards; nothing else touches
+it. Closing a tab or exiting therefore waits for a running whole-channel read to
+return.
 
 The nav panel never binds a session's `TreeModel` directly: `AppController::currentTreeModel()` returns a per-session `TreeFilterModel` (`src/models/treefiltermodel.h`) — a `QSortFilterProxyModel` with recursive filtering and auto-accepted child rows that also exposes `nodeKeyRole` and a source-mapped `indexForNodeKey()` to QML. One proxy per session keeps the filter text per tab and preserves NavPanel's model-identity-keyed expand/selection/scroll state; the proxies live in `AppController` and are dropped when their tab closes. Sessions and backends know nothing about filtering.
 
@@ -180,7 +223,7 @@ those summaries. The paint representation therefore follows the viewport rather 
 recording size. `SignalPlotItem` draws direct polylines when the visible data is
 sparse and min/max columns when it is dense; wheel zoom, drag pan, and nearest-
 sample cursor lookup remain in the format-neutral plot stack. MDF4 protobuf and
-decoder types stop at `Mdf4DocumentSession`.
+reader types stop at `Mdf4DocumentSession`.
 
 ### Overlap stripes
 

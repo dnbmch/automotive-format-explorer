@@ -32,8 +32,8 @@ viewer-side plan of record.
   reader + session only, zero plot work.
 - **Plot rendering: custom `QQuickPaintedItem`** (`SignalPlotItem`), following the
   `SignalGridItem` precedent. No new Qt modules, no new deploy surface.
-- **Load strategy: metadata-only at open, per-channel decode on demand** on a worker
-  thread, cached per channel.
+- **Load strategy: metadata-only at open into one retained reader, one channel read
+  at a time on demand** on a worker thread, cached per channel.
 - **v1 plot scope: single channel** — click a channel in the tree, it plots.
 
 ## v1 reader scope (writer output + foreign-writer gate)
@@ -65,22 +65,29 @@ The `-lib` surface is a hybrid — protobuf for the document, plain C++ for bulk
   protobuf.
 
 ```cpp
-// lib/include/mdf4/extract.h        namespace mdf4::extract
-mdf4::File extractFile(const std::string& path);          // block graph walk, no sample read
-Series decodeChannel(const std::string& path,
-                     uint32_t group, uint32_t channel,     // samples + time master, physical
-                     uint64_t firstSample = 0,
-                     uint64_t sampleCount = UINT64_MAX);   // sample window, clamped
+// lib/include/mdf4/reader.h         namespace mdf4
+class Reader {                                             // one opened, indexed source
+    explicit Reader(const std::string& path);              // block graph walk, no sample read
+    const File& metadata() const;                          // immutable for the reader's life
+    bool ready() const;
+    ReadResult read(uint32_t group, uint32_t channel,      // samples + time master, physical
+                    uint64_t firstSample = 0,
+                    uint64_t sampleCount = UINT64_MAX);    // sample window, clamped
+};
+struct ReadResult { bool ok; Series series; std::string location; const char* message; };
+// lib/include/mdf4/extract.h        metadata of a temporary Reader
+mdf4::File extract::extractFile(const std::string& path);
 // lib/include/mdf4/series.h
 struct Series { std::vector<double> time; std::vector<double> value; };
 ```
 
-Both calls are stateless (re-open by path) — no long-lived file handle, trivially usable
-from worker threads. `extractFile` reads block headers only; sample count comes from CG
-cycle counts, so open cost is proportional to structure, not file size. Decode streams
-through a bounded buffer, so file size never bounds RAM; the decoded `Series`
-(16 bytes/sample) is the only output-size cost, and the sample window caps it for
-huge channels.
+The reader indexes once and serves every read from the file it opened; a file changed
+since then fails the read and needs a new reader. One thread uses a reader at a time,
+while its metadata may be read from any thread. Indexing reads block headers only;
+sample count comes from CG cycle counts, so open cost is proportional to structure, not
+file size. A read materializes the whole clamped window of one channel (16
+bytes/sample) and inflates a compressed fragment whole. Normative contract:
+[reader architecture](../../../mdf4-parser/docs/arch/reader.md).
 
 ## mdf4-parser repo
 
@@ -104,18 +111,18 @@ worth having):
 - `decode` — stream a group's records (row) or value blocks (column), extract one channel
   + its time master, apply the conversion to physical doubles. Never materializes other
   channels.
-- `extract` — the two public calls above; `extractFile` also serializes the proto.
+- `reader` — the public surface above, including the internal-model → proto mapping.
 
 Differences from the text parsers, stated up front: input is binary (no line numbers —
 `Diagnostic.location` = block path + file offset), and the public API has the extra
-`decodeChannel` / `Series` surface next to the proto document.
+`Reader::read` / `Series` surface next to the proto document.
 
 ## Writer verification gate (in mdf4-writer)
 
 The round-trip CTest in `mdf4-writer` consumes the **sibling** `mdf4-parser` working
 tree (the same sibling-consumption pattern it uses for `signal-core`). It writes
 every fixture-catalog `Recording` in Row, Column, and ColumnCompressed, then reads
-physical values and time axes through `mdf4::extract` and compares them with the
+physical values and time axes through an `mdf4::Reader` and compares them with the
 catalog. A large mixed DV/DZ-under-LD case keeps the compressed path non-vacuous.
 Guarded cross-gates compare mdf4-parser and asammdf on the same writer file, then
 reverse the producer direction by decoding plain/compressed files written by
@@ -131,12 +138,13 @@ the open parser for verification, never the reverse.
 - **Dispatch**: the `{FormatId::MDF4, {"mf4"}, Mdf4Adapter}` entry in `builtInFormats()`
   (`src/builtinformats.cpp`); suffix lookup, `FileDialog` name filters and the sample list
   derive from it. `FormatId::MDF4` + display name live in `src/core/formatid.h`.
-- **Adapter** `src/adapters/mdf4adapter.{h,cpp}`: `load()` = `extractFile`, map proto
-  diagnostics to `DiagnosticMessage`s, construct session.
+- **Adapter** `src/adapters/mdf4adapter.{h,cpp}`: `load()` opens one `mdf4::Reader`, maps
+  its metadata diagnostics to `DiagnosticMessage`s, and constructs the session with that
+  reader's metadata and a read function bound to it.
 - **Session** `src/sessions/mdf4documentsession.{h,cpp}` (extends `AdapterSessionBase`):
-  holds `mdf4::File _document`; tree = file → channel groups → channels (unit as
-  subtitle); owns the decode cache and the async decode flow; converts decoded data into
-  the plot module's series type at this seam.
+  tree = file → channel groups → channels (unit as subtitle) from the reader's metadata;
+  owns the decode cache and the one-read-at-a-time flow; converts read results into the
+  plot module's series type at this seam.
 - **Presenter** `src/sessions/mdf4detailpresenter.{h,cpp}`: channel cards — data type,
   bit geometry, unit, conversion kind + coefficients, sample count, master type; group
   cards — record size, cycle count, storage layout. Unsupported channels appear in tree +
@@ -169,9 +177,10 @@ struct PlotSeries {
 - `qml/components/SignalPlotView.qml` — toolbar (signal name, unit, sample count,
   reset-zoom), plot item, status bar; returned by `centerPanelSource()`; registered in
   `qt_add_qml_module`.
-- **Selection flow**: `selectNode(channel)` → session cache check → on miss,
-  `decodeChannel` via `QtConcurrent` + `QFutureWatcher`, plot shows busy state; a result
-  is always cached but reaches the plot only while its channel is still selected.
+- **Selection flow**: `selectNode(channel)` → session cache check → on miss, a read via
+  `QtConcurrent` + one `QFutureWatcher`, or the single pending read while another runs;
+  plot shows busy state; a successful result is always cached but reaches the plot only
+  while its channel is still selected. Contract: [architecture](../arch/architecture.md#mdf4-reads).
 - **Reuse note**: the plot module is a candidate for later lift into the proprietary apps
   (live view off the UDP feed). Keep it contribution-clean — operator-authored only — so
   self-relicensing stays possible.

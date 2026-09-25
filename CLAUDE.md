@@ -145,7 +145,7 @@ No external consumers, or owned end-to-end by us: the contract (proto / API / fi
 Every format backend is a static library linked into the executable on all platforms. `builtInFormats()` (`src/builtinformats.cpp`) is the one list of format id, suffixes and adapter; `main.cpp` hands it to `AppController`, and suffix lookup, dialog filters and sample classification derive from it. `AppController::shutdown()` (also run by its destructor) joins a pending load before the adapters go. Details: [docs/arch/architecture.md](docs/arch/architecture.md) "Format composition". Each backend provides:
 
 - `FormatAdapter` — loads a file, returns a `DocumentSession`
-- `DocumentSession` — owns the protobuf document, tree model, detail presenter, and optional center panel model
+- `DocumentSession` — owns the protobuf document (MDF4: shares it with the session's retained reader), tree model, detail presenter, and optional center panel model
 - `DetailPresenter` — builds `QList<DetailSection>` from a `NodeBinding`
 
 ### Center panel slot

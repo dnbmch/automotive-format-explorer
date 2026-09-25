@@ -10,8 +10,8 @@ Structural findings from /enforce coverage, awaiting a call — deliberately not
 
 The four adapters repeat protobuf-diagnostic translation; format identity and
 construction live once, in the built-in format list. Their actual load boundaries differ: A2L/DBC/LDF own text-loader
-objects while MDF4 extracts metadata directly and defers bulk samples to its
-session. A generic load template would hide that distinction for little source
+objects while MDF4 opens one retained reader and hands its metadata and reads to
+the session. A generic load template would hide that distinction for little source
 reduction. Keep the explicit adapters; extract only diagnostic translation if
 its semantics ever need to change together.
 

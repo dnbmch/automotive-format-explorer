@@ -1,5 +1,63 @@
 # automotive-format-explorer — handoff
 
+## 2026-09-23 — MDF4 sessions read through one retained reader — ACCEPTED
+
+Workspace cleanup batch I1, accepted by parent review with its relative-path
+follow-up — [review](../../docs/audit/mdf4_reader_review.md#follow-up-acceptance-2026-09-25).
+`Mdf4Adapter::load()` opens one `mdf4::Reader`; the session holds its metadata
+(aliasing `shared_ptr`) and a read function bound to it, runs one read at a time
+with one replaceable pending selection, shows failures with their reason and never
+caches them, and joins its running read on destruction. The per-channel watchers,
+the in-flight set, the path-based decode seam and the array trimming are gone.
+Contract: [architecture](arch/architecture.md#mdf4-reads). Parity, timing and
+mutant evidence: [review](../../docs/audit/mdf4_reader_review.md).
+
+Verified: standalone PACKAGE build against a fresh parser prefix 9/9;
+`tst_mdf4documentsession` 15 cases, 25 repeated runs clean; `tst_mdf4writerfile`
+3 cases on the real sample. A pre-change probe shows the old session running three
+reads at once for A → B → C, reading B in A → B → A, and showing a failed read as an
+empty plot; four mutants (watcher left on the open worker, active read released
+after notifying, no join, one read per selection) each fail their case.
+
+Landmines: `tst_mdf4documentsession` also synchronises on
+`QThreadPool::globalInstance()->waitForDone()` (`settle()`), only while no read is
+blocked. Closing a session from inside the plot model's reset or series
+notifications is unsupported (a Qt model cannot be destroyed while emitting); the
+completion's last notification is the busy change. Runtime provenance is
+load-bearing in the ctest `PATH`, the packaging closure order and
+`--search`-before-`--provided` ([build reference](ref/cmake_build_system.md)); any
+script CMake or Ninja invokes must pin its own msys runtime's tools first.
+
+UNVERIFIED — no CI has run: Linux and macOS builds of the static composition and
+the MDF4 session; the Linux AppImage packaging and launch gate; a headless Windows
+launch of the package (BL-K6: the gate can pass on a fatal-error dialog).
+
+UNVERIFIED — operator-visual, one Windows launch of a fresh build:
+- File > Open lists "Automotive files (*.a2l *.dbc *.ldf *.mf4)", then A2L, DBC,
+  LDF, MDF4 and All files, each narrowing the listing.
+- The empty sidebar's four sample links open; long tab names elide with "…".
+- `demo_recording.mf4`: `speed` plots the sine with zoom, pan, hover and reset; `t`
+  shows the master-channel notice.
+- A foreign `.mf4`: numeric channels plot; exotic ones say "not plottable".
+- A large recording: clicking several channels quickly settles on the last one
+  clicked, with no intermediate channel flashing. After truncating or appending to
+  the open file from outside, an unviewed channel reads "Samples could not be read:
+  source file changed since it was opened; reload it". Closing the tab while a long
+  channel loads may freeze the window until that read returns, then carries on
+  without the tab.
+- Closing the window during a large A2L load exits after the parse.
+- Memory grid: clicking an object selects it.
+
+Fail = missing or unfiltered entries, a dead sample link, clipped tabs, an empty
+`speed` plot or an empty plot without explanation, a stale channel shown last, a
+stuck busy veil, a crash, or a hang outlasting the parse or read.
+
+Open: the operator's verdict on a real-world `.mf4`. If one comes back mostly
+non-plottable and matters, dump it with the parser's `mdf4_json`, map each
+non-decodable channel class to the reader increment that unlocks it (VLSD,
+unsorted, arrays, MLSD, bus logging) and spec those increments as a locked plan;
+reader breadth is bought, not assumed.
+
 ## 2026-09-23 — static format composition and controller-owned load shutdown — ACCEPTED
 
 Workspace cleanup batch G1, accepted by parent review with its load-ownership
@@ -27,75 +85,14 @@ the controller down from `currentTabIndexChanged` receives neither
 Verified: standalone PACKAGE build against the matching parser package 9/9
 (`tst_appcontroller` 14 cases, six of them notification re-entry regressions that
 each fail on the candidate they were written against); incremental workspace
-SOURCE suite 227/227 before the current-tab check; fresh
-Windows package with no Explorer DLL, complete closure and msys2 runtime
-provenance; the packaged app launched with only System32 on `PATH` showed its
-window for 15 s. The first pass's headless smoke result is void — the package has no
-offscreen platform plugin (BL-K6). Commands and identities are in the
-[workspace handoff](../../docs/handoff.md) and the review.
+SOURCE suite 227/227 before the current-tab check; fresh Windows package with no
+Explorer DLL, complete closure and msys2 runtime provenance; the packaged app
+launched with only System32 on `PATH` showed its window for 15 s. The first pass's
+headless smoke result is void — the package has no offscreen platform plugin
+(BL-K6). Reproducers and identities: [review](../../docs/audit/dbc_explorer_review.md).
 
 Landmines: `tst_appcontroller` synchronises on `QThreadPool::globalInstance()->waitForDone()`
 to hold a result in the finished-but-undelivered state; a future test that leaves
 unrelated pool work running would make that wait cover it too. On Windows,
 `qt_standard_project_setup()` already emits every executable, tests included, into
 the build root.
-
-UNVERIFIED: Linux build, AppImage packaging and launch gate for the static composition
-(CI has not run); a headless Windows launch of the package (BL-K6). Operator-visual, one Windows launch: File > Open lists "Automotive
-files (*.a2l *.dbc *.ldf *.mf4)", A2L, DBC, LDF, MDF4, All files, each narrowing the
-listing; the empty sidebar's four sample links open; closing the window during a
-large A2L load exits after the parse. Fail = missing/unfiltered entries, a dead link,
-or a crash or hang at exit.
-
-## 2026-08-29 — first operator drive: two UI defects fixed, silent deploy no-op fixed, MDF4 sample bundled — OPEN
-
-The first live click-to-plot drive surfaced defects; all fixed and committed (`5897424`
-packaging, `86165ac` ui, `6aa7aa9` samples).
-
-**Tab titles clipped** without an ellipsis — the title label sat in a plain `Row` where
-`elide` never engages; it now gets a bounded width inside the capped tab (`qml/Main.qml`).
-
-**"No samples available" everywhere** decomposed into three findings:
-- Masters legitimately don't plot since the axis-channel change, but said the same thing as a
-  failure. Empty plots now state why via the series' `placeholderText` — "Master channel — this
-  group's time axis" / "This channel type is not plottable" / "No samples recorded" — in the
-  plot area and footer ([docs/ref/signal_plot.md](ref/signal_plot.md)).
-- Foreign files' exotic channels (VLSD/strings/arrays/MLSD/unsorted variants) are a reader
-  coverage boundary, honestly labeled — not a defect. Operator confirmed seeing "not plottable"
-  on some files; whether their numeric channels plot is still awaited.
-- The C++ chain was exonerated end-to-end: the writer smoke passes against the same DLLs.
-
-**The build-tree DLL deploy was a silent no-op** — Git for Windows' `find` shadowing msys2's on
-PATH glob-expanded quoted patterns (foreign-msys-runtime command-line re-parse), the failure was
-invisible inside a process substitution, and the walk printed "dependency closure complete"
-having deployed nothing; masked only by DLLs the old hand-list deploy left in `build/`.
-`deploy_closure.sh` now prepends its own runtime's tools and fails loudly on enumeration or
-import-scan failure. Proven by deleting `zlib1.dll` and watching the walk restore it under the
-hostile PATH, plus a loud negative test.
-
-**`samples/demo_recording.mf4` bundled** (writer-authored: `t` master + `speed` sine; provenance
-in `samples/SAMPLES.md`); the sidebar scanner already matched `*.mf4`. The writer smoke now runs
-against it on every ctest — 7/7 Passed, no permanent skip; `MDF4_WRITER_SAMPLE` still overrides.
-
-**Verified:** full build + ctest 7/7 Passed after every batch. `build/samples/` staged by hand
-(the copy runs only on exe relink). Several commits are unpushed; the next push is also the
-first CI run of the shared closure walk and the always-on writer smoke.
-
-**Landmines:** runtime provenance is load-bearing in three places (ctest `PATH`, packaging
-closure order, `--search`-before-`--provided`) — [docs/ref/cmake_build_system.md](ref/cmake_build_system.md).
-Same-named tools from a different msys runtime re-parse command lines — any script CMake/ninja
-invokes must pin its own runtime's tools first. BL-K5 (`cp -u` keeps a stale build-tree DLL
-after a pacman downgrade) parked in [docs/backlog.md](backlog.md).
-
-UNVERIFIED (operator-visual, one relaunch): long tab names elide with "…"; the
-`demo_recording.mf4` sidebar link opens; `speed` plots the sine with zoom/pan/hover/reset; `t`
-shows the master-channel notice; on foreign files numeric channels plot while exotic ones say
-"not plottable". Memory-grid click-through carried. Fail = clipped tabs, missing sample link,
-empty plot on `speed`, stuck busy veil.
-
-**NEXT-SESSION KICKOFF:** operator reports the drive result. If a real-world `.mf4` comes back
-mostly non-plottable and matters, dump it with `mdf4-parser/build/mdf4_json.exe`, map each
-non-decodable channel class to the reader increment that unlocks it (VLSD / unsorted / arrays /
-MLSD / bus logging), and spec the chosen increments as a locked plan for Opus-subagent
-implementation in `mdf4-parser` with round-trip and asammdf gates — reader breadth is bought,
-not assumed.
