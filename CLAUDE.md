@@ -168,7 +168,7 @@ Node keys are assigned by `NodeRegistry` during tree construction. Memory/signal
 
 Both `MemoryGridItem` and `SignalGridItem` extend `QQuickPaintedItem`:
 
-- Pre-computed flat arrays (colorMap, objectMap) for O(1) per-byte/per-bit lookup
+- Signal grid: pre-computed per-bit arrays. Memory grid: no per-byte state; each paint and hit-test resolves bytes through `MemoryMapModel::queryBytes` over sorted object intervals
 - Paint only visible region (viewport-sized item, scroll offset in C++)
 - Mouse hover, wheel, click handled in C++ — no QML MouseArea overlay
 - FBO render target for best scroll performance

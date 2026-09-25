@@ -92,7 +92,7 @@ private slots:
 
 private:
     int rowHeight() const;
-    void rebuildColorMap();
+    void rebuildObjectColors();
     void updateContentHeight();
     int objectIndexAtPixel(qreal px, qreal py) const;
     // Byte offset (from segment start) under a pixel, or -1 outside the grid.
@@ -116,12 +116,11 @@ private:
     qint64 _sel_start = -1;
     qint64 _sel_end = -1;
 
-    // Pre-computed flat color map: one int8 per byte in the segment.
-    // -1 = unoccupied; otherwise (colorIndex | 0x10 alternate-shade bit), so
-    // stored values span 0-7 and 0x10-0x17, indexing the 32-entry _palette.
-    std::vector<int8_t> _color_map;
-    // Parallel map: object index per byte (-1 = none).
-    std::vector<int32_t> _object_map;
+    // Encoded palette color per model row: (colorIndex | 0x10 alternate-shade
+    // bit), or -1 for a row that claims no bytes. Assigned once per segment in
+    // row order, so scrolling never changes an object's color. Which object a
+    // byte shows comes from the model's queryBytes().
+    std::vector<int8_t> _object_colors;
 
     GridPalette _palette;
     HighlightFlash _flash{[this] { update(); }};

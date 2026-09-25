@@ -31,6 +31,12 @@ explorer_add_test(tst_treefiltermodel explorer-core)
 
 explorer_add_test(tst_memorymapmodel explorer-core)
 
+# The painted grid is compiled into the executable; its test compiles the same
+# source and paints into an image on the offscreen platform.
+explorer_add_test(tst_memorygriditem explorer-core Qt6::Quick)
+target_sources(tst_memorygriditem PRIVATE ${PROJECT_SOURCE_DIR}/src/ui/memorygriditem.cpp)
+set_property(TEST tst_memorygriditem APPEND PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 explorer_add_test(tst_signalplotmodel explorer-core)
 
 explorer_add_test(tst_appcontroller explorer-core)

@@ -3,25 +3,16 @@
 #include <QAbstractListModel>
 #include <QString>
 
-#include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
-// The in-segment byte span [first, last) an object claims, as offsets from the
-// segment start clamped to the per-byte map bounds. A straddler starting below
-// the segment clips its head to the segment start (offset 0); the tail clips to
-// mapSize. Callers pass only objects that pass the segment filter (end reaches
-// past segStart) and have a known footprint, so address + size > segStart holds.
-struct ClampedByteSpan {
-    uint64_t first;
-    uint64_t last;
-};
-
-inline ClampedByteSpan clampedByteSpan(uint64_t address, uint64_t size,
-                                       uint64_t segStart, uint64_t mapSize) {
-    const uint64_t first = address > segStart ? address - segStart : 0;
-    const uint64_t last = std::min(address + size - segStart, mapSize);
-    return {first, last};
+// The exclusive end of [address, address + size), saturated at the top of the
+// address space: sizes come from saturating layout arithmetic.
+inline uint64_t addressEnd(uint64_t address, uint64_t size) {
+    return size > std::numeric_limits<uint64_t>::max() - address
+        ? std::numeric_limits<uint64_t>::max()
+        : address + size;
 }
 
 // One addressable object placed on the memory grid.
@@ -48,15 +39,20 @@ struct MemorySegmentInfo {
     bool synthetic = false;
 };
 
+// Bytes [start, start + owner.size()) of the memory map: the model row owning
+// each byte, or -1, and whether more than one object claims it.
+struct MemoryTile {
+    uint64_t start = 0;
+    std::vector<int32_t> owner;
+    std::vector<uint8_t> overlap;
+};
+
 // MemoryMapModel: flat list model exposing the memory map to QML.
 //
-// The model has two sections of data exposed via properties:
-//   - segments: list of MemorySegmentInfo (for the segment selector)
-//   - objects: sorted interval list of MemoryObject (for grid painting)
-//
-// QML reads objects for the currently selected segment.
-// The grid rendering (MemoryView.qml) uses invokable methods to query
-// which objects occupy a given address range.
+// The rows are the current segment's objects as sorted intervals; nothing is
+// stored per byte. queryBytes() resolves any byte range from those intervals,
+// and ownership, overlap, hit-testing and painting all go through it, so they
+// agree at every address the segment spans.
 
 class MemoryMapModel : public QAbstractListModel {
     Q_OBJECT
@@ -67,7 +63,7 @@ class MemoryMapModel : public QAbstractListModel {
     Q_PROPERTY(int excludedMeasurementCount READ excludedMeasurementCount CONSTANT)
     Q_PROPERTY(quint64 viewStartAddress READ viewStartAddress NOTIFY currentSegmentChanged)
     Q_PROPERTY(quint64 viewEndAddress READ viewEndAddress NOTIFY currentSegmentChanged)
-    Q_PROPERTY(int totalRows READ totalRows NOTIFY currentSegmentChanged)
+    Q_PROPERTY(quint64 totalRows READ totalRows NOTIFY currentSegmentChanged)
     Q_PROPERTY(int bytesPerRow READ bytesPerRow WRITE setBytesPerRow NOTIFY bytesPerRowChanged)
 
 public:
@@ -99,7 +95,7 @@ public:
     // View geometry
     quint64 viewStartAddress() const;
     quint64 viewEndAddress() const;
-    int totalRows() const;
+    quint64 totalRows() const;
     int bytesPerRow() const;
     void setBytesPerRow(int bpr);
 
@@ -107,7 +103,14 @@ public:
     int totalObjectCount() const;
     int excludedMeasurementCount() const;
 
-    // Query: which object (if any) occupies the byte at `address`.
+    // Ownership of the `count` bytes from `start`. A byte belongs to the last
+    // row whose known footprint covers it; a byte two or more rows claim is an
+    // overlap; bytes outside the current segment are unowned. Work and memory
+    // grow with `count` and the objects reaching into the range, not with the
+    // segment, so callers pass the range they draw or test.
+    MemoryTile queryBytes(uint64_t start, uint64_t count) const;
+
+    // Query: which object (if any) owns the byte at `address`.
     // Returns -1 if unoccupied, or the model row index.
     Q_INVOKABLE int objectAtAddress(quint64 address) const;
 
@@ -120,7 +123,7 @@ public:
     Q_INVOKABLE bool isOverlap(quint64 address) const;
 
     // Scroll target: returns the row index that contains `address`.
-    Q_INVOKABLE int rowForAddress(quint64 address) const;
+    Q_INVOKABLE quint64 rowForAddress(quint64 address) const;
 
     // Lookup object by tree nodeKey. Returns model row index or -1.
     Q_INVOKABLE int objectIndexForNodeKey(quint64 nodeKey) const;
@@ -154,9 +157,9 @@ private:
     // Objects filtered to the current segment's address range, sorted by address.
     std::vector<const MemoryObject*> _filtered_objects;
 
-    // Per-byte overlap flags for the current segment (offset from
-    // viewStartAddress, capped like the grid's color map).
-    std::vector<bool> _overlap_map;
+    // Running maximum of the rows' footprint ends: the rows before the first
+    // entry past an address all end at or before it.
+    std::vector<uint64_t> _reach_end;
 
     int _current_segment = 0;
     int _bytes_per_row = 16;

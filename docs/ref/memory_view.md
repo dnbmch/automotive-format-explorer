@@ -91,7 +91,7 @@ Each row = 16 bytes (configurable: 8, 16, 32). Left gutter shows absolute addres
 
 ### Overlap hatching
 
-Bytes claimed by more than one object (e.g. a measurement aliasing a characteristic address) draw diagonal red hatching over the cell fill, matching the signal grid's overlap marker. Detection lives in the model: `MemoryMapModel::isOverlap(address)` reads a per-byte overlap map rebuilt with the segment filter. Sub-byte `bit_mask` footprints still color (and hatch) whole bytes — subdivided cells are a [planned enhancement](../plans/memory_view_planned.md).
+Bytes claimed by more than one object (e.g. a measurement aliasing a characteristic address) draw diagonal red hatching over the cell fill, matching the signal grid's overlap marker. Detection lives in the model's byte query, `MemoryMapModel::queryBytes`, which decides ownership and overlap together from the segment's object intervals; `isOverlap(address)` asks it about one byte. Sub-byte `bit_mask` footprints still color (and hatch) whole bytes — subdivided cells are a [planned enhancement](../plans/memory_view_planned.md).
 
 ### Hover tooltip
 
@@ -131,7 +131,7 @@ Click a Characteristic, Measurement, or AxisPts in the tree. The memory view scr
 
 ### Memory → tree/detail
 
-Click a colored cell in the memory view. The tree auto-scrolls to and selects the owning object. The detail panel updates to show its properties. When a byte is shared by multiple objects the owning object is selected; a disambiguation popup is a [planned enhancement](../plans/memory_view_planned.md).
+Click a colored cell in the memory view. The tree auto-scrolls to and selects the owning object. The detail panel updates to show its properties. A byte shared by several objects belongs to the one drawn last: the highest start address, and among objects starting at one address the later in document order. That owner is painted, hit and selected; a disambiguation popup is a [planned enhancement](../plans/memory_view_planned.md).
 
 ### Memory → memory
 
@@ -185,7 +185,9 @@ For Measurements with `bit_mask`, the footprint is the byte(s) containing the ma
 - Generic center panel slot: `centerPanelSource` / `centerPanelModel` on DocumentSession, Loader in Main.qml
 - MemorySegment list with segment selector (dropdown when multiple segments), synthetic segment fallback
 - Object filtering: Characteristics + AxisPts always included, Measurements only with `ecu_address`
-- Sorted interval-based color/object maps for O(1) byte-level hit testing
+- Sorted object intervals with one byte query (`MemoryMapModel::queryBytes`) for painting,
+  overlap and hit-testing; nothing is stored per byte, so every byte of a segment of any
+  size is shown and selectable
 - Tier 1 + Tier 2 size computation (VALUE, MEASUREMENT, CURVE, MAP, AXIS_PTS)
 - Colored cells, address gutter, hover tooltips (name, type, address, size,
   record layout, conversion)
@@ -200,7 +202,7 @@ For Measurements with `bit_mask`, the footprint is the byte(s) containing the ma
 - Bytes-per-row toggle (8, 16, 32)
 - Color legend with 8 object type categories
 - Status bar: address range, object count, excluded measurement count
-- Shade alternation for adjacent same-color objects
+- Shade alternation for adjacent same-color objects, assigned once per segment in address order so scrolling never changes a color
 
 ### Planned
 
@@ -215,7 +217,7 @@ navigation are designed in
 - The memory view is read-only visualization — no hex editing
 - All data comes from the already-parsed protobuf, no file re-reading
 - RecordLayout size computation is tiered — see Size Calculation section. Each object is placed at its own known address, so approximate sizes cause visual fuzziness at one object's boundary, not cascading errors
-- **Performance**: typical CALIBRATION_VARIABLES segment is 64KB–256KB (4K–16K rows at 16 bytes/row) — well within QQuickPaintedItem's comfort zone. For outlier 2MB segments (128K rows), virtualized scrolling (only render visible rows + small buffer) is essential. The sorted interval vector for address lookup keeps hit-testing O(log n)
+- **Performance**: each paint queries only the bytes of the visible rows, so its cost follows the viewport and the objects reaching into it, never the segment size. A derived segment spanning gigabytes (objects in RAM and flash, no `MemorySegment`) scrolls and paints like a small one: row geometry is 64-bit, and object ends saturate at the top of the address space. Hit-testing is the same query for one byte
 - **Renderer upgrade path**: if QQuickPaintedItem becomes a bottleneck (full repaint on scroll), swap to QQuickItem + QSGNode for incremental scene graph updates. The data model and QML interface stay the same — only the paint implementation changes
 - Color scheme should respect the app's existing Theme.qml dark palette
 - **AxisPts ownership**: when a Characteristic's AxisDescr has `AXIS_PTS_REF` pointing to a standalone AxisPts, the AxisPts is rendered as its own separate block (it occupies its own address range). This is not an overlap — do not show hatched pattern for this case

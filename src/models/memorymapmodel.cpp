@@ -98,16 +98,13 @@ quint64 MemoryMapModel::viewEndAddress() const {
         return 0;
     }
     const auto& seg = _segments[static_cast<size_t>(_current_segment)];
-    return seg.address + seg.size;
+    return addressEnd(seg.address, seg.size);
 }
 
-int MemoryMapModel::totalRows() const {
-    if (_segments.empty()) {
-        return 0;
-    }
-    const auto& seg = _segments[static_cast<size_t>(_current_segment)];
-    return static_cast<int>((seg.size + static_cast<uint64_t>(_bytes_per_row) - 1)
-                            / static_cast<uint64_t>(_bytes_per_row));
+quint64 MemoryMapModel::totalRows() const {
+    const uint64_t span = viewEndAddress() - viewStartAddress();
+    const auto bpr = static_cast<uint64_t>(_bytes_per_row);
+    return span / bpr + (span % bpr != 0 ? 1 : 0);
 }
 
 int MemoryMapModel::bytesPerRow() const {
@@ -138,31 +135,45 @@ int MemoryMapModel::excludedMeasurementCount() const {
     return _excluded_measurements;
 }
 
-int MemoryMapModel::objectAtAddress(quint64 address) const {
-    // Binary search: find the last object whose address <= target address,
-    // then check if the address falls within [obj.address, obj.address + obj.size).
-    if (_filtered_objects.empty()) {
-        return -1;
+MemoryTile MemoryMapModel::queryBytes(uint64_t start, uint64_t count) const {
+    MemoryTile tile;
+    tile.start = start;
+    tile.owner.assign(static_cast<size_t>(count), -1);
+    tile.overlap.assign(static_cast<size_t>(count), 0);
+
+    const uint64_t first = std::max<uint64_t>(start, viewStartAddress());
+    const uint64_t last = std::min<uint64_t>(addressEnd(start, count), viewEndAddress());
+    if (first >= last) {
+        return tile;
     }
 
-    // Upper bound on address, then step back.
-    auto it = std::upper_bound(
-        _filtered_objects.begin(), _filtered_objects.end(), address,
-        [](uint64_t addr, const MemoryObject* obj) {
-            return addr < obj->address;
-        });
-
-    // Check candidates backwards. Objects are sorted by start address only, so
-    // an earlier-starting object with a larger footprint can still cover the
-    // address — scan every candidate rather than stopping at the first miss.
-    while (it != _filtered_objects.begin()) {
-        --it;
-        const MemoryObject* obj = *it;
-        if (obj->address <= address && address < obj->address + obj->size) {
-            return static_cast<int>(std::distance(_filtered_objects.begin(), it));
+    // Rows before `from` end at or before `first`; rows from `to` start at or
+    // after `last`. Later rows claim over earlier ones, as they are drawn.
+    const auto from = static_cast<size_t>(
+        std::upper_bound(_reach_end.begin(), _reach_end.end(), first) - _reach_end.begin());
+    const auto to = static_cast<size_t>(
+        std::lower_bound(_filtered_objects.begin(), _filtered_objects.end(), last,
+                         [](const MemoryObject* obj, uint64_t address) {
+                             return obj->address < address;
+                         })
+        - _filtered_objects.begin());
+    for (size_t row = from; row < to; ++row) {
+        const MemoryObject* obj = _filtered_objects[row];
+        const uint64_t claimFirst = std::max(obj->address, first);
+        const uint64_t claimLast = std::min(addressEnd(obj->address, obj->size), last);
+        for (uint64_t address = claimFirst; address < claimLast; ++address) {
+            const auto i = static_cast<size_t>(address - start);
+            if (tile.owner[i] >= 0) {
+                tile.overlap[i] = 1;
+            }
+            tile.owner[i] = static_cast<int32_t>(row);
         }
     }
-    return -1;
+    return tile;
+}
+
+int MemoryMapModel::objectAtAddress(quint64 address) const {
+    return queryBytes(address, 1).owner.front();
 }
 
 QVariantList MemoryMapModel::objectsInRange(quint64 startAddr, quint64 endAddr) const {
@@ -173,8 +184,7 @@ QVariantList MemoryMapModel::objectsInRange(quint64 startAddr, quint64 endAddr) 
 
     for (size_t i = 0; i < _filtered_objects.size(); ++i) {
         const MemoryObject* obj = _filtered_objects[i];
-        uint64_t objEnd = obj->address + obj->size;
-        if (objEnd <= startAddr) {
+        if (addressEnd(obj->address, obj->size) <= startAddr) {
             continue;
         }
         if (obj->address >= endAddr) {
@@ -186,26 +196,15 @@ QVariantList MemoryMapModel::objectsInRange(quint64 startAddr, quint64 endAddr) 
 }
 
 bool MemoryMapModel::isOverlap(quint64 address) const {
-    const quint64 start = viewStartAddress();
-    if (address < start) {
-        return false;
-    }
-    const uint64_t offset = address - start;
-    if (offset >= _overlap_map.size()) {
-        return false;
-    }
-    return _overlap_map[static_cast<size_t>(offset)];
+    return queryBytes(address, 1).overlap.front() != 0;
 }
 
-int MemoryMapModel::rowForAddress(quint64 address) const {
-    if (_segments.empty()) {
-        return 0;
-    }
-    uint64_t start = _segments[static_cast<size_t>(_current_segment)].address;
+quint64 MemoryMapModel::rowForAddress(quint64 address) const {
+    const quint64 start = viewStartAddress();
     if (address < start) {
         return 0;
     }
-    return static_cast<int>((address - start) / static_cast<uint64_t>(_bytes_per_row));
+    return (address - start) / static_cast<uint64_t>(_bytes_per_row);
 }
 
 int MemoryMapModel::objectIndexForNodeKey(quint64 nodeKey) const {
@@ -228,12 +227,10 @@ int MemoryMapModel::segmentIndexForNodeKey(quint64 nodeKey) const {
         if (obj.nodeKey != nodeKey) {
             continue;
         }
-        uint64_t objEnd = obj.address + (obj.size > 0 ? obj.size : 1);
+        const uint64_t objEnd = addressEnd(obj.address, obj.size > 0 ? obj.size : 1);
         for (size_t s = 0; s < _segments.size(); ++s) {
             const auto& seg = _segments[s];
-            uint64_t segStart = seg.address;
-            uint64_t segEnd = seg.address + seg.size;
-            if (objEnd > segStart && obj.address < segEnd) {
+            if (objEnd > seg.address && obj.address < addressEnd(seg.address, seg.size)) {
                 return static_cast<int>(s);
             }
         }
@@ -262,26 +259,26 @@ void MemoryMapModel::setExcludedMeasurementCount(int count) {
 }
 
 void MemoryMapModel::finalize() {
-    // Sort all objects by address.
-    std::sort(_all_objects.begin(), _all_objects.end(),
-              [](const MemoryObject& a, const MemoryObject& b) {
-                  return a.address < b.address;
-              });
+    // Sort all objects by address; objects at one address keep document order,
+    // which decides who owns their shared bytes.
+    std::stable_sort(_all_objects.begin(), _all_objects.end(),
+                     [](const MemoryObject& a, const MemoryObject& b) {
+                         return a.address < b.address;
+                     });
 
     // If no segments, derive a synthetic one from object extents.
     if (_segments.empty() && !_all_objects.empty()) {
         uint64_t minAddr = _all_objects.front().address;
         uint64_t maxAddr = 0;
         for (const auto& obj : _all_objects) {
-            uint64_t end = obj.address + (obj.size > 0 ? obj.size : 1);
-            if (end > maxAddr) {
-                maxAddr = end;
-            }
+            maxAddr = std::max(maxAddr, addressEnd(obj.address, obj.size > 0 ? obj.size : 1));
         }
 
-        // Align to 256-byte boundaries.
+        // Align to 256-byte boundaries; an end in the last 256 bytes of the
+        // address space cannot round up and stays at the top.
         minAddr = minAddr & ~uint64_t(0xFF);
-        maxAddr = (maxAddr + 0xFF) & ~uint64_t(0xFF);
+        const uint64_t alignedEnd = addressEnd(maxAddr, 0xFF) & ~uint64_t(0xFF);
+        maxAddr = alignedEnd >= maxAddr ? alignedEnd : std::numeric_limits<uint64_t>::max();
 
         MemorySegmentInfo synthetic;
         synthetic.name = QStringLiteral("[derived]");
@@ -298,39 +295,21 @@ void MemoryMapModel::finalize() {
 void MemoryMapModel::rebuildFilteredObjects() {
     beginResetModel();
     _filtered_objects.clear();
-    _overlap_map.clear();
+    _reach_end.clear();
 
     if (!_segments.empty()) {
-        const auto& seg = _segments[static_cast<size_t>(_current_segment)];
-        uint64_t segStart = seg.address;
-        uint64_t segEnd = seg.address + seg.size;
+        const uint64_t segStart = viewStartAddress();
+        const uint64_t segEnd = viewEndAddress();
 
+        // An object of unknown size (0) still counts as one byte for segment
+        // membership, so it stays listed; it claims no bytes.
+        uint64_t reach = 0;
         for (auto& obj : _all_objects) {
-            uint64_t objEnd = obj.address + (obj.size > 0 ? obj.size : 1);
-            if (objEnd > segStart && obj.address < segEnd) {
+            if (addressEnd(obj.address, obj.size > 0 ? obj.size : 1) > segStart
+                && obj.address < segEnd) {
                 _filtered_objects.push_back(&obj);
-            }
-        }
-
-        // Per-byte overlap flags: a byte claimed by two or more objects.
-        // Same 16MB cap as the grid's color map.
-        const size_t mapSize = static_cast<size_t>(
-            qMin(segEnd - segStart, uint64_t(16 * 1024 * 1024)));
-        _overlap_map.assign(mapSize, false);
-        std::vector<bool> claimed(mapSize, false);
-
-        for (const MemoryObject* obj : _filtered_objects) {
-            if (obj->size == 0) {
-                continue; // unknown footprint, not painted — no overlap claim
-            }
-            const auto span = clampedByteSpan(obj->address, obj->size, segStart, mapSize);
-            for (uint64_t b = span.first; b < span.last; ++b) {
-                const auto i = static_cast<size_t>(b);
-                if (claimed[i]) {
-                    _overlap_map[i] = true;
-                } else {
-                    claimed[i] = true;
-                }
+                reach = std::max(reach, addressEnd(obj.address, obj.size));
+                _reach_end.push_back(reach);
             }
         }
     }

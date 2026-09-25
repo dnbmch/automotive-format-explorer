@@ -27,9 +27,10 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   the tab waits for a running read. Non-monotonic domains fall back to record
   indices at the session seam; group masters are listed as axis channels, not
   signals.
-- Memory grid: overlap hatching (bytes claimed by more than one object),
-  click-drag byte-range selection with status readout, and hover tooltips with
-  record layout / conversion — see [docs/ref/memory_view.md](docs/ref/memory_view.md).
+- Memory grid: every object of a segment of any size is painted and selectable
+  through one sparse byte query, with overlap hatching (bytes claimed by more than
+  one object), click-drag byte-range selection with status readout, and hover
+  tooltips with record layout / conversion — see [docs/ref/memory_view.md](docs/ref/memory_view.md).
 - Bidirectional selection (tree ↔ detail ↔ center) keyed by `NodeRegistry`.
 - Per-tab tree filter (`TreeFilterModel` proxy, `Ctrl+F`) with recursive matching
   and pre-filter state restore.

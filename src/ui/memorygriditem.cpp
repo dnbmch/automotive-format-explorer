@@ -6,6 +6,8 @@
 #include <QWheelEvent>
 #include <QMouseEvent>
 
+#include <cmath>
+
 MemoryGridItem::MemoryGridItem(QQuickItem* parent)
     : QQuickPaintedItem(parent) {
     setAcceptHoverEvents(true);
@@ -14,7 +16,7 @@ MemoryGridItem::MemoryGridItem(QQuickItem* parent)
 }
 
 void MemoryGridItem::paint(QPainter* painter) {
-    if (!_model || _model->segmentCount() == 0 || _color_map.empty()) {
+    if (!_model || _model->segmentCount() == 0) {
         return;
     }
 
@@ -25,26 +27,33 @@ void MemoryGridItem::paint(QPainter* painter) {
     const int gw = _gutter_width;
     const uint64_t segStart = _model->viewStartAddress();
     const uint64_t segSize = _model->viewEndAddress() - segStart;
-    const int totalRowCount = _model->totalRows();
+    const uint64_t totalRowCount = _model->totalRows();
 
-    const int firstRow = qMax(0, static_cast<int>(_scroll_y / rh) - 1);
-    const int visibleRows = static_cast<int>(height() / rh) + 3;
-    const int lastRow = qMin(firstRow + visibleRows, totalRowCount);
+    const auto firstRow = static_cast<uint64_t>(qMax(0.0, std::floor(_scroll_y / rh) - 1.0));
+    const uint64_t lastRow =
+        qMin<uint64_t>(firstRow + static_cast<uint64_t>(height() / rh) + 3, totalRowCount);
+    if (firstRow >= lastRow) {
+        return;
+    }
 
-    const qreal yOffset = -_scroll_y;
+    // One tile holds every visible byte; the segment is never mapped whole.
+    const uint64_t firstByte = firstRow * static_cast<uint64_t>(bpr);
+    const uint64_t endByte =
+        lastRow == totalRowCount ? segSize : lastRow * static_cast<uint64_t>(bpr);
+    const MemoryTile tile = _model->queryBytes(segStart + firstByte, endByte - firstByte);
 
     QFont monoFont(QStringLiteral("Consolas"), 0);
     monoFont.setPixelSize(11);
     painter->setFont(monoFont);
 
-    for (int row = firstRow; row < lastRow; ++row) {
-        const qreal y = row * rh + yOffset;
+    for (uint64_t row = firstRow; row < lastRow; ++row) {
+        const qreal y = static_cast<qreal>(row) * rh - _scroll_y;
 
         if (y + cs < 0 || y > height()) {
             continue;
         }
 
-        const uint64_t rowAddr = static_cast<uint64_t>(row) * static_cast<uint64_t>(bpr);
+        const uint64_t rowAddr = row * static_cast<uint64_t>(bpr);
 
         // Address gutter.
         painter->setPen(QColor(0x88, 0x88, 0x88));
@@ -60,14 +69,17 @@ void MemoryGridItem::paint(QPainter* painter) {
             }
 
             const qreal x = gw + col * (cs + cg);
-            const auto mapIdx = static_cast<size_t>(byteOffset);
+            const auto k = static_cast<size_t>(byteOffset - firstByte);
+            const int32_t owner = tile.owner[k];
 
-            const int8_t encoded = mapIdx < _color_map.size() ? _color_map[mapIdx] : int8_t(-1);
-            painter->fillRect(QRectF(x, y, cs, cs), _palette.cellColor(encoded));
+            painter->fillRect(QRectF(x, y, cs, cs),
+                              _palette.cellColor(owner >= 0
+                                                     ? _object_colors[static_cast<size_t>(owner)]
+                                                     : int8_t(-1)));
 
             // Overlap hatching: diagonal stripes on bytes claimed by more
             // than one object (matches the signal grid's overlap marker).
-            if (_model->isOverlap(segStart + byteOffset)) {
+            if (tile.overlap[k] != 0) {
                 painter->save();
                 painter->setClipRect(QRectF(x, y, cs, cs));
                 painter->setPen(QPen(QColor(255, 60, 60, 180), 1));
@@ -85,15 +97,14 @@ void MemoryGridItem::paint(QPainter* painter) {
             }
 
             // Persistent selection border.
-            if (_selected_obj >= 0 && mapIdx < _object_map.size() &&
-                _object_map[mapIdx] == _selected_obj) {
+            if (_selected_obj >= 0 && owner == _selected_obj) {
                 painter->setPen(QPen(QColor(255, 255, 255), 2));
                 painter->drawRect(QRectF(x, y, cs, cs));
                 painter->setPen(Qt::NoPen);
             }
 
             // Highlight flash overlay.
-            if (mapIdx < _object_map.size() && _flash.activeFor(_object_map[mapIdx])) {
+            if (_flash.activeFor(owner)) {
                 painter->setPen(QPen(_flash.penColor(), 2));
                 painter->drawRect(QRectF(x, y, cs, cs));
                 painter->setPen(Qt::NoPen);
@@ -121,7 +132,7 @@ void MemoryGridItem::setModel(MemoryMapModel* model) {
         connect(_model, SIGNAL(currentSegmentChanged()), this, SLOT(onModelUpdated()));
         connect(_model, SIGNAL(bytesPerRowChanged()), this, SLOT(onLayoutChanged()));
         connect(_model, SIGNAL(objectsChanged()), this, SLOT(onModelUpdated()));
-        rebuildColorMap();
+        rebuildObjectColors();
         updateContentHeight();
     }
 
@@ -147,7 +158,7 @@ qreal MemoryGridItem::contentHeight() const {
     if (!_model) {
         return 0;
     }
-    return _model->totalRows() * rowHeight();
+    return static_cast<qreal>(_model->totalRows()) * rowHeight();
 }
 
 int MemoryGridItem::cellSize() const { return _cell_size; }
@@ -324,7 +335,7 @@ void MemoryGridItem::mouseMoveEvent(QMouseEvent* event) {
 
 void MemoryGridItem::onModelUpdated() {
     clearSelection();
-    rebuildColorMap();
+    rebuildObjectColors();
     updateContentHeight();
     update();
 }
@@ -338,50 +349,22 @@ int MemoryGridItem::rowHeight() const {
     return _cell_size + _cell_gap;
 }
 
-void MemoryGridItem::rebuildColorMap() {
-    _color_map.clear();
-    _object_map.clear();
-
-    if (!_model || _model->segmentCount() == 0) {
+void MemoryGridItem::rebuildObjectColors() {
+    _object_colors.clear();
+    if (!_model) {
         return;
     }
 
-    const uint64_t segStart = _model->viewStartAddress();
-    const uint64_t segEnd = _model->viewEndAddress();
-    if (segEnd <= segStart) {
-        return;
-    }
-
-    const auto segSize = static_cast<size_t>(segEnd - segStart);
-
-    // Cap at 16MB to avoid absurd allocations.
-    const size_t mapSize = qMin(segSize, size_t(16 * 1024 * 1024));
-    _color_map.assign(mapSize, -1);
-    _object_map.assign(mapSize, -1);
-
+    // Same-colored objects alternate shades in row (address) order; a row of
+    // unknown size claims no bytes and takes no shade.
     ShadeCycler shader;
-
     const int objCount = _model->rowCount();
+    _object_colors.reserve(static_cast<size_t>(objCount));
     for (int i = 0; i < objCount; ++i) {
         const auto mi = _model->index(i, 0);
-        const auto addr = _model->data(mi, MemoryMapModel::AddressRole).toULongLong();
         const auto size = _model->data(mi, MemoryMapModel::SizeRole).toULongLong();
         const int ci = _model->data(mi, MemoryMapModel::ColorIndexRole).toInt();
-
-        if (size == 0 || ci < 0 || ci >= 8) {
-            continue;
-        }
-
-        const int8_t encoded = shader.encode(ci, i);
-
-        // The model's segment filter includes objects straddling the segment
-        // start (end reaches into the segment); paint them clipped, matching
-        // the overlap map.
-        const auto span = clampedByteSpan(addr, size, segStart, mapSize);
-        for (size_t b = static_cast<size_t>(span.first); b < static_cast<size_t>(span.last); ++b) {
-            _color_map[b] = encoded;
-            _object_map[b] = static_cast<int32_t>(i);
-        }
+        _object_colors.push_back(size == 0 ? int8_t(-1) : shader.encode(ci, i));
     }
 }
 
@@ -391,10 +374,10 @@ void MemoryGridItem::updateContentHeight() {
 
 int MemoryGridItem::objectIndexAtPixel(qreal px, qreal py) const {
     const qint64 off = byteOffsetAtPixel(px, py, false);
-    if (off < 0 || static_cast<size_t>(off) >= _object_map.size()) {
+    if (off < 0) {
         return -1;
     }
-    return _object_map[static_cast<size_t>(off)];
+    return _model->objectAtAddress(_model->viewStartAddress() + static_cast<quint64>(off));
 }
 
 qint64 MemoryGridItem::byteOffsetAtPixel(qreal px, qreal py, bool clamp) const {
@@ -407,14 +390,15 @@ qint64 MemoryGridItem::byteOffsetAtPixel(qreal px, qreal py, bool clamp) const {
     const int cs = _cell_size;
     const int cg = _cell_gap;
     const int gw = _gutter_width;
+    const auto rows = static_cast<qint64>(_model->totalRows());
 
-    int col = static_cast<int>((px - gw) / (cs + cg));
-    int row = static_cast<int>((py + _scroll_y) / rh);
+    auto col = static_cast<qint64>(std::floor((px - gw) / (cs + cg)));
+    auto row = static_cast<qint64>(std::floor((py + _scroll_y) / rh));
 
     if (clamp) {
-        col = qBound(0, col, bpr - 1);
-        row = qBound(0, row, _model->totalRows() - 1);
-    } else if (px < gw || col < 0 || col >= bpr || row < 0 || row >= _model->totalRows()) {
+        col = qBound(qint64(0), col, qint64(bpr) - 1);
+        row = qBound(qint64(0), row, rows - 1);
+    } else if (px < gw || col < 0 || col >= bpr || row < 0 || row >= rows) {
         return -1;
     }
 

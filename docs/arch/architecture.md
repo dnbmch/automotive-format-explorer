@@ -209,7 +209,12 @@ Center panel (memory grid / signal grid click)
 
 The two grid renderers use these rules:
 
-- Pre-computed flat arrays (`colorMap`, `objectMap`) for O(1) per-byte / per-bit lookup.
+- `SignalGridItem` precomputes per-bit color arrays; a frame spans at most a few hundred bits.
+- `MemoryGridItem` holds no per-byte state. It paints the visible rows from one
+  `MemoryMapModel::queryBytes` tile, which resolves ownership and overlap from the
+  segment's sorted object intervals, and hit-tests through the same query; object
+  colors are assigned once per segment. Row geometry is 64-bit, so a segment of any
+  size scrolls, paints and selects correctly.
 - Paint only the visible region — the QQuickPaintedItem is sized to the viewport; scroll offsets are tracked in C++.
 - Mouse hover, wheel, and click are handled in `mouseMoveEvent` / `wheelEvent` / `mousePressEvent` — no QML `MouseArea` overlay.
 - `FBO` render target for stable scroll performance.
@@ -227,7 +232,7 @@ reader types stop at `Mdf4DocumentSession`.
 
 ### Overlap stripes
 
-Both grid items mark cells claimed by more than one occupant. After filling a cell with its color, if the model's overlap query is true (`SignalMapModel::isOverlap(bit)` per bit, `MemoryMapModel::isOverlap(address)` per byte) the item draws diagonal red hatching (`rgba(255,60,60,180)`, 1px pen) clipped to the cell — parallel lines stepped every 6px — over the base fill, so an overlapped cell reads as "colored, with red diagonal lines". The stripe is drawn *before* the selection border and highlight-flash overlay, so those keep visual priority. Overlap detection lives in the models: each rebuilds a per-cell overlap map alongside its occupancy map.
+Both grid items mark cells claimed by more than one occupant. After filling a cell with its color, if the model's overlap query is true (`SignalMapModel::isOverlap(bit)` per bit, `MemoryMapModel::isOverlap(address)` per byte) the item draws diagonal red hatching (`rgba(255,60,60,180)`, 1px pen) clipped to the cell — parallel lines stepped every 6px — over the base fill, so an overlapped cell reads as "colored, with red diagonal lines". The stripe is drawn *before* the selection border and highlight-flash overlay, so those keep visual priority. Overlap detection lives in the models: the signal map rebuilds a per-bit overlap map alongside its occupancy map, and the memory map answers overlap from its object intervals in the same byte query that decides ownership.
 
 ```
 +-----+-----+-----+

@@ -1,36 +1,54 @@
 # automotive-format-explorer — handoff
 
-## 2026-09-23 — MDF4 sessions read through one retained reader — ACCEPTED
+## 2026-09-25 — sparse memory view (workspace cleanup batch H) — OPEN
 
-Workspace cleanup batch I1, accepted by parent review with its relative-path
-follow-up — [review](../../docs/audit/mdf4_reader_review.md#follow-up-acceptance-2026-09-25).
-`Mdf4Adapter::load()` opens one `mdf4::Reader`; the session holds its metadata
-(aliasing `shared_ptr`) and a read function bound to it, runs one read at a time
-with one replaceable pending selection, shows failures with their reason and never
-caches them, and joins its running read on destruction. The per-channel watchers,
-the in-flight set, the path-based decode seam and the array trimming are gone.
-Contract: [architecture](arch/architecture.md#mdf4-reads). Parity, timing and
-mutant evidence: [review](../../docs/audit/mdf4_reader_review.md).
+Committed locally as "memory view: resolve bytes from sorted object intervals", after
+the accepted G1 (`daec46e`) and I1 (`325267e`) commits; parent review is pending, and
+corrections land as follow-up commits. `MemoryMapModel` keeps the current segment's
+objects as sorted intervals with a running maximum of their ends, and
+`queryBytes(start, count)` resolves ownership and overlap for any byte range from them:
+the row drawn last (highest start address, then document order) owns a shared byte.
+`objectAtAddress` and `isOverlap` are that query for one byte. `MemoryGridItem` paints
+the visible rows from one tile, hit-tests through the same query, and gives each object
+its shade once per segment in address order. The 16 MiB overlap map, color map and
+object map and `clampedByteSpan` are gone. Row geometry (`totalRows`, `rowForAddress`,
+`contentHeight`, row positions) is 64-bit; object and segment ends saturate at the top
+of the address space; objects at one address keep document order. Contract:
+[memory view](ref/memory_view.md), [rendering](arch/architecture.md#rendering).
 
-Verified: standalone PACKAGE build against a fresh parser prefix 9/9;
-`tst_mdf4documentsession` 15 cases, 25 repeated runs clean; `tst_mdf4writerfile`
-3 cases on the real sample. A pre-change probe shows the old session running three
-reads at once for A → B → C, reading B in A → B → A, and showing a failed read as an
-empty plot; four mutants (watcher left on the open worker, active read released
-after notifying, no join, one read per selection) each fail their case.
+Verified: standalone PACKAGE build against `build-i1-parser-prefix` 10/10, no
+warnings; `tst_memorymapmodel` 13 cases, among them a per-byte oracle over 300 random
+layouts with straddlers, shared starts and unknown sizes; new `tst_memorygriditem`
+3 cases painting offscreen into an image, including clicks; strict
+`-Wshadow -Wconversion -Wsign-conversion` replay clean on the four touched sources, as
+the two production files were before; five repeated runs of both memory suites clean.
+Workspace SOURCE build 232/232. Before the change, `tst_memorygriditem` fails on the
+pre-H model and grid: an object 48 MiB into a 64 MiB segment paints unoccupied, and a
+3 GiB derived segment's `contentHeight` overflows to −469,761,744. Five mutants each
+fail their case: unstable sort, first row wins, no segment clip, wrapping interval
+ends, shades assigned per painted range. Evidence: `build-h/` at the workspace root.
+G1 and I1 evidence: the [DBC/Explorer](../../docs/audit/dbc_explorer_review.md) and
+[Reader](../../docs/audit/mdf4_reader_review.md) reviews.
 
-Landmines: `tst_mdf4documentsession` also synchronises on
-`QThreadPool::globalInstance()->waitForDone()` (`settle()`), only while no read is
-blocked. Closing a session from inside the plot model's reset or series
-notifications is unsupported (a Qt model cannot be destroyed while emitting); the
-completion's last notification is the busy change. Runtime provenance is
-load-bearing in the ctest `PATH`, the packaging closure order and
-`--search`-before-`--provided` ([build reference](ref/cmake_build_system.md)); any
-script CMake or Ninja invokes must pin its own msys runtime's tools first.
+Landmines:
+- `tst_memorygriditem` compiles `src/ui/memorygriditem.cpp` itself (the painted items
+  are part of the executable, not a library) and runs with `QT_QPA_PLATFORM=offscreen`.
+  Pixel checks compare 8-bit RGB; a `QColor` keeps finer components than the image stores.
+- `tst_appcontroller` and `tst_mdf4documentsession` (`settle()`) synchronise on
+  `QThreadPool::globalInstance()->waitForDone()`; a test that leaves unrelated pool work
+  running, or blocks a read, would make that wait cover it too.
+- Closing a session from inside the plot model's reset or series notifications is
+  unsupported (a Qt model cannot be destroyed while emitting); a read completion's last
+  notification is the busy change.
+- Runtime provenance is load-bearing in the ctest `PATH`, the packaging closure order
+  and `--search`-before-`--provided` ([build reference](ref/cmake_build_system.md)); any
+  script CMake or Ninja invokes must pin its own msys runtime's tools first. On Windows,
+  `qt_standard_project_setup()` emits every executable, tests included, into the build
+  root.
 
-UNVERIFIED — no CI has run: Linux and macOS builds of the static composition and
-the MDF4 session; the Linux AppImage packaging and launch gate; a headless Windows
-launch of the package (BL-K6: the gate can pass on a fatal-error dialog).
+UNVERIFIED — no CI has run: Linux and macOS builds of the static composition, the MDF4
+session and the sparse memory view; the Linux AppImage packaging and launch gate; a
+headless Windows launch of the package (BL-K6: the gate can pass on a fatal-error dialog).
 
 UNVERIFIED — operator-visual, one Windows launch of a fresh build:
 - File > Open lists "Automotive files (*.a2l *.dbc *.ldf *.mf4)", then A2L, DBC,
@@ -46,11 +64,16 @@ UNVERIFIED — operator-visual, one Windows launch of a fresh build:
   channel loads may freeze the window until that read returns, then carries on
   without the tab.
 - Closing the window during a large A2L load exits after the parse.
-- Memory grid: clicking an object selects it.
+- An A2L whose objects span more than 16 MiB, for example RAM and flash without
+  `MEMORY_SEGMENT`s: objects at both ends of the derived segment paint in their colors;
+  scrolling or "Go to" reaches a far address and flash-highlights its object; clicking
+  an object selects it in the tree; overlaps far into the segment are hatched.
 
 Fail = missing or unfiltered entries, a dead sample link, clipped tabs, an empty
 `speed` plot or an empty plot without explanation, a stale channel shown last, a
-stuck busy veil, a crash, or a hang outlasting the parse or read.
+stuck busy veil, a crash, a hang outlasting the parse or read, an unoccupied cell where
+an object belongs, a scrollbar that cannot reach the far end, or a click that selects
+nothing.
 
 Open: the operator's verdict on a real-world `.mf4`. If one comes back mostly
 non-plottable and matters, dump it with the parser's `mdf4_json`, map each
@@ -58,41 +81,4 @@ non-decodable channel class to the reader increment that unlocks it (VLSD,
 unsorted, arrays, MLSD, bus logging) and spec those increments as a locked plan;
 reader breadth is bought, not assumed.
 
-## 2026-09-23 — static format composition and controller-owned load shutdown — ACCEPTED
-
-Workspace cleanup batch G1, accepted by parent review with its load-ownership
-correction and current-tab notification check —
-[review](../../docs/audit/dbc_explorer_review.md#final-acceptance-2026-09-25).
-G2 is not started. The application composes one format list (`src/builtinformats.cpp`, target
-`explorer-formats`) and moves it into `AppController`; suffix lookup, the Open
-dialog filters (`AppController.fileDialogFilters`, bound in `qml/Main.qml`) and the
-sample list derive from it. `explorer-core`, the four backends and `explorer-formats`
-are static on every platform. Deleted: `QLibrary` loading, the `extern "C"` adapter
-factories, `FormatRegistry`, `BACKENDS_STATIC`, `formatId/formatName/extensions` on
-adapters, `explorercoreexport.h` with the `SignalPlotModel` import decoration, the
-`WINDOWS_EXPORT_ALL_SYMBOLS` properties, and the Explorer-DLL copy in
-`scripts/package_windows.sh`. `AppController::shutdown()` (from `aboutToQuit` and the
-destructor, or any observer) stops opens, disconnects delivery, joins a load it still
-owns and destroys an undelivered session on the GUI thread before the adapters go.
-`fileLoading` is true exactly while the controller owns an unconsumed load; the
-controller re-reads its state after the open/completion notification calls,
-including between the current-tab helper's two signals, so an observer that shuts
-the controller down from `currentTabIndexChanged` receives neither
-`currentSessionChanged` nor `fileLoaded`. Contracts:
-[architecture](arch/architecture.md#format-composition), [build](ref/cmake_build_system.md#static-composition),
-[packaging](ref/release_packaging.md).
-
-Verified: standalone PACKAGE build against the matching parser package 9/9
-(`tst_appcontroller` 14 cases, six of them notification re-entry regressions that
-each fail on the candidate they were written against); incremental workspace
-SOURCE suite 227/227 before the current-tab check; fresh Windows package with no
-Explorer DLL, complete closure and msys2 runtime provenance; the packaged app
-launched with only System32 on `PATH` showed its window for 15 s. The first pass's
-headless smoke result is void — the package has no offscreen platform plugin
-(BL-K6). Reproducers and identities: [review](../../docs/audit/dbc_explorer_review.md).
-
-Landmines: `tst_appcontroller` synchronises on `QThreadPool::globalInstance()->waitForDone()`
-to hold a result in the finished-but-undelivered state; a future test that leaves
-unrelated pool work running would make that wait cover it too. On Windows,
-`qt_standard_project_setup()` already emits every executable, tests included, into
-the build root.
+Next: G2 after H's review — kickoff in the [workspace handoff](../../docs/handoff.md).
