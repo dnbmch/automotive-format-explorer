@@ -184,9 +184,21 @@ void SignalGridItem::setModel(SignalMapModel* model) {
         connect(_model, SIGNAL(currentMessageChanged()), this, SLOT(onModelUpdated()));
         connect(_model, SIGNAL(messagesChanged()), this, SLOT(onModelUpdated()));
         connect(_model, SIGNAL(muxGroupChanged()), this, SLOT(onModelUpdated()));
-        rebuildColorMap();
+        connect(_model, &QObject::destroyed, this, &SignalGridItem::onModelReplaced);
     }
+    onModelReplaced();
+}
 
+// Drops the state that names signals of the previous model and derives the bit
+// colors from the current one, if any; the model's destruction lands here too.
+void SignalGridItem::onModelReplaced() {
+    _hovered_sig = -1;
+    _selected_sig = -1;
+    _flash.stop();
+    rebuildColorMap();
+    setImplicitHeight(totalHeight());
+    emit hoveredSignalChanged();
+    emit selectedSignalChanged();
     emit modelChanged();
     update();
 }

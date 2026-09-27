@@ -2,6 +2,7 @@
 
 #include "models/plotseries.h"
 #include "sessions/adaptersessionbase.h"
+#include "sessions/mdf4detailpresenter.h"
 
 #pragma push_macro("signals")
 #undef signals
@@ -15,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include <utility>
 
 class SignalPlotModel;
@@ -59,6 +61,9 @@ private:
     };
 
     void buildTree();
+    // Appends a row that shows the entity at `path`.
+    TreeItem* appendEntity(TreeItem* parent, const QString& title, const QString& subtitle,
+                           const QString& iconKey, SemanticKind semanticKind, Mdf4Path path);
     void clearPlot();
     void selectChannel(const Mdf4Path& path);
     void startRead(ChannelKey key);
@@ -70,6 +75,9 @@ private:
     void cacheSeries(ChannelKey key, PlotSeriesPtr series);
 
     const std::shared_ptr<const mdf4::File> _metadata;
+    const Mdf4DetailPresenter _presenter;
+    // The entity each row shows, by the row's key.
+    std::unordered_map<quint64, Mdf4Path> _paths;
     const ReadFunction _read;
     std::unique_ptr<SignalPlotModel> _plot_model;
     std::map<ChannelKey, CacheEntry> _decode_cache;

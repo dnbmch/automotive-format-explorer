@@ -1,6 +1,5 @@
 #pragma once
 
-#include "core/detailpresenter.h"
 #include "sessions/presentertext.h"
 
 #pragma push_macro("signals")
@@ -18,6 +17,32 @@
 #include <type_traits>
 
 #include <google/protobuf/repeated_field.h>
+
+enum class A2lEntityKind {
+    Module,
+    Measurement,
+    Characteristic,
+    AxisPts,
+    CompuMethod,
+    RecordLayout,
+    Unit,
+    Function,
+    Group,
+    XcpSummary,
+    CcpSummary,
+    TypedefItem,
+    Instance,
+    VariantCoding
+};
+
+// An A2L entity a tree row shows: its kind, the module, the entity's index
+// in that module's list and, for typedefs, the typedef category.
+struct A2lPath {
+    A2lEntityKind kind = A2lEntityKind::Module;
+    int primaryIndex = -1;
+    int secondaryIndex = -1;
+    int tertiaryIndex = -1;
+};
 
 // Format-specific helpers live in a2ldetail so they don't collide with other
 // backends' same-named global helpers (e.g. LDF's differently-defined
@@ -285,14 +310,14 @@ inline QString recordLayoutComponentSummary(const a2l::RecordLayoutComponent& co
 
 } // namespace a2ldetail
 
-class A2lDetailPresenter final : public DetailPresenter {
+class A2lDetailPresenter final {
 public:
     explicit A2lDetailPresenter(const a2l::A2lFile& document)
         : _document(document) {
     }
 
-    QList<DetailSection> buildDetails(const NodeBinding& binding) const override;
-    QString buildRawJson(const NodeBinding& binding) const override;
+    QList<DetailSection> buildDetails(const A2lPath& path) const;
+    QString buildRawJson(const A2lPath& path) const;
 
 private:
     const a2l::Module* moduleAt(int index) const;

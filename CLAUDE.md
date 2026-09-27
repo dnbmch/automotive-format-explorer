@@ -117,7 +117,7 @@ No external consumers, or owned end-to-end by us: the contract (proto / API / fi
 
 ## Project notes
 
-**Release is on-demand; there are no active users.** The app ships as a GPL-3.0 GitHub release, but we release only to exercise the current build against fresh parser artifacts — not on every change. With no users there is no cross-release backward-compat obligation; keep the backend seam (FormatAdapter / DocumentSession / DetailPresenter) internally coherent and change it when the design improves. See workspace [CLAUDE.md](../CLAUDE.md) "Release cadence".
+**Release is on-demand; there are no active users.** The app ships as a GPL-3.0 GitHub release, but we release only to exercise the current build against fresh parser artifacts — not on every change. With no users there is no cross-release backward-compat obligation; keep the backend seam (FormatAdapter / DocumentSession) internally coherent and change it when the design improves. See workspace [CLAUDE.md](../CLAUDE.md) "Release cadence".
 
 ### Architecture
 
@@ -146,7 +146,7 @@ Every format backend is a static library linked into the executable on all platf
 
 - `FormatAdapter` — loads a file, returns a `DocumentSession`
 - `DocumentSession` — owns the protobuf document (MDF4: shares it with the session's retained reader), tree model, detail presenter, and optional center panel model
-- `DetailPresenter` — builds `QList<DetailSection>` from a `NodeBinding`
+- a presenter — builds `QList<DetailSection>` and raw JSON from the format's own typed entity path
 
 ### Center panel slot
 
@@ -158,11 +158,11 @@ Main.qml uses a `Loader` that loads the component and passes the model. When no 
 
 ### Bidirectional selection
 
-- Tree → Detail: `AppController::selectCurrentNode(nodeKey)` → `DetailPresenter::buildDetails()`
+- Tree → Detail: `AppController::selectCurrentNode(nodeKey)` → the session's `selectNode()` → its presenter
 - Tree → Center: `scrollToNodeKey(nodeKey)` on the loaded center panel component
 - Center → Tree: `nodeKeyClicked` signal → `AppController::selectCurrentNode()` + `NavPanel::selectAndScrollTo()`
 
-Node keys are assigned by `NodeRegistry` during tree construction. Memory/signal map models store the same keys for cross-referencing.
+Every tree row, categories included, gets a session-local node key as the session appends it; each format session maps the keys of its entity rows to its own typed paths. Memory/signal map models store the same keys for cross-referencing.
 
 ### Rendering
 
@@ -178,7 +178,7 @@ Both `MemoryGridItem` and `SignalGridItem` extend `QQuickPaintedItem`:
 ```
 src/
   builtinformats  the application format list (only place concrete adapters are built)
-  core/           appcontroller, formatlist, noderegistry, formatid, detailsection, detailpresenter
+  core/           appcontroller, documenttab, formatlist, formatid, detailsection, treeitem
   models/         treemodel, treefiltermodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel
   sessions/       documentsession (interface), adaptersessionbase, presentertext
                   (shared text/detail helpers), a2l/dbc/ldf/mdf4 sessions

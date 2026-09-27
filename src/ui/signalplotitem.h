@@ -4,6 +4,7 @@
 
 #include <QColor>
 #include <QPointF>
+#include <QPointer>
 #include <QQuickPaintedItem>
 #include <QRectF>
 
@@ -49,6 +50,7 @@ protected:
     void geometryChange(const QRectF& newGeometry, const QRectF& oldGeometry) override;
 
 private:
+    void onModelReplaced();
     QRectF plotRect() const;
     double timeAtX(qreal x) const;
     qreal xForTime(double time, const QRectF& rect) const;
@@ -62,7 +64,8 @@ private:
 
     static QString numberLabel(double value);
 
-    SignalPlotModel* _model = nullptr;
+    // Reads null once the model is destroyed, which counts as a replacement.
+    QPointer<SignalPlotModel> _model;
     QColor _background{0x1e, 0x1e, 0x1e};
     QColor _grid{0x44, 0x44, 0x44};
     QColor _axis{0xaa, 0xaa, 0xaa};

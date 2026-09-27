@@ -120,12 +120,7 @@ void appendComment(QList<DetailSection>& sections, const std::string& comment) {
 
 } // namespace
 
-QList<DetailSection> Mdf4DetailPresenter::buildDetails(const NodeBinding& binding) const {
-    if (!std::holds_alternative<Mdf4Path>(binding.payload)) {
-        return {};
-    }
-
-    const Mdf4Path path = std::get<Mdf4Path>(binding.payload);
+QList<DetailSection> Mdf4DetailPresenter::buildDetails(const Mdf4Path& path) const {
     switch (path.kind) {
     case Mdf4EntityKind::File:
         return fileDetails();
@@ -137,12 +132,7 @@ QList<DetailSection> Mdf4DetailPresenter::buildDetails(const NodeBinding& bindin
     return {};
 }
 
-QString Mdf4DetailPresenter::buildRawJson(const NodeBinding& binding) const {
-    if (!std::holds_alternative<Mdf4Path>(binding.payload)) {
-        return {};
-    }
-
-    const Mdf4Path path = std::get<Mdf4Path>(binding.payload);
+QString Mdf4DetailPresenter::buildRawJson(const Mdf4Path& path) const {
     const google::protobuf::Message* message = nullptr;
     switch (path.kind) {
     case Mdf4EntityKind::File:

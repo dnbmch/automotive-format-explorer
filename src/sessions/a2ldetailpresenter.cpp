@@ -1,16 +1,10 @@
 #include "sessions/a2ldetailpresenter.h"
 
 #include <QStringList>
-#include <variant>
 
 using namespace a2ldetail;
 
-QList<DetailSection> A2lDetailPresenter::buildDetails(const NodeBinding& binding) const {
-    if (!std::holds_alternative<A2lPath>(binding.payload)) {
-        return {};
-    }
-
-    const A2lPath path = std::get<A2lPath>(binding.payload);
+QList<DetailSection> A2lDetailPresenter::buildDetails(const A2lPath& path) const {
     QList<DetailSection> sections;
 
     switch (path.kind) {
@@ -64,12 +58,7 @@ QList<DetailSection> A2lDetailPresenter::buildDetails(const NodeBinding& binding
     return sections;
 }
 
-QString A2lDetailPresenter::buildRawJson(const NodeBinding& binding) const {
-    if (!std::holds_alternative<A2lPath>(binding.payload)) {
-        return {};
-    }
-
-    const A2lPath path = std::get<A2lPath>(binding.payload);
+QString A2lDetailPresenter::buildRawJson(const A2lPath& path) const {
     const auto* module = moduleAt(path.primaryIndex);
     if (!module) {
         return {};

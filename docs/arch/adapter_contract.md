@@ -32,7 +32,7 @@ struct LoadResult {
 };
 ```
 
-`load()` runs on a worker thread — `AppController::openFile()` dispatches it via `QtConcurrent::run()`, and the worker moves the session's models to the controller's thread before the result is published. Expect to be called with an absolute path; let parser-layer errors flow into `diagnostics` instead of throwing. Do not depend on the GUI event loop inside `load()` or a session constructor: application shutdown waits for a pending load on the GUI thread. The adapter is owned by the controller's `FormatList` and outlives every load it runs.
+`load()` runs on a worker thread — `AppController::openFile()` dispatches it via `QtConcurrent::run()`, and the worker moves the session's models to the controller's thread before the result is published. The controller wraps the session in a `DocumentTab`, which owns it and the filter over its tree. Expect to be called with an absolute path; let parser-layer errors flow into `diagnostics` instead of throwing. Do not depend on the GUI event loop inside `load()` or a session constructor: application shutdown waits for a pending load on the GUI thread. The adapter is owned by the controller's `FormatList` and outlives every load it runs.
 
 Format identity for the file dialog and suffix lookup comes from the `FormatEntry`; `formatDisplayName(FormatId)` labels the dialog filter. The session reports its own identity (`formatId()`, `formatName()`) for tabs.
 
@@ -50,7 +50,7 @@ public:
     virtual DetailModel* detailModel() = 0;           // right Detail panel
     virtual QList<DiagnosticMessage> diagnostics() const = 0;
     virtual bool hasDiagnostics() const = 0;          // true when any diagnostic (warning or error) exists
-    virtual void selectNode(quint64 key) = 0;         // refresh DetailModel for a NodeRegistry key
+    virtual void selectNode(quint64 key) = 0;         // show the entity of the row with this key
 
     // Optional center panel (memory view / signal map / blank)
     virtual QUrl centerPanelSource() const { return {}; }
@@ -60,7 +60,9 @@ public:
 };
 ```
 
-`AdapterSessionBase` ([src/sessions/adaptersessionbase.h](../../src/sessions/adaptersessionbase.h)) provides the model plumbing and node-registry handling. Use it as the base class unless your format genuinely needs to bypass it.
+`AdapterSessionBase` ([src/sessions/adaptersessionbase.h](../../src/sessions/adaptersessionbase.h)) provides identity, diagnostics, the tree and detail models, and row keys: `appendNode()` gives every row the session's next key. Use it as the base class unless your format genuinely needs to bypass it.
+
+Declare the format's entity kinds and a typed path (`<Fmt>Path`) next to its presenter. The session owns the presenter by value and a table from the key of each entity row to its path, filled by an `appendEntity()` that calls `appendNode()`. `selectNode(key)` looks the key up and hands `DetailModel::setSelection()` the presenter's details and a producer of the entity's raw JSON, or no producer when the entity has no raw form.
 
 ## CMake wiring
 

@@ -9,10 +9,16 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - Static per-format backends for A2L, DBC, LDF, and MDF4, linked into one
   executable on every platform and composed from a single built-in format list
   (id, suffixes, adapter) that also derives the dialog filters and sample list;
-  each backend provides `FormatAdapter` / `DocumentSession` / `DetailPresenter`.
+  each backend provides a `FormatAdapter`, a `DocumentSession` and its presenter.
 - `AppController` owns its format list and its one pending load: shutdown stops
   opens, suppresses late completions and joins the load before adapters go,
-  disposing any undelivered session on the GUI thread.
+  disposing any undelivered session on the GUI thread; afterwards every public
+  action does nothing.
+- Each open file is a `DocumentTab` owning its session, tree filter and tree
+  navigation. The controller tracks the current tab by identity; closing a tab
+  announces the new current tab before destroying the closed one, and tab
+  switches or closes requested during a tab-model row change are deferred by tab
+  identity. Painted items track their model's lifetime.
 - A2L memory-map view and DBC/LDF signal-map view via `QQuickPaintedItem`
   C++ renderers (`MemoryGridItem`, `SignalGridItem`) with FBO scrolling.
 - Format-neutral single-channel signal plot (`PlotSeries`, `SignalPlotModel`,
@@ -27,13 +33,16 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   the tab waits for a running read. Non-monotonic domains fall back to record
   indices at the session seam; group masters are listed as axis channels, not
   signals.
-- Memory grid: every object of a segment of any size is painted and selectable
-  through one sparse byte query, with overlap hatching (bytes claimed by more than
+- Memory grid: sparse byte queries remove the 16 MiB coverage cap and support tested
+  multi-GiB spans, with overlap hatching (bytes claimed by more than
   one object), click-drag byte-range selection with status readout, and hover
   tooltips with record layout / conversion — see [docs/ref/memory_view.md](docs/ref/memory_view.md).
-- Bidirectional selection (tree ↔ detail ↔ center) keyed by `NodeRegistry`.
-- Per-tab tree filter (`TreeFilterModel` proxy, `Ctrl+F`) with recursive matching
-  and pre-filter state restore.
+- Bidirectional selection (tree ↔ detail ↔ center) keyed by session-local node keys,
+  which every tree row has.
+- Per-tab tree filter (`TreeFilterModel` proxy, `Ctrl+F`) with recursive matching.
+  Tab switches and filter clears restore each tab's expansion (categories
+  included), current row and scroll; the tab keeps its pre-filter navigation.
+- Raw JSON is serialized only when the raw view reads it.
 - Bundled samples (one per format, `samples/`, including a writer-authored
   `.mf4` recording) with "open a sample" links in the empty sidebar; provenance
   in `samples/SAMPLES.md`.
@@ -45,7 +54,9 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   empty results, cache eviction, domain validation, worker-thread hand-off and
   teardown from and during reads, the production format list (suffixes, dialog filters, sample
   classification, one bundled sample per format opened through the controller)
-  and controller load/shutdown lifetimes through a fake adapter, registered with
+  controller load/shutdown lifetimes and the tab contract through a fake adapter,
+  tab navigation and pre-filter snapshots, lazy raw JSON, the painted items'
+  model lifetimes, and the production nav panel offscreen, registered with
   ctest and run in CI. The end-to-end
   writer-file smoke opens and plots the bundled `samples/demo_recording.mf4`
   through the production adapter, and a truncated copy asks for a reload;

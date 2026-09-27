@@ -1,5 +1,4 @@
 #include "sessions/ldfdocumentsession.h"
-#include "sessions/ldfdetailpresenter.h"
 #include "models/signalmapmodel.h"
 
 #include <QStringList>
@@ -19,13 +18,35 @@ LdfDocumentSession::LdfDocumentSession(QString displayName,
                          std::move(displayName),
                          std::move(sourcePath),
                          std::move(diagnostics)),
-      _document(std::move(document)) {
-    setDetailPresenter(std::make_unique<LdfDetailPresenter>(_document));
+      _document(std::move(document)),
+      _presenter(_document) {
     buildTree();
     buildSignalMap();
 }
 
 LdfDocumentSession::~LdfDocumentSession() = default;
+
+void LdfDocumentSession::selectNode(quint64 key) {
+    const auto it = _paths.find(key);
+    if (it == _paths.end()) {
+        _detail_model.setSelection({}, {});
+        return;
+    }
+    const LdfPath path = it->second;
+    std::function<QString()> rawJson;
+    if (LdfDetailPresenter::hasRawJson(path)) {
+        rawJson = [this, path] { return _presenter.buildRawJson(path); };
+    }
+    _detail_model.setSelection(_presenter.buildDetails(path), std::move(rawJson));
+}
+
+TreeItem* LdfDocumentSession::appendEntity(TreeItem* parent, const QString& title,
+                                           const QString& subtitle, const QString& iconKey,
+                                           SemanticKind semanticKind, LdfPath path) {
+    TreeItem* item = appendNode(parent, title, subtitle, iconKey, semanticKind, true);
+    _paths.emplace(item->nodeKey, path);
+    return item;
+}
 
 QUrl LdfDocumentSession::centerPanelSource() const {
     if (_signal_map_model && _signal_map_model->messageCount() > 0) {
@@ -49,14 +70,14 @@ void LdfDocumentSession::buildTree() {
     root->title = displayName();
     root->semanticKind = SemanticKind::Root;
 
-    appendNode(root.get(),
-               QStringLiteral("Overview"),
-               QStringLiteral("LIN %1  %2 kbps")
+    appendEntity(root.get(),
+                 QStringLiteral("Overview"),
+                 QStringLiteral("LIN %1  %2 kbps")
                    .arg(text(_document.lin_protocol_version()))
                    .arg(numberText(_document.lin_speed_kbps())),
-               QStringLiteral("overview"),
-               SemanticKind::Entity,
-               NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::Overview, 0, -1, -1}, true});
+                 QStringLiteral("overview"),
+                 SemanticKind::Entity,
+                 LdfPath{LdfEntityKind::Overview, 0});
 
     if (_document.has_master() || _document.slaves_size() > 0) {
         TreeItem* nodes = appendNode(root.get(),
@@ -66,12 +87,12 @@ void LdfDocumentSession::buildTree() {
                                      SemanticKind::Section);
 
         if (_document.has_master()) {
-            appendNode(nodes,
-                       text(_document.master().name()),
-                       QStringLiteral("master"),
-                       QStringLiteral("master"),
-                       SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::MasterNode, 0, -1, -1}, true});
+            appendEntity(nodes,
+                         text(_document.master().name()),
+                         QStringLiteral("master"),
+                         QStringLiteral("master"),
+                         SemanticKind::Entity,
+                         LdfPath{LdfEntityKind::MasterNode, 0});
         }
 
         for (int i = 0; i < _document.slaves_size(); ++i) {
@@ -79,12 +100,12 @@ void LdfDocumentSession::buildTree() {
             const QString subtitle = slave.has_attributes()
                 ? hexValue(slave.attributes().configured_nad())
                 : QStringLiteral("slave");
-            appendNode(nodes,
-                       text(slave.name()),
-                       subtitle,
-                       QStringLiteral("slave"),
-                       SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::SlaveNode, i, -1, -1}, true});
+            appendEntity(nodes,
+                         text(slave.name()),
+                         subtitle,
+                         QStringLiteral("slave"),
+                         SemanticKind::Entity,
+                         LdfPath{LdfEntityKind::SlaveNode, i});
         }
     }
 
@@ -92,15 +113,13 @@ void LdfDocumentSession::buildTree() {
         TreeItem* signals = appendNode(root.get(), QStringLiteral("Signals"), QString::number(_document.signals_size()), QStringLiteral("signals"), SemanticKind::Section);
         for (int i = 0; i < _document.signals_size(); ++i) {
             const auto& signal = _document.signals(i);
-            TreeItem* sigNode = appendNode(signals,
+            TreeItem* sigNode = appendEntity(signals,
                        text(signal.name()),
                        QStringLiteral("%1 bits").arg(signal.bit_length()),
                        QStringLiteral("signal"),
                        SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::Signal, i, -1, -1}, true});
-            if (sigNode->nodeKey) {
-                _tree_node_keys[{static_cast<int>(LdfEntityKind::Signal), i, -1}] = sigNode->nodeKey;
-            }
+                       LdfPath{LdfEntityKind::Signal, i});
+            _tree_node_keys[{static_cast<int>(LdfEntityKind::Signal), i, -1}] = sigNode->nodeKey;
         }
     }
 
@@ -108,22 +127,22 @@ void LdfDocumentSession::buildTree() {
         TreeItem* frames = appendNode(root.get(), QStringLiteral("Frames"), QString::number(_document.frames_size()), QStringLiteral("frames"), SemanticKind::Section);
         for (int i = 0; i < _document.frames_size(); ++i) {
             const auto& frame = _document.frames(i);
-            TreeItem* frameItem = appendNode(frames,
-                                             text(frame.name()),
-                                             QStringLiteral("%1  %2B").arg(hexValue(frame.id())).arg(frame.length()),
-                                             QStringLiteral("frame"),
-                                             SemanticKind::Entity,
-                                             NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::Frame, i, -1, -1}, true});
+            TreeItem* frameItem = appendEntity(frames,
+                                               text(frame.name()),
+                                               QStringLiteral("%1  %2B").arg(hexValue(frame.id())).arg(frame.length()),
+                                               QStringLiteral("frame"),
+                                               SemanticKind::Entity,
+                                               LdfPath{LdfEntityKind::Frame, i});
             _tree_node_keys[{static_cast<int>(LdfEntityKind::Frame), i, -1}] = frameItem->nodeKey;
 
             for (int j = 0; j < frame.signals_size(); ++j) {
                 const auto& signal = frame.signals(j);
-                TreeItem* sigItem = appendNode(frameItem,
+                TreeItem* sigItem = appendEntity(frameItem,
                            text(signal.signal_name()),
                            QStringLiteral("@%1").arg(signal.start_bit()),
                            QStringLiteral("framesignal"),
                            SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::FrameSignal, i, j, -1}, true});
+                           LdfPath{LdfEntityKind::FrameSignal, i, j});
                 _tree_node_keys[{static_cast<int>(LdfEntityKind::FrameSignal), i, j}] = sigItem->nodeKey;
             }
         }
@@ -133,12 +152,12 @@ void LdfDocumentSession::buildTree() {
         TreeItem* encodings = appendNode(root.get(), QStringLiteral("Signal Encodings"), QString::number(_document.signal_encoding_types_size()), QStringLiteral("encodings"), SemanticKind::Section);
         for (int i = 0; i < _document.signal_encoding_types_size(); ++i) {
             const auto& encoding = _document.signal_encoding_types(i);
-            appendNode(encodings,
-                       text(encoding.name()),
-                       QStringLiteral("P%1 / L%2").arg(encoding.physical_values_size()).arg(encoding.logical_values_size()),
-                       QStringLiteral("encoding"),
-                       SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::Encoding, i, -1, -1}, true});
+            appendEntity(encodings,
+                         text(encoding.name()),
+                         QStringLiteral("P%1 / L%2").arg(encoding.physical_values_size()).arg(encoding.logical_values_size()),
+                         QStringLiteral("encoding"),
+                         SemanticKind::Entity,
+                         LdfPath{LdfEntityKind::Encoding, i});
         }
     }
 
@@ -146,12 +165,12 @@ void LdfDocumentSession::buildTree() {
         TreeItem* schedules = appendNode(root.get(), QStringLiteral("Schedule Tables"), QString::number(_document.schedule_tables_size()), QStringLiteral("schedules"), SemanticKind::Section);
         for (int i = 0; i < _document.schedule_tables_size(); ++i) {
             const auto& schedule = _document.schedule_tables(i);
-            TreeItem* scheduleItem = appendNode(schedules,
-                                                text(schedule.name()),
-                                                QStringLiteral("%1 entries").arg(schedule.entries_size()),
-                                                QStringLiteral("schedule"),
-                                                SemanticKind::Entity,
-                                                NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::ScheduleTable, i, -1, -1}, true});
+            TreeItem* scheduleItem = appendEntity(schedules,
+                                                  text(schedule.name()),
+                                                  QStringLiteral("%1 entries").arg(schedule.entries_size()),
+                                                  QStringLiteral("schedule"),
+                                                  SemanticKind::Entity,
+                                                  LdfPath{LdfEntityKind::ScheduleTable, i});
 
             for (const auto& entry : schedule.entries()) {
                 appendNode(scheduleItem,
@@ -167,12 +186,12 @@ void LdfDocumentSession::buildTree() {
         TreeItem* events = appendNode(root.get(), QStringLiteral("Event Triggered Frames"), QString::number(_document.event_triggered_frames_size()), QStringLiteral("events"), SemanticKind::Section);
         for (int i = 0; i < _document.event_triggered_frames_size(); ++i) {
             const auto& frame = _document.event_triggered_frames(i);
-            appendNode(events,
-                       text(frame.name()),
-                       hexValue(frame.id()),
-                       QStringLiteral("eventframe"),
-                       SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::EventFrame, i, -1, -1}, true});
+            appendEntity(events,
+                         text(frame.name()),
+                         hexValue(frame.id()),
+                         QStringLiteral("eventframe"),
+                         SemanticKind::Entity,
+                         LdfPath{LdfEntityKind::EventFrame, i});
         }
     }
 
@@ -180,12 +199,12 @@ void LdfDocumentSession::buildTree() {
         TreeItem* groups = appendNode(root.get(), QStringLiteral("Signal Groups"), QString::number(_document.signal_groups_size()), QStringLiteral("groups"), SemanticKind::Section);
         for (int i = 0; i < _document.signal_groups_size(); ++i) {
             const auto& group = _document.signal_groups(i);
-            appendNode(groups,
-                       text(group.name()),
-                       QStringLiteral("%1 bits").arg(group.group_size()),
-                       QStringLiteral("group"),
-                       SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity, LdfPath{LdfEntityKind::SignalGroup, i, -1, -1}, true});
+            appendEntity(groups,
+                         text(group.name()),
+                         QStringLiteral("%1 bits").arg(group.group_size()),
+                         QStringLiteral("group"),
+                         SemanticKind::Entity,
+                         LdfPath{LdfEntityKind::SignalGroup, i});
         }
     }
 
@@ -198,12 +217,12 @@ void LdfDocumentSession::buildTree() {
             TreeItem* addresses = appendNode(diagnostics, QStringLiteral("Addresses"), QString::number(_document.diagnostic_addresses_size()), QStringLiteral("diag-addresses"), SemanticKind::Section);
             for (int i = 0; i < _document.diagnostic_addresses_size(); ++i) {
                 const auto& address = _document.diagnostic_addresses(i);
-                appendNode(addresses,
-                           text(address.node_name()),
-                           hexValue(address.nad()),
-                           QStringLiteral("diag-address"),
-                           SemanticKind::Diagnostic,
-                           NodeBinding{SemanticKind::Diagnostic, LdfPath{LdfEntityKind::DiagnosticAddress, i, -1, -1}, true});
+                appendEntity(addresses,
+                             text(address.node_name()),
+                             hexValue(address.nad()),
+                             QStringLiteral("diag-address"),
+                             SemanticKind::Diagnostic,
+                             LdfPath{LdfEntityKind::DiagnosticAddress, i});
             }
         }
 
@@ -211,12 +230,12 @@ void LdfDocumentSession::buildTree() {
             TreeItem* signals = appendNode(diagnostics, QStringLiteral("Signals"), QString::number(_document.diagnostic_signals_size()), QStringLiteral("diag-signals"), SemanticKind::Section);
             for (int i = 0; i < _document.diagnostic_signals_size(); ++i) {
                 const auto& signal = _document.diagnostic_signals(i);
-                appendNode(signals,
-                           text(signal.name()),
-                           QStringLiteral("%1 bits").arg(signal.bit_length()),
-                           QStringLiteral("diag-signal"),
-                           SemanticKind::Diagnostic,
-                           NodeBinding{SemanticKind::Diagnostic, LdfPath{LdfEntityKind::DiagnosticSignal, i, -1, -1}, true});
+                appendEntity(signals,
+                             text(signal.name()),
+                             QStringLiteral("%1 bits").arg(signal.bit_length()),
+                             QStringLiteral("diag-signal"),
+                             SemanticKind::Diagnostic,
+                             LdfPath{LdfEntityKind::DiagnosticSignal, i});
             }
         }
 
@@ -224,12 +243,12 @@ void LdfDocumentSession::buildTree() {
             TreeItem* frames = appendNode(diagnostics, QStringLiteral("Frames"), QString::number(_document.diagnostic_frames_size()), QStringLiteral("diag-frames"), SemanticKind::Section);
             for (int i = 0; i < _document.diagnostic_frames_size(); ++i) {
                 const auto& frame = _document.diagnostic_frames(i);
-                appendNode(frames,
-                           text(frame.name()),
-                           hexValue(frame.id()),
-                           QStringLiteral("diag-frame"),
-                           SemanticKind::Diagnostic,
-                           NodeBinding{SemanticKind::Diagnostic, LdfPath{LdfEntityKind::DiagnosticFrame, i, -1, -1}, true});
+                appendEntity(frames,
+                             text(frame.name()),
+                             hexValue(frame.id()),
+                             QStringLiteral("diag-frame"),
+                             SemanticKind::Diagnostic,
+                             LdfPath{LdfEntityKind::DiagnosticFrame, i});
             }
         }
     }

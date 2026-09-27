@@ -306,7 +306,7 @@ Click a colored bit cell:
 
 When the user changes the message dropdown, optionally select the message node in the tree (debatable — may be annoying). Probably don't auto-select on dropdown change, only on explicit grid click.
 
-The center-panel slot, `DocumentSession` interface, `NodeRegistry`-keyed bidirectional selection, and the Theme palette are shared with the A2L memory view. The model (`SignalMapModel`) and renderer (`SignalGridItem`) are signal-specific because the data is bit-level signal packing rather than a byte-level address space; the tooltip and legend reuse the memory view's patterns with signal-specific content (the legend is dynamic, showing the current message's signal names).
+The center-panel slot, `DocumentSession` interface, node-key bidirectional selection, and the Theme palette are shared with the A2L memory view. The model (`SignalMapModel`) and renderer (`SignalGridItem`) are signal-specific because the data is bit-level signal packing rather than a byte-level address space; the tooltip and legend reuse the memory view's patterns with signal-specific content (the legend is dynamic, showing the current message's signal names).
 
 ## Implementation Status
 

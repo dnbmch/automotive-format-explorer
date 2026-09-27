@@ -128,7 +128,7 @@ ApplicationWindow {
             SplitView.preferredWidth: 320
             SplitView.minimumWidth: root.leftPaneVisible ? 180 : 0
             clip: true
-            treeModel: AppController.currentTreeModel
+            tab: AppController.currentTab
             Behavior on SplitView.preferredWidth {
                 NumberAnimation { duration: 200; easing.type: Easing.InOutQuad }
             }
@@ -382,7 +382,7 @@ ApplicationWindow {
                         color: Theme.bg
 
                         property bool showRawJson: false
-                        readonly property bool _rawAvailable: AppController.currentDetailModel.rawJsonText.length > 0
+                        readonly property bool _rawAvailable: AppController.currentDetailModel.rawJsonAvailable
                         readonly property bool _rawEffective: showRawJson && _rawAvailable
 
                         ColumnLayout {
@@ -579,7 +579,9 @@ ApplicationWindow {
                                     color: Theme.textPrimary
                                     selectionColor: Theme.bgSelection
                                     selectedTextColor: Theme.textWhite
-                                    text: AppController.currentDetailModel.rawJsonText
+                                    // Reading the text serializes it: only while shown.
+                                    text: detailPanel._rawEffective
+                                          ? AppController.currentDetailModel.rawJsonText : ""
 
                                     background: Rectangle {
                                         color: Theme.bgCard

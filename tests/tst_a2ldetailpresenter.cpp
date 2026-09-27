@@ -13,8 +13,8 @@
 
 namespace {
 
-NodeBinding bindingFor(A2lEntityKind kind, int moduleIndex = 0, int secondary = -1) {
-    return NodeBinding{SemanticKind::Entity, A2lPath{kind, moduleIndex, secondary, -1}, true};
+A2lPath pathFor(A2lEntityKind kind, int moduleIndex = 0, int secondary = -1) {
+    return A2lPath{kind, moduleIndex, secondary, -1};
 }
 
 // A one-module document carrying one XCP IF_DATA, one CCP IF_DATA and one
@@ -64,7 +64,7 @@ void TestA2lDetailPresenter::moduleNodeYieldsRawJson() {
     const a2l::A2lFile doc = makeDocument();
     const A2lDetailPresenter presenter(doc);
 
-    const QString json = presenter.buildRawJson(bindingFor(A2lEntityKind::Module));
+    const QString json = presenter.buildRawJson(pathFor(A2lEntityKind::Module));
 
     QVERIFY(!json.isEmpty());
     QVERIFY(json.contains(QStringLiteral("ECU_MAIN")));
@@ -74,7 +74,7 @@ void TestA2lDetailPresenter::xcpSummaryYieldsRawJson() {
     const a2l::A2lFile doc = makeDocument();
     const A2lDetailPresenter presenter(doc);
 
-    const QString json = presenter.buildRawJson(bindingFor(A2lEntityKind::XcpSummary));
+    const QString json = presenter.buildRawJson(pathFor(A2lEntityKind::XcpSummary));
 
     QVERIFY(!json.isEmpty());
     // The aggregate carries the interface name and the typed XCP payload.
@@ -87,7 +87,7 @@ void TestA2lDetailPresenter::ccpSummaryYieldsRawJson() {
     const a2l::A2lFile doc = makeDocument();
     const A2lDetailPresenter presenter(doc);
 
-    const QString json = presenter.buildRawJson(bindingFor(A2lEntityKind::CcpSummary));
+    const QString json = presenter.buildRawJson(pathFor(A2lEntityKind::CcpSummary));
 
     QVERIFY(!json.isEmpty());
     QVERIFY(json.contains(QStringLiteral("ASAP1B_CCP")));
@@ -101,11 +101,11 @@ void TestA2lDetailPresenter::summaryRawJsonExcludesOtherFamilies() {
     const a2l::A2lFile doc = makeDocument();
     const A2lDetailPresenter presenter(doc);
 
-    const QString xcpJson = presenter.buildRawJson(bindingFor(A2lEntityKind::XcpSummary));
+    const QString xcpJson = presenter.buildRawJson(pathFor(A2lEntityKind::XcpSummary));
     QVERIFY(!xcpJson.contains(QStringLiteral("ASAP1B_CCP")));
     QVERIFY(!xcpJson.contains(QStringLiteral("ETK")));
 
-    const QString ccpJson = presenter.buildRawJson(bindingFor(A2lEntityKind::CcpSummary));
+    const QString ccpJson = presenter.buildRawJson(pathFor(A2lEntityKind::CcpSummary));
     QVERIFY(!ccpJson.contains(QStringLiteral("XCPplus")));
     QVERIFY(!ccpJson.contains(QStringLiteral("ETK")));
 }
@@ -117,8 +117,8 @@ void TestA2lDetailPresenter::summaryWithoutMatchingIfDataIsEmpty() {
     doc.add_modules()->set_name("BARE");
     const A2lDetailPresenter presenter(doc);
 
-    QVERIFY(presenter.buildRawJson(bindingFor(A2lEntityKind::XcpSummary)).isEmpty());
-    QVERIFY(presenter.buildRawJson(bindingFor(A2lEntityKind::CcpSummary)).isEmpty());
+    QVERIFY(presenter.buildRawJson(pathFor(A2lEntityKind::XcpSummary)).isEmpty());
+    QVERIFY(presenter.buildRawJson(pathFor(A2lEntityKind::CcpSummary)).isEmpty());
 }
 
 // One matching if_data renders as a bare JSON object, not a one-element array.
@@ -126,7 +126,7 @@ void TestA2lDetailPresenter::singleMatchRawJsonIsOneObject() {
     const a2l::A2lFile doc = makeDocument();
     const A2lDetailPresenter presenter(doc);
 
-    const QString json = presenter.buildRawJson(bindingFor(A2lEntityKind::XcpSummary));
+    const QString json = presenter.buildRawJson(pathFor(A2lEntityKind::XcpSummary));
     QJsonParseError err{};
     const QJsonDocument parsed = QJsonDocument::fromJson(json.toUtf8(), &err);
     QCOMPARE(err.error, QJsonParseError::NoError);
@@ -144,7 +144,7 @@ void TestA2lDetailPresenter::multipleMatchesRawJsonIsValidArray() {
     module->add_if_datas()->mutable_xcp()->mutable_protocol_layer()->set_max_cto(16);
 
     const A2lDetailPresenter presenter(doc);
-    const QString json = presenter.buildRawJson(bindingFor(A2lEntityKind::XcpSummary));
+    const QString json = presenter.buildRawJson(pathFor(A2lEntityKind::XcpSummary));
 
     QJsonParseError err{};
     const QJsonDocument parsed = QJsonDocument::fromJson(json.toUtf8(), &err);

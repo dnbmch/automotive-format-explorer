@@ -33,7 +33,7 @@ QModelIndex TreeModel::parent(const QModelIndex& child) const {
     }
 
     TreeItem* parentItem = childItem->parent;
-    return createIndex(rowForItem(parentItem), 0, parentItem);
+    return createIndex(parentItem->row, 0, parentItem);
 }
 
 int TreeModel::rowCount(const QModelIndex& parent) const {
@@ -89,44 +89,18 @@ QHash<int, QByteArray> TreeModel::roleNames() const {
 void TreeModel::setRoot(std::unique_ptr<TreeItem> root) {
     beginResetModel();
     _root = std::move(root);
+    _items_by_key.clear();
+    fileItems(_root.get());
     endResetModel();
 }
 
-TreeItem* TreeModel::rootItem() {
-    return _root.get();
-}
-
-const TreeItem* TreeModel::rootItem() const {
-    return _root.get();
-}
-
 QModelIndex TreeModel::indexForNodeKey(qulonglong nodeKey) const {
-    if (nodeKey == 0) {
+    if (nodeKey == 0 || nodeKey >= _items_by_key.size() || !_items_by_key[nodeKey]) {
         return {};
     }
 
-    // BFS to find the node with matching key.
-    struct Frame { TreeItem* item; QModelIndex parentIdx; };
-    std::vector<Frame> stack;
-    stack.push_back({_root.get(), {}});
-
-    while (!stack.empty()) {
-        auto [item, parentIdx] = stack.back();
-        stack.pop_back();
-
-        for (int i = 0; i < static_cast<int>(item->children.size()); ++i) {
-            TreeItem* child = item->children[static_cast<size_t>(i)].get();
-            QModelIndex childIdx = index(i, 0, parentIdx);
-            if (child->nodeKey == nodeKey) {
-                return childIdx;
-            }
-            if (!child->children.empty()) {
-                stack.push_back({child, childIdx});
-            }
-        }
-    }
-
-    return {};
+    TreeItem* item = _items_by_key[nodeKey];
+    return createIndex(item->row, 0, item);
 }
 
 TreeItem* TreeModel::itemForIndex(const QModelIndex& index) const {
@@ -137,13 +111,16 @@ TreeItem* TreeModel::itemForIndex(const QModelIndex& index) const {
     return static_cast<TreeItem*>(index.internalPointer());
 }
 
-int TreeModel::rowForItem(const TreeItem* item) const {
-    const auto& siblings = item->parent->children;
-    for (std::size_t i = 0; i < siblings.size(); ++i) {
-        if (siblings[i].get() == item) {
-            return static_cast<int>(i);
+// Records every row's position under its parent and files it by key, once per
+// installed tree, so no lookup walks the tree.
+void TreeModel::fileItems(TreeItem* parent) {
+    for (std::size_t i = 0; i < parent->children.size(); ++i) {
+        TreeItem* child = parent->children[i].get();
+        child->row = static_cast<int>(i);
+        if (child->nodeKey >= _items_by_key.size()) {
+            _items_by_key.resize(child->nodeKey + 1, nullptr);
         }
+        _items_by_key[child->nodeKey] = child;
+        fileItems(child);
     }
-
-    return 0;
 }

@@ -18,8 +18,11 @@ struct TreeItem {
     QString subtitle;
     QString iconKey;
     SemanticKind semanticKind = SemanticKind::Root;
+    // Session-local key, nonzero for every row; only the invisible root keeps 0.
     quint64 nodeKey = 0;
     bool selectable = false;
+    // Position under the parent, set when the tree is installed in a TreeModel.
+    int row = 0;
     TreeItem* parent = nullptr;
     std::vector<std::unique_ptr<TreeItem>> children;
 };

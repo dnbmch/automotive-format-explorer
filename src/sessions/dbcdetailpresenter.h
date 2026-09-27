@@ -1,6 +1,5 @@
 #pragma once
 
-#include "core/detailpresenter.h"
 #include "sessions/presentertext.h"
 
 #pragma push_macro("signals")
@@ -8,14 +7,34 @@
 #include "dbc/dbc.pb.h"
 #pragma pop_macro("signals")
 
-class DbcDetailPresenter final : public DetailPresenter {
+enum class DbcEntityKind {
+    Node,
+    Message,
+    Signal,
+    ValueTable,
+    AttributeDefinition,
+    AttributeDefault,
+    AttributeValue,
+    EnvironmentVariable,
+    SignalGroup
+};
+
+// A DBC entity a tree row shows: its kind, its index in the document's list
+// and, for a signal, its index in the message.
+struct DbcPath {
+    DbcEntityKind kind = DbcEntityKind::Message;
+    int primaryIndex = -1;
+    int secondaryIndex = -1;
+};
+
+class DbcDetailPresenter final {
 public:
     explicit DbcDetailPresenter(const dbc::DbcFile& document)
         : _document(document) {
     }
 
-    QList<DetailSection> buildDetails(const NodeBinding& binding) const override;
-    QString buildRawJson(const NodeBinding& binding) const override;
+    QList<DetailSection> buildDetails(const DbcPath& path) const;
+    QString buildRawJson(const DbcPath& path) const;
 
 private:
     QList<DetailSection> nodeDetails(const DbcPath& path) const;

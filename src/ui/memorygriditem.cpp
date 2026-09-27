@@ -132,10 +132,25 @@ void MemoryGridItem::setModel(MemoryMapModel* model) {
         connect(_model, SIGNAL(currentSegmentChanged()), this, SLOT(onModelUpdated()));
         connect(_model, SIGNAL(bytesPerRowChanged()), this, SLOT(onLayoutChanged()));
         connect(_model, SIGNAL(objectsChanged()), this, SLOT(onModelUpdated()));
-        rebuildObjectColors();
-        updateContentHeight();
+        connect(_model, &QObject::destroyed, this, &MemoryGridItem::onModelReplaced);
     }
+    onModelReplaced();
+}
 
+// Drops the state that names rows of the previous model and derives colors and
+// height from the current one, if any; the model's destruction lands here too.
+void MemoryGridItem::onModelReplaced() {
+    _hovered_obj = -1;
+    _selected_obj = -1;
+    _sel_anchor = -1;
+    _sel_start = -1;
+    _sel_end = -1;
+    _flash.stop();
+    rebuildObjectColors();
+    updateContentHeight();
+    emit hoveredObjectChanged();
+    emit selectedObjectChanged();
+    emit selectionRangeChanged();
     emit modelChanged();
     update();
 }

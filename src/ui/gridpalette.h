@@ -83,6 +83,12 @@ public:
         _timer.start();
     }
 
+    void stop() {
+        _index = -1;
+        _opacity = 0.0;
+        _timer.stop();
+    }
+
     bool activeFor(int index) const {
         return _index >= 0 && _index == index && _opacity > 0.0;
     }

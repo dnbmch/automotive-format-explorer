@@ -1,7 +1,6 @@
 #include "sessions/mdf4documentsession.h"
 
 #include "models/signalplotmodel.h"
-#include "sessions/mdf4detailpresenter.h"
 #include "sessions/presentertext.h"
 
 #include <QObject>
@@ -121,11 +120,11 @@ Mdf4DocumentSession::Mdf4DocumentSession(QString displayName,
                          std::move(sourcePath),
                          std::move(diagnostics)),
       _metadata(std::move(metadata)),
+      _presenter(*_metadata),
       _read(std::move(read)),
       _plot_model(std::make_unique<SignalPlotModel>()) {
     QObject::connect(&_read_watcher, &QFutureWatcher<mdf4::ReadResult>::finished,
                      &_read_watcher, [this] { onReadFinished(); });
-    setDetailPresenter(std::make_unique<Mdf4DetailPresenter>(*_metadata));
     buildTree();
 }
 
@@ -151,21 +150,30 @@ QAbstractListModel* Mdf4DocumentSession::centerPanelModel() {
 }
 
 void Mdf4DocumentSession::selectNode(quint64 key) {
-    AdapterSessionBase::selectNode(key);
-
-    const NodeBinding* binding = _registry.resolve(NodeRef{FormatId::MDF4, key});
-    if (!binding || !std::holds_alternative<Mdf4Path>(binding->payload)) {
+    const auto it = _paths.find(key);
+    if (it == _paths.end()) {
+        _detail_model.setSelection({}, {});
         clearPlot();
         return;
     }
 
-    const Mdf4Path path = std::get<Mdf4Path>(binding->payload);
+    const Mdf4Path path = it->second;
+    _detail_model.setSelection(_presenter.buildDetails(path),
+                               [this, path] { return _presenter.buildRawJson(path); });
     if (path.kind != Mdf4EntityKind::Channel) {
         clearPlot();
         return;
     }
 
     selectChannel(path);
+}
+
+TreeItem* Mdf4DocumentSession::appendEntity(TreeItem* parent, const QString& title,
+                                            const QString& subtitle, const QString& iconKey,
+                                            SemanticKind semanticKind, Mdf4Path path) {
+    TreeItem* item = appendNode(parent, title, subtitle, iconKey, semanticKind, true);
+    _paths.emplace(item->nodeKey, path);
+    return item;
 }
 
 void Mdf4DocumentSession::moveModelsToThread(QThread* thread) {
@@ -179,26 +187,24 @@ void Mdf4DocumentSession::buildTree() {
     root->title = displayName();
     root->semanticKind = SemanticKind::Root;
 
-    TreeItem* file = appendNode(
+    TreeItem* file = appendEntity(
         root.get(),
         displayName(),
         _metadata->version().empty() ? QStringLiteral("MDF4")
                                      : QStringLiteral("MDF %1").arg(text(_metadata->version())),
         QStringLiteral("file"),
         SemanticKind::Root,
-        NodeBinding{SemanticKind::Root, Mdf4Path{Mdf4EntityKind::File, -1, -1}, true});
+        Mdf4Path{Mdf4EntityKind::File, -1, -1});
 
     for (int groupIndex = 0; groupIndex < _metadata->groups_size(); ++groupIndex) {
         const auto& group = _metadata->groups(groupIndex);
-        TreeItem* groupItem = appendNode(
+        TreeItem* groupItem = appendEntity(
             file,
             groupTitle(group, groupIndex),
             QStringLiteral("%1 samples").arg(group.cycle_count()),
             QStringLiteral("channel-group"),
             SemanticKind::Section,
-            NodeBinding{SemanticKind::Section,
-                        Mdf4Path{Mdf4EntityKind::ChannelGroup, groupIndex, -1},
-                        true});
+            Mdf4Path{Mdf4EntityKind::ChannelGroup, groupIndex, -1});
 
         for (int channelIndex = 0; channelIndex < group.channels_size(); ++channelIndex) {
             const auto& channel = group.channels(channelIndex);
@@ -208,16 +214,14 @@ void Mdf4DocumentSession::buildTree() {
             } else if (!channel.decodable()) {
                 semanticKind = SemanticKind::Diagnostic;
             }
-            appendNode(
+            appendEntity(
                 groupItem,
                 channelTitle(channel, channelIndex),
                 channelSubtitle(channel),
                 channel.decodable() ? QStringLiteral("channel")
                                     : QStringLiteral("channel-unsupported"),
                 semanticKind,
-                NodeBinding{semanticKind,
-                            Mdf4Path{Mdf4EntityKind::Channel, groupIndex, channelIndex},
-                            true});
+                Mdf4Path{Mdf4EntityKind::Channel, groupIndex, channelIndex});
         }
     }
 

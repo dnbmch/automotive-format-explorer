@@ -1,5 +1,4 @@
 #include "sessions/a2ldocumentsession.h"
-#include "sessions/a2ldetailpresenter.h"
 #include "models/memorymapmodel.h"
 
 #pragma push_macro("signals")
@@ -21,13 +20,32 @@ A2lDocumentSession::A2lDocumentSession(QString displayName,
                          std::move(displayName),
                          std::move(sourcePath),
                          std::move(diagnostics)),
-      _document(std::move(document)) {
-    setDetailPresenter(std::make_unique<A2lDetailPresenter>(_document));
+      _document(std::move(document)),
+      _presenter(_document) {
     buildTree();
     buildMemoryMap();
 }
 
 A2lDocumentSession::~A2lDocumentSession() = default;
+
+void A2lDocumentSession::selectNode(quint64 key) {
+    const auto it = _paths.find(key);
+    if (it == _paths.end()) {
+        _detail_model.setSelection({}, {});
+        return;
+    }
+    const A2lPath path = it->second;
+    _detail_model.setSelection(_presenter.buildDetails(path),
+                               [this, path] { return _presenter.buildRawJson(path); });
+}
+
+TreeItem* A2lDocumentSession::appendEntity(TreeItem* parent, const QString& title,
+                                           const QString& subtitle, const QString& iconKey,
+                                           A2lPath path) {
+    TreeItem* item = appendNode(parent, title, subtitle, iconKey, SemanticKind::Entity, true);
+    _paths.emplace(item->nodeKey, path);
+    return item;
+}
 
 QUrl A2lDocumentSession::centerPanelSource() const {
     if (_memory_map_model && _memory_map_model->totalObjectCount() > 0) {
@@ -367,14 +385,11 @@ void A2lDocumentSession::buildTree() {
 
     for (int moduleIndex = 0; moduleIndex < _document.modules_size(); ++moduleIndex) {
         const auto& module = _document.modules(moduleIndex);
-        TreeItem* moduleItem = appendNode(modulesSection,
-                                          text(module.name()),
-                                          text(module.long_identifier()),
-                                          QStringLiteral("module"),
-                                          SemanticKind::Entity,
-                                          NodeBinding{SemanticKind::Entity,
-                                                      A2lPath{A2lEntityKind::Module, moduleIndex, -1, -1},
-                                                      true});
+        TreeItem* moduleItem = appendEntity(modulesSection,
+                                            text(module.name()),
+                                            text(module.long_identifier()),
+                                            QStringLiteral("module"),
+                                            A2lPath{A2lEntityKind::Module, moduleIndex, -1, -1});
 
         if (module.measurements_size() > 0) {
             TreeItem* section = appendNode(moduleItem,
@@ -384,17 +399,12 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.measurements_size(); ++i) {
                 const auto& item = module.measurements(i);
-                TreeItem* node = appendNode(section,
+                TreeItem* node = appendEntity(section,
                            text(item.name()),
                            text(a2l::DataType_Name(item.datatype())),
                            QStringLiteral("measurement"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity,
-                                       A2lPath{A2lEntityKind::Measurement, moduleIndex, i, -1},
-                                       true});
-                if (node->nodeKey) {
-                    _tree_node_keys[{static_cast<int>(A2lEntityKind::Measurement), moduleIndex, i}] = node->nodeKey;
-                }
+                           A2lPath{A2lEntityKind::Measurement, moduleIndex, i, -1});
+                _tree_node_keys[{static_cast<int>(A2lEntityKind::Measurement), moduleIndex, i}] = node->nodeKey;
             }
         }
 
@@ -406,17 +416,12 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.characteristics_size(); ++i) {
                 const auto& item = module.characteristics(i);
-                TreeItem* node = appendNode(section,
+                TreeItem* node = appendEntity(section,
                            text(item.name()),
                            text(a2l::CharacteristicType_Name(item.type())),
                            QStringLiteral("characteristic"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity,
-                                       A2lPath{A2lEntityKind::Characteristic, moduleIndex, i, -1},
-                                       true});
-                if (node->nodeKey) {
-                    _tree_node_keys[{static_cast<int>(A2lEntityKind::Characteristic), moduleIndex, i}] = node->nodeKey;
-                }
+                           A2lPath{A2lEntityKind::Characteristic, moduleIndex, i, -1});
+                _tree_node_keys[{static_cast<int>(A2lEntityKind::Characteristic), moduleIndex, i}] = node->nodeKey;
             }
         }
 
@@ -428,17 +433,12 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.axis_points_size(); ++i) {
                 const auto& item = module.axis_points(i);
-                TreeItem* node = appendNode(section,
+                TreeItem* node = appendEntity(section,
                            text(item.name()),
                            text(item.record_layout_ref()),
                            QStringLiteral("axispt"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity,
-                                       A2lPath{A2lEntityKind::AxisPts, moduleIndex, i, -1},
-                                       true});
-                if (node->nodeKey) {
-                    _tree_node_keys[{static_cast<int>(A2lEntityKind::AxisPts), moduleIndex, i}] = node->nodeKey;
-                }
+                           A2lPath{A2lEntityKind::AxisPts, moduleIndex, i, -1});
+                _tree_node_keys[{static_cast<int>(A2lEntityKind::AxisPts), moduleIndex, i}] = node->nodeKey;
             }
         }
 
@@ -450,14 +450,11 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.compu_methods_size(); ++i) {
                 const auto& item = module.compu_methods(i);
-                appendNode(section,
-                           text(item.name()),
-                           text(a2l::ConversionType_Name(item.conversion_type())),
-                           QStringLiteral("compumethod"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity,
-                                       A2lPath{A2lEntityKind::CompuMethod, moduleIndex, i, -1},
-                                       true});
+                appendEntity(section,
+                             text(item.name()),
+                             text(a2l::ConversionType_Name(item.conversion_type())),
+                             QStringLiteral("compumethod"),
+                             A2lPath{A2lEntityKind::CompuMethod, moduleIndex, i, -1});
             }
         }
 
@@ -469,14 +466,11 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.record_layouts_size(); ++i) {
                 const auto& item = module.record_layouts(i);
-                appendNode(section,
-                           text(item.name()),
-                           QStringLiteral("%1 components").arg(item.components_size()),
-                           QStringLiteral("recordlayout"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity,
-                                       A2lPath{A2lEntityKind::RecordLayout, moduleIndex, i, -1},
-                                       true});
+                appendEntity(section,
+                             text(item.name()),
+                             QStringLiteral("%1 components").arg(item.components_size()),
+                             QStringLiteral("recordlayout"),
+                             A2lPath{A2lEntityKind::RecordLayout, moduleIndex, i, -1});
             }
         }
 
@@ -488,14 +482,11 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.units_size(); ++i) {
                 const auto& item = module.units(i);
-                appendNode(section,
-                           text(item.name()),
-                           text(item.display()),
-                           QStringLiteral("unit"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity,
-                                       A2lPath{A2lEntityKind::Unit, moduleIndex, i, -1},
-                                       true});
+                appendEntity(section,
+                             text(item.name()),
+                             text(item.display()),
+                             QStringLiteral("unit"),
+                             A2lPath{A2lEntityKind::Unit, moduleIndex, i, -1});
             }
         }
 
@@ -507,17 +498,14 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.functions_size(); ++i) {
                 const auto& item = module.functions(i);
-                appendNode(section,
-                           text(item.name()),
-                           QStringLiteral("%1 refs").arg(item.in_measurements_size() +
-                                                         item.out_measurements_size() +
-                                                         item.def_characteristics_size() +
-                                                         item.ref_characteristics_size()),
-                           QStringLiteral("function"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity,
-                                       A2lPath{A2lEntityKind::Function, moduleIndex, i, -1},
-                                       true});
+                appendEntity(section,
+                             text(item.name()),
+                             QStringLiteral("%1 refs").arg(item.in_measurements_size() +
+                                                           item.out_measurements_size() +
+                                                           item.def_characteristics_size() +
+                                                           item.ref_characteristics_size()),
+                             QStringLiteral("function"),
+                             A2lPath{A2lEntityKind::Function, moduleIndex, i, -1});
             }
         }
 
@@ -529,14 +517,11 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.groups_size(); ++i) {
                 const auto& item = module.groups(i);
-                appendNode(section,
-                           text(item.name()),
-                           item.has_root() && item.root() ? QStringLiteral("root") : QString(),
-                           QStringLiteral("group"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity,
-                                       A2lPath{A2lEntityKind::Group, moduleIndex, i, -1},
-                                       true});
+                appendEntity(section,
+                             text(item.name()),
+                             item.has_root() && item.root() ? QStringLiteral("root") : QString(),
+                             QStringLiteral("group"),
+                             A2lPath{A2lEntityKind::Group, moduleIndex, i, -1});
             }
         }
 
@@ -554,24 +539,18 @@ void A2lDocumentSession::buildTree() {
                                                    QStringLiteral("protocols"),
                                                    SemanticKind::Section);
             if (hasXcp) {
-                appendNode(protocolSection,
-                           QStringLiteral("XCP"),
-                           QStringLiteral("module IF_DATA"),
-                           QStringLiteral("xcp"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity,
-                                       A2lPath{A2lEntityKind::XcpSummary, moduleIndex, -1, -1},
-                                       true});
+                appendEntity(protocolSection,
+                             QStringLiteral("XCP"),
+                             QStringLiteral("module IF_DATA"),
+                             QStringLiteral("xcp"),
+                             A2lPath{A2lEntityKind::XcpSummary, moduleIndex, -1, -1});
             }
             if (hasCcp) {
-                appendNode(protocolSection,
-                           QStringLiteral("CCP"),
-                           QStringLiteral("module IF_DATA"),
-                           QStringLiteral("ccp"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity,
-                                       A2lPath{A2lEntityKind::CcpSummary, moduleIndex, -1, -1},
-                                       true});
+                appendEntity(protocolSection,
+                             QStringLiteral("CCP"),
+                             QStringLiteral("module IF_DATA"),
+                             QStringLiteral("ccp"),
+                             A2lPath{A2lEntityKind::CcpSummary, moduleIndex, -1, -1});
             }
         }
 
@@ -593,17 +572,11 @@ void A2lDocumentSession::buildTree() {
                                                SemanticKind::Section);
                 for (int i = 0; i < module.typedef_characteristics_size(); ++i) {
                     const auto& item = module.typedef_characteristics(i);
-                    appendNode(section,
-                               text(item.name()),
-                               text(a2l::CharacteristicType_Name(item.type())),
-                               QStringLiteral("typedefcharacteristic"),
-                               SemanticKind::Entity,
-                               NodeBinding{SemanticKind::Entity,
-                                           A2lPath{A2lEntityKind::TypedefItem,
-                                                   moduleIndex,
-                                                   i,
-                                                   kTypedefCharacteristicCategory},
-                                           true});
+                    appendEntity(section,
+                                 text(item.name()),
+                                 text(a2l::CharacteristicType_Name(item.type())),
+                                 QStringLiteral("typedefcharacteristic"),
+                                 A2lPath{A2lEntityKind::TypedefItem, moduleIndex, i, kTypedefCharacteristicCategory});
                 }
             }
 
@@ -615,17 +588,11 @@ void A2lDocumentSession::buildTree() {
                                                SemanticKind::Section);
                 for (int i = 0; i < module.typedef_structures_size(); ++i) {
                     const auto& item = module.typedef_structures(i);
-                    appendNode(section,
-                               text(item.name()),
-                               QStringLiteral("%1 components").arg(item.components_size()),
-                               QStringLiteral("typedefstructure"),
-                               SemanticKind::Entity,
-                               NodeBinding{SemanticKind::Entity,
-                                           A2lPath{A2lEntityKind::TypedefItem,
-                                                   moduleIndex,
-                                                   i,
-                                                   kTypedefStructureCategory},
-                                           true});
+                    appendEntity(section,
+                                 text(item.name()),
+                                 QStringLiteral("%1 components").arg(item.components_size()),
+                                 QStringLiteral("typedefstructure"),
+                                 A2lPath{A2lEntityKind::TypedefItem, moduleIndex, i, kTypedefStructureCategory});
                 }
             }
 
@@ -637,17 +604,11 @@ void A2lDocumentSession::buildTree() {
                                                SemanticKind::Section);
                 for (int i = 0; i < module.typedef_axes_size(); ++i) {
                     const auto& item = module.typedef_axes(i);
-                    appendNode(section,
-                               text(item.name()),
-                               text(item.input_quantity()),
-                               QStringLiteral("typedefaxis"),
-                               SemanticKind::Entity,
-                               NodeBinding{SemanticKind::Entity,
-                                           A2lPath{A2lEntityKind::TypedefItem,
-                                                   moduleIndex,
-                                                   i,
-                                                   kTypedefAxisCategory},
-                                           true});
+                    appendEntity(section,
+                                 text(item.name()),
+                                 text(item.input_quantity()),
+                                 QStringLiteral("typedefaxis"),
+                                 A2lPath{A2lEntityKind::TypedefItem, moduleIndex, i, kTypedefAxisCategory});
                 }
             }
 
@@ -659,27 +620,21 @@ void A2lDocumentSession::buildTree() {
                                                SemanticKind::Section);
                 for (int i = 0; i < module.instances_size(); ++i) {
                     const auto& item = module.instances(i);
-                    appendNode(section,
-                               text(item.name()),
-                               text(item.type_ref()),
-                               QStringLiteral("instance"),
-                               SemanticKind::Entity,
-                               NodeBinding{SemanticKind::Entity,
-                                           A2lPath{A2lEntityKind::Instance, moduleIndex, i, -1},
-                                           true});
+                    appendEntity(section,
+                                 text(item.name()),
+                                 text(item.type_ref()),
+                                 QStringLiteral("instance"),
+                                 A2lPath{A2lEntityKind::Instance, moduleIndex, i, -1});
                 }
             }
         }
 
         if (module.has_variant_coding()) {
-            appendNode(moduleItem,
-                       QStringLiteral("Variant Coding"),
-                       QStringLiteral("%1 criteria").arg(module.variant_coding().var_criteria_size()),
-                       QStringLiteral("variantcoding"),
-                       SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity,
-                                   A2lPath{A2lEntityKind::VariantCoding, moduleIndex, -1, -1},
-                                   true});
+            appendEntity(moduleItem,
+                         QStringLiteral("Variant Coding"),
+                         QStringLiteral("%1 criteria").arg(module.variant_coding().var_criteria_size()),
+                         QStringLiteral("variantcoding"),
+                         A2lPath{A2lEntityKind::VariantCoding, moduleIndex, -1, -1});
         }
     }
 

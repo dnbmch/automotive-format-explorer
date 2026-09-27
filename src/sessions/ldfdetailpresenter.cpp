@@ -60,12 +60,7 @@ QString ldfdetail::scheduleEntryLabel(const ldf::ScheduleEntry& entry) {
     return {};
 }
 
-QList<DetailSection> LdfDetailPresenter::buildDetails(const NodeBinding& binding) const {
-    if (!std::holds_alternative<LdfPath>(binding.payload)) {
-        return {};
-    }
-
-    const LdfPath path = std::get<LdfPath>(binding.payload);
+QList<DetailSection> LdfDetailPresenter::buildDetails(const LdfPath& path) const {
     switch (path.kind) {
     case LdfEntityKind::Overview:
         return overviewDetails();
@@ -100,12 +95,7 @@ QList<DetailSection> LdfDetailPresenter::buildDetails(const NodeBinding& binding
     return {};
 }
 
-QString LdfDetailPresenter::buildRawJson(const NodeBinding& binding) const {
-    if (!std::holds_alternative<LdfPath>(binding.payload)) {
-        return {};
-    }
-
-    const LdfPath path = std::get<LdfPath>(binding.payload);
+QString LdfDetailPresenter::buildRawJson(const LdfPath& path) const {
     const google::protobuf::Message* msg = nullptr;
     int i = path.primaryIndex;
     int j = path.secondaryIndex;

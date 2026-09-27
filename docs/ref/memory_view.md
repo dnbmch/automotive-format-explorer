@@ -186,8 +186,8 @@ For Measurements with `bit_mask`, the footprint is the byte(s) containing the ma
 - MemorySegment list with segment selector (dropdown when multiple segments), synthetic segment fallback
 - Object filtering: Characteristics + AxisPts always included, Measurements only with `ecu_address`
 - Sorted object intervals with one byte query (`MemoryMapModel::queryBytes`) for painting,
-  overlap and hit-testing; nothing is stored per byte, so every byte of a segment of any
-  size is shown and selectable
+  overlap and hit-testing; retained storage follows object count, with per-byte data
+  only for the visible tile. No 16 MiB cap; multi-GiB spans are covered by grid tests
 - Tier 1 + Tier 2 size computation (VALUE, MEASUREMENT, CURVE, MAP, AXIS_PTS)
 - Colored cells, address gutter, hover tooltips (name, type, address, size,
   record layout, conversion)
@@ -217,7 +217,8 @@ navigation are designed in
 - The memory view is read-only visualization — no hex editing
 - All data comes from the already-parsed protobuf, no file re-reading
 - RecordLayout size computation is tiered — see Size Calculation section. Each object is placed at its own known address, so approximate sizes cause visual fuzziness at one object's boundary, not cascading errors
-- **Performance**: each paint queries only the bytes of the visible rows, so its cost follows the viewport and the objects reaching into it, never the segment size. A derived segment spanning gigabytes (objects in RAM and flash, no `MemorySegment`) scrolls and paints like a small one: row geometry is 64-bit, and object ends saturate at the top of the address space. Hit-testing is the same query for one byte
+- **Performance**: each paint allocates a tile for the visible rows. Query work follows that tile and the candidate interval range selected by the prefix maximum ends; a long early interval can keep already-ended objects in that scan. There is no allocation proportional to the segment span. Hit-testing uses the same query for one byte
+- **Coordinate limits**: row counts and interval arithmetic support multi-GiB spans, and ends saturate at the top of the address space. UI scrolling uses floating coordinates and selection uses signed byte offsets, so this is not a guarantee of precise interaction over every possible 64-bit span. A high base address alone does not imply a large span
 - **Renderer upgrade path**: if QQuickPaintedItem becomes a bottleneck (full repaint on scroll), swap to QQuickItem + QSGNode for incremental scene graph updates. The data model and QML interface stay the same — only the paint implementation changes
 - Color scheme should respect the app's existing Theme.qml dark palette
 - **AxisPts ownership**: when a Characteristic's AxisDescr has `AXIS_PTS_REF` pointing to a standalone AxisPts, the AxisPts is rendered as its own separate block (it occupies its own address range). This is not an overlap — do not show hatched pattern for this case

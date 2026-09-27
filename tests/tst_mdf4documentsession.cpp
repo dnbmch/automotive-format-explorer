@@ -1,8 +1,11 @@
+#include "core/appcontroller.h"
 #include "models/signalplotmodel.h"
 #include "models/treemodel.h"
 #include "sessions/mdf4documentsession.h"
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QSignalSpy>
 #include <QTest>
 #include <QThread>
 #include <QThreadPool>
@@ -195,6 +198,22 @@ std::unique_ptr<Mdf4DocumentSession> openSession(const std::shared_ptr<Reads>& r
                  std::uint64_t count) { return source->read({group, channel, first, count}); });
 }
 
+// Opens through the controller: the adapter hands over a session whose reads
+// the test gates.
+class SessionAdapter final : public FormatAdapter {
+public:
+    explicit SessionAdapter(std::shared_ptr<Reads> reads) : _reads(std::move(reads)) {}
+
+    LoadResult load(const QString&) const override {
+        LoadResult result;
+        result.session = openSession(_reads);
+        return result;
+    }
+
+private:
+    std::shared_ptr<Reads> _reads;
+};
+
 SignalPlotModel* plotOf(Mdf4DocumentSession& session) {
     return static_cast<SignalPlotModel*>(session.centerPanelModel());
 }
@@ -285,6 +304,7 @@ private slots:
     void closeDiscardsFinishedUndeliveredRead();
     void selectionFromCompletionNotification();
     void closeFromCompletionNotification();
+    void closingTabWithReadInFlight();
 };
 
 void TestMdf4DocumentSession::readUsesMetadataRangeAndCachesResult() {
@@ -685,6 +705,42 @@ void TestMdf4DocumentSession::closeFromCompletionNotification() {
              (QStringList{QStringLiteral("read 0 returned"), QStringLiteral("read 2 returned"),
                           QStringLiteral("source released")}));
     QCOMPARE(reads->maxConcurrent(), 1);
+    QVERIFY(!reads->timedOut());
+}
+
+// A tab closed while its channel reads: the close notifies while the session is
+// alive; then the session waits for the read and is destroyed, and the finished
+// read reaches nobody.
+void TestMdf4DocumentSession::closingTabWithReadInFlight() {
+    auto reads = std::make_shared<Reads>();
+    FormatList formats;
+    formats.push_back({FormatId::MDF4, {QStringLiteral("mf4")}, std::make_unique<SessionAdapter>(reads)});
+    AppController controller(std::move(formats));
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+    controller.openFile(QUrl::fromLocalFile(QDir::temp().filePath(QStringLiteral("test.mf4"))));
+    QVERIFY(loaded.wait(10000));
+    auto* session = static_cast<Mdf4DocumentSession*>(controller.tabModel()->tabAt(0)->session());
+    QObject::connect(plotOf(*session), &QObject::destroyed, &controller,
+                     [reads] { reads->note(QStringLiteral("plot destroyed")); });
+    QObject::connect(&controller, &AppController::currentSessionChanged, &controller,
+                     [reads] { reads->note(QStringLiteral("tab closed")); });
+    Releaser releaser(reads);
+
+    controller.selectCurrentNode(channelKey(*session, Engine));
+    QVERIFY(reads->waitForReads(1));
+    reads->startTeardown();
+    controller.closeTab(0);
+
+    const QStringList events = reads->events();
+    const qsizetype closed = events.indexOf(QStringLiteral("tab closed"));
+    const qsizetype returned = events.indexOf(QStringLiteral("read %1 returned").arg(Engine));
+    const qsizetype destroyed = events.indexOf(QStringLiteral("plot destroyed"));
+    QVERIFY(closed >= 0 && returned >= 0);
+    QVERIFY(closed < destroyed);
+    QVERIFY(returned < destroyed);
+    QVERIFY(settle());
+    QCOMPARE(controller.tabModel()->rowCount(), 0);
+    QCOMPARE(reads->channels(), std::vector<std::uint32_t>{Engine});
     QVERIFY(!reads->timedOut());
 }
 

@@ -1,5 +1,4 @@
 #include "sessions/dbcdocumentsession.h"
-#include "sessions/dbcdetailpresenter.h"
 #include "models/signalmapmodel.h"
 
 #include <QStringList>
@@ -16,13 +15,32 @@ DbcDocumentSession::DbcDocumentSession(QString displayName,
                          std::move(displayName),
                          std::move(sourcePath),
                          std::move(diagnostics)),
-      _document(std::move(document)) {
-    setDetailPresenter(std::make_unique<DbcDetailPresenter>(_document));
+      _document(std::move(document)),
+      _presenter(_document) {
     buildTree();
     buildSignalMap();
 }
 
 DbcDocumentSession::~DbcDocumentSession() = default;
+
+void DbcDocumentSession::selectNode(quint64 key) {
+    const auto it = _paths.find(key);
+    if (it == _paths.end()) {
+        _detail_model.setSelection({}, {});
+        return;
+    }
+    const DbcPath path = it->second;
+    _detail_model.setSelection(_presenter.buildDetails(path),
+                               [this, path] { return _presenter.buildRawJson(path); });
+}
+
+TreeItem* DbcDocumentSession::appendEntity(TreeItem* parent, const QString& title,
+                                           const QString& subtitle, const QString& iconKey,
+                                           DbcPath path) {
+    TreeItem* item = appendNode(parent, title, subtitle, iconKey, SemanticKind::Entity, true);
+    _paths.emplace(item->nodeKey, path);
+    return item;
+}
 
 QUrl DbcDocumentSession::centerPanelSource() const {
     if (_signal_map_model && _signal_map_model->messageCount() > 0) {
@@ -50,12 +68,11 @@ void DbcDocumentSession::buildTree() {
         TreeItem* section = appendNode(root.get(), QStringLiteral("Nodes"), QString::number(_document.nodes_size()), QStringLiteral("nodes"), SemanticKind::Section);
         for (int i = 0; i < _document.nodes_size(); ++i) {
             const auto& node = _document.nodes(i);
-            appendNode(section,
-                       text(node.name()),
-                       node.comment().empty() ? QString() : QStringLiteral("commented"),
-                       QStringLiteral("node"),
-                       SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::Node, i, -1, -1}, true});
+            appendEntity(section,
+                         text(node.name()),
+                         node.comment().empty() ? QString() : QStringLiteral("commented"),
+                         QStringLiteral("node"),
+                         DbcPath{DbcEntityKind::Node, i});
         }
     }
 
@@ -63,22 +80,20 @@ void DbcDocumentSession::buildTree() {
         TreeItem* section = appendNode(root.get(), QStringLiteral("Messages"), QString::number(_document.messages_size()), QStringLiteral("messages"), SemanticKind::Section);
         for (int i = 0; i < _document.messages_size(); ++i) {
             const auto& message = _document.messages(i);
-            TreeItem* messageItem = appendNode(section,
-                                               text(message.name()),
-                                               QStringLiteral("%1  DLC=%2").arg(hexId(message.id())).arg(message.dlc()),
-                                               QStringLiteral("message"),
-                                               SemanticKind::Entity,
-                                               NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::Message, i, -1, -1}, true});
+            TreeItem* messageItem = appendEntity(section,
+                                                 text(message.name()),
+                                                 QStringLiteral("%1  DLC=%2").arg(hexId(message.id())).arg(message.dlc()),
+                                                 QStringLiteral("message"),
+                                                 DbcPath{DbcEntityKind::Message, i});
             _tree_node_keys[{static_cast<int>(DbcEntityKind::Message), i, -1}] = messageItem->nodeKey;
 
             for (int j = 0; j < message.signals_size(); ++j) {
                 const auto& signal = message.signals(j);
-                TreeItem* sigItem = appendNode(messageItem,
+                TreeItem* sigItem = appendEntity(messageItem,
                            text(signal.name()),
                            QStringLiteral("[%1|%2]").arg(signal.start_bit()).arg(signal.bit_length()),
                            QStringLiteral("signal"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::Signal, i, j, -1}, true});
+                           DbcPath{DbcEntityKind::Signal, i, j});
                 _tree_node_keys[{static_cast<int>(DbcEntityKind::Signal), i, j}] = sigItem->nodeKey;
             }
         }
@@ -88,12 +103,11 @@ void DbcDocumentSession::buildTree() {
         TreeItem* section = appendNode(root.get(), QStringLiteral("Value Tables"), QString::number(_document.value_tables_size()), QStringLiteral("valuetables"), SemanticKind::Section);
         for (int i = 0; i < _document.value_tables_size(); ++i) {
             const auto& table = _document.value_tables(i);
-            appendNode(section,
-                       text(table.name()),
-                       QString::number(table.entries_size()),
-                       QStringLiteral("valuetable"),
-                       SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::ValueTable, i, -1, -1}, true});
+            appendEntity(section,
+                         text(table.name()),
+                         QString::number(table.entries_size()),
+                         QStringLiteral("valuetable"),
+                         DbcPath{DbcEntityKind::ValueTable, i});
         }
     }
 
@@ -101,12 +115,11 @@ void DbcDocumentSession::buildTree() {
         TreeItem* section = appendNode(root.get(), QStringLiteral("Environment Variables"), QString::number(_document.environment_variables_size()), QStringLiteral("envvars"), SemanticKind::Section);
         for (int i = 0; i < _document.environment_variables_size(); ++i) {
             const auto& envVar = _document.environment_variables(i);
-            appendNode(section,
-                       text(envVar.name()),
-                       text(dbc::EnvironmentVariableType_Name(envVar.var_type())),
-                       QStringLiteral("envvar"),
-                       SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::EnvironmentVariable, i, -1, -1}, true});
+            appendEntity(section,
+                         text(envVar.name()),
+                         text(dbc::EnvironmentVariableType_Name(envVar.var_type())),
+                         QStringLiteral("envvar"),
+                         DbcPath{DbcEntityKind::EnvironmentVariable, i});
         }
     }
 
@@ -114,12 +127,11 @@ void DbcDocumentSession::buildTree() {
         TreeItem* section = appendNode(root.get(), QStringLiteral("Signal Groups"), QString::number(_document.signal_groups_size()), QStringLiteral("signalgroups"), SemanticKind::Section);
         for (int i = 0; i < _document.signal_groups_size(); ++i) {
             const auto& group = _document.signal_groups(i);
-            appendNode(section,
-                       text(group.name()),
-                       hexId(group.message_id()),
-                       QStringLiteral("signalgroup"),
-                       SemanticKind::Entity,
-                       NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::SignalGroup, i, -1, -1}, true});
+            appendEntity(section,
+                         text(group.name()),
+                         hexId(group.message_id()),
+                         QStringLiteral("signalgroup"),
+                         DbcPath{DbcEntityKind::SignalGroup, i});
         }
     }
 
@@ -130,12 +142,11 @@ void DbcDocumentSession::buildTree() {
             TreeItem* defs = appendNode(attributes, QStringLiteral("Definitions"), QString::number(_document.attribute_definitions_size()), QStringLiteral("attrdefs"), SemanticKind::Section);
             for (int i = 0; i < _document.attribute_definitions_size(); ++i) {
                 const auto& definition = _document.attribute_definitions(i);
-                appendNode(defs,
-                           text(definition.name()),
-                           text(dbc::AttributeScope_Name(definition.scope())),
-                           QStringLiteral("attrdef"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::AttributeDefinition, i, -1, -1}, true});
+                appendEntity(defs,
+                             text(definition.name()),
+                             text(dbc::AttributeScope_Name(definition.scope())),
+                             QStringLiteral("attrdef"),
+                             DbcPath{DbcEntityKind::AttributeDefinition, i});
             }
         }
 
@@ -143,12 +154,11 @@ void DbcDocumentSession::buildTree() {
             TreeItem* defaults = appendNode(attributes, QStringLiteral("Defaults"), QString::number(_document.attribute_defaults_size()), QStringLiteral("attrdefaults"), SemanticKind::Section);
             for (int i = 0; i < _document.attribute_defaults_size(); ++i) {
                 const auto& value = _document.attribute_defaults(i);
-                appendNode(defaults,
-                           text(value.name()),
-                           text(value.value()),
-                           QStringLiteral("attrdefault"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::AttributeDefault, i, -1, -1}, true});
+                appendEntity(defaults,
+                             text(value.name()),
+                             text(value.value()),
+                             QStringLiteral("attrdefault"),
+                             DbcPath{DbcEntityKind::AttributeDefault, i});
             }
         }
 
@@ -156,12 +166,11 @@ void DbcDocumentSession::buildTree() {
             TreeItem* values = appendNode(attributes, QStringLiteral("Global Values"), QString::number(_document.attribute_values_size()), QStringLiteral("attrvalues"), SemanticKind::Section);
             for (int i = 0; i < _document.attribute_values_size(); ++i) {
                 const auto& value = _document.attribute_values(i);
-                appendNode(values,
-                           text(value.name()),
-                           text(value.value()),
-                           QStringLiteral("attrvalue"),
-                           SemanticKind::Entity,
-                           NodeBinding{SemanticKind::Entity, DbcPath{DbcEntityKind::AttributeValue, i, -1, -1}, true});
+                appendEntity(values,
+                             text(value.name()),
+                             text(value.value()),
+                             QStringLiteral("attrvalue"),
+                             DbcPath{DbcEntityKind::AttributeValue, i});
             }
         }
     }
