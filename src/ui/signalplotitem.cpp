@@ -42,28 +42,29 @@ void SignalPlotItem::paint(QPainter* painter) {
     }
 
     drawAxes(painter, rect);
-    if (!_model || !_model->hasSeries()) {
+    const SignalPlotModel::State state =
+        _model ? _model->plotState() : SignalPlotModel::NoSignal;
+    if (state != SignalPlotModel::Overview && state != SignalPlotModel::Detail) {
         QString message = QStringLiteral("Select a plottable channel");
-        if (_model && _model->busy()) {
-            message = QStringLiteral("Decoding samples\u2026");
-        } else if (_model && !_model->placeholderText().isEmpty()) {
-            message = _model->placeholderText();
-        } else if (_model && !_model->name().isEmpty()) {
-            message = QStringLiteral("No samples available");
+        if (state != SignalPlotModel::NoSignal) {
+            message = _model->message();
+            if (state == SignalPlotModel::Pending && _model->progress() >= 0.0) {
+                message += QStringLiteral(" %1%").arg(qRound(_model->progress() * 100.0));
+            }
         }
         drawCenteredMessage(painter, rect, message);
         return;
     }
 
-    drawSeries(painter, rect);
-    drawCursor(painter, rect);
-
-    if (_model->busy()) {
-        QColor veil = _background;
-        veil.setAlpha(165);
-        painter->fillRect(rect, veil);
-        drawCenteredMessage(painter, rect, QStringLiteral("Decoding samples\u2026"));
+    painter->save();
+    painter->setClipRect(rect.adjusted(-1.0, -1.0, 1.0, 1.0));
+    if (state == SignalPlotModel::Detail) {
+        drawSamples(painter, rect);
+    } else {
+        drawColumns(painter, rect);
     }
+    painter->restore();
+    drawCursor(painter, rect);
 }
 
 SignalPlotModel* SignalPlotItem::model() const {
@@ -80,14 +81,11 @@ void SignalPlotItem::setModel(SignalPlotModel* model) {
 
     _model = model;
     if (_model) {
-        connect(_model, &SignalPlotModel::seriesChanged, this,
-                [this] { update(); });
-        connect(_model, &SignalPlotModel::viewChanged, this,
-                [this] { update(); });
-        connect(_model, &SignalPlotModel::busyChanged, this,
-                [this] { update(); });
-        connect(_model, &SignalPlotModel::cursorChanged, this,
-                [this] { update(); });
+        for (auto change : {&SignalPlotModel::contentChanged, &SignalPlotModel::stateChanged,
+                            &SignalPlotModel::busyChanged, &SignalPlotModel::viewChanged,
+                            &SignalPlotModel::cursorChanged}) {
+            connect(_model, change, this, [this] { update(); });
+        }
         connect(_model, &QObject::destroyed, this, &SignalPlotItem::onModelReplaced);
     }
     onModelReplaced();
@@ -108,6 +106,10 @@ void SignalPlotItem::onModelReplaced() {
 
 bool SignalPlotItem::panning() const {
     return _panning;
+}
+
+bool SignalPlotItem::interactive() const {
+    return _model && _model->hasSamples();
 }
 
 void SignalPlotItem::setColors(const QColor& background,
@@ -140,7 +142,7 @@ void SignalPlotItem::hoverLeaveEvent(QHoverEvent*) {
 }
 
 void SignalPlotItem::wheelEvent(QWheelEvent* event) {
-    if (!_model || !_model->hasSeries() || !plotRect().contains(event->position())) {
+    if (!interactive() || !plotRect().contains(event->position())) {
         event->ignore();
         return;
     }
@@ -161,7 +163,7 @@ void SignalPlotItem::wheelEvent(QWheelEvent* event) {
 }
 
 void SignalPlotItem::mousePressEvent(QMouseEvent* event) {
-    if (event->button() != Qt::LeftButton || !_model || !_model->hasSeries() ||
+    if (event->button() != Qt::LeftButton || !interactive() ||
         !plotRect().contains(event->position())) {
         event->ignore();
         return;
@@ -259,15 +261,19 @@ qreal SignalPlotItem::yForValue(double value, const QRectF& rect) const {
     return rect.bottom() - (value - _model->viewMinimum()) / span * rect.height();
 }
 
+// The cursor reports the pixel column under the pointer: its exact sample, or
+// the overview bins that column covers.
 void SignalPlotItem::updateCursorAt(const QPointF& position) {
     if (!_model) {
         return;
     }
-    if (!_model->hasSeries() || !plotRect().contains(position)) {
+    const QRectF rect = plotRect();
+    if (!_model->hasSamples() || !rect.contains(position)) {
         _model->clearCursor();
         return;
     }
-    _model->setCursorTime(timeAtX(position.x()));
+    const double halfPixel = (_model->viewEnd() - _model->viewStart()) / rect.width() * 0.5;
+    _model->setCursor(timeAtX(position.x()), halfPixel);
 }
 
 void SignalPlotItem::drawAxes(QPainter* painter, const QRectF& rect) const {
@@ -303,14 +309,14 @@ void SignalPlotItem::drawAxes(QPainter* painter, const QRectF& rect) const {
         } else if (labelRect.right() > width() - 2.0) {
             labelRect.moveRight(width() - 2.0);
         }
-        painter->drawText(labelRect,
-                          Qt::AlignHCenter | Qt::AlignTop, numberLabel(value));
+        painter->drawText(labelRect, Qt::AlignHCenter | Qt::AlignTop,
+                          SignalPlotModel::numberText(value));
     }
     for (int tick = 0; tick <= yTickCount; ++tick) {
         const qreal y = rect.bottom() - rect.height() * tick / yTickCount;
         const double value = yMinimum + (yMaximum - yMinimum) * tick / yTickCount;
         painter->drawText(QRectF(2.0, y - 10.0, kLeftMargin - 8.0, 20.0),
-                          Qt::AlignRight | Qt::AlignVCenter, numberLabel(value));
+                          Qt::AlignRight | Qt::AlignVCenter, SignalPlotModel::numberText(value));
     }
 
     painter->setPen(QPen(_axis, 1));
@@ -322,123 +328,136 @@ void SignalPlotItem::drawAxes(QPainter* painter, const QRectF& rect) const {
                       Qt::AlignHCenter | Qt::AlignTop, domainLabel);
 }
 
-void SignalPlotItem::drawSeries(QPainter* painter, const QRectF& rect) const {
-    const auto visible = _model->visibleSampleRange();
-    if (visible.first == visible.second) {
-        return;
+// One vertical line per pixel column, from its minimum to its maximum. Columns
+// stand alone: an overview's extrema are not consecutive samples.
+void SignalPlotItem::drawColumns(QPainter* painter, const QRectF& rect) const {
+    const std::vector<PlotColumn>& columns =
+        _model->columns(static_cast<int>(std::ceil(rect.width())));
+    std::vector<QLineF> lines;
+    lines.reserve(columns.size());
+    for (const PlotColumn& column : columns) {
+        const qreal x = xForTime(column.domain, rect);
+        lines.emplace_back(x, yForValue(column.minimum, rect), x, yForValue(column.maximum, rect));
     }
 
-    painter->save();
-    painter->setClipRect(rect.adjusted(-1.0, -1.0, 1.0, 1.0));
-
-    const std::size_t visibleCount = visible.second - visible.first;
-    if (visibleCount <= static_cast<std::size_t>(std::max(1.0, rect.width() * 2.0))) {
-        const PlotSeries& series = _model->series();
-        std::size_t first = visible.first;
-        std::size_t last = visible.second;
-        if (first > 0) {
-            --first;
-        }
-        if (last < series.time.size()) {
-            ++last;
-        }
-
-        QPainterPath path;
-        bool pathStarted = false;
-        for (std::size_t i = first; i < last; ++i) {
-            if (!std::isfinite(series.time[i]) || !std::isfinite(series.value[i])) {
-                pathStarted = false;
-                continue;
-            }
-            const QPointF point(xForTime(series.time[i], rect),
-                                yForValue(series.value[i], rect));
-            if (pathStarted) {
-                path.lineTo(point);
-            } else {
-                path.moveTo(point);
-                pathStarted = true;
-            }
-        }
-        QPen pen(_series_color, 1.5);
-        pen.setCosmetic(true);
-        pen.setCapStyle(Qt::RoundCap);
-        pen.setJoinStyle(Qt::RoundJoin);
-        painter->setPen(pen);
-        painter->drawPath(path);
-    } else {
-        const auto& columns = _model->buckets(static_cast<int>(std::ceil(rect.width())));
-        std::vector<QLineF> lines;
-        lines.reserve(columns.size());
-        for (const PlotBucket& bucket : columns) {
-            lines.emplace_back(xForTime(bucket.time, rect), yForValue(bucket.minimum, rect),
-                               xForTime(bucket.time, rect), yForValue(bucket.maximum, rect));
-        }
-
-        QPen pen(_series_color, 1.0);
-        pen.setCosmetic(true);
-        pen.setCapStyle(Qt::RoundCap);
-        painter->setPen(pen);
-        if (!lines.empty()) {
-            painter->drawLines(lines.data(), static_cast<int>(lines.size()));
-        }
+    QPen pen(_series_color, 1.0);
+    pen.setCosmetic(true);
+    pen.setCapStyle(Qt::RoundCap);
+    painter->setPen(pen);
+    if (!lines.empty()) {
+        painter->drawLines(lines.data(), static_cast<int>(lines.size()));
     }
-
-    painter->restore();
 }
 
-void SignalPlotItem::drawCursor(QPainter* painter, const QRectF& rect) const {
-    if (!_model || !_model->cursorVisible() ||
-        _model->cursorTime() < _model->viewStart() ||
-        _model->cursorTime() > _model->viewEnd()) {
+// Exact samples: a line through them while they are sparser than two per
+// pixel, one sample past each edge so it enters and leaves the view. A
+// nonfinite value breaks the line; a sample alone between breaks is a dot.
+void SignalPlotItem::drawSamples(QPainter* painter, const QRectF& rect) const {
+    const auto [first, last] = _model->visibleSampleRange();
+    if (last - first > static_cast<std::size_t>(std::max(1.0, rect.width() * 2.0))) {
+        drawColumns(painter, rect);
         return;
     }
 
-    const qreal x = xForTime(_model->cursorTime(), rect);
-    const bool finiteValue = std::isfinite(_model->cursorValue());
-    const qreal y = finiteValue
-        ? yForValue(_model->cursorValue(), rect) : rect.center().y();
+    const PlotWindow& window = *_model->window();
+    const std::size_t from = first > 0 ? first - 1 : 0;
+    const std::size_t to = std::min(last + 1, window.time.size());
+    QPen pen(_series_color, 1.5);
+    pen.setCosmetic(true);
+    pen.setCapStyle(Qt::RoundCap);
+    pen.setJoinStyle(Qt::RoundJoin);
+    painter->setPen(pen);
 
-    QPen crosshair(_cursor_color, 1.0, Qt::DashLine);
-    crosshair.setCosmetic(true);
-    painter->setPen(crosshair);
-    painter->drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
-    if (finiteValue) {
-        painter->drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
-        painter->setBrush(_cursor_color);
-        painter->setPen(Qt::NoPen);
-        painter->drawEllipse(QPointF(x, y), 3.5, 3.5);
+    QPainterPath path;
+    std::size_t run = 0;
+    QPointF lone;
+    for (std::size_t i = from; i < to; ++i) {
+        if (!std::isfinite(window.value[i])) {
+            if (run == 1) {
+                painter->drawPoint(lone);
+            }
+            run = 0;
+            continue;
+        }
+        const QPointF point(xForTime(window.time[i], rect), yForValue(window.value[i], rect));
+        if (run == 0) {
+            path.moveTo(point);
+        } else {
+            path.lineTo(point);
+        }
+        lone = point;
+        ++run;
+    }
+    if (run == 1) {
+        painter->drawPoint(lone);
+    }
+    painter->drawPath(path);
+}
+
+// An exact sample gets a crosshair on its point. Overview bins get a band over
+// the domain range they cover and a bar over their extrema, never a point: no
+// single sample is claimed.
+void SignalPlotItem::drawCursor(QPainter* painter, const QRectF& rect) const {
+    if (!_model || !_model->cursorVisible()) {
+        return;
+    }
+    const PlotCursor& cursor = _model->cursor();
+    if (cursor.lastDomain < _model->viewStart() || cursor.firstDomain > _model->viewEnd()) {
+        return;
     }
 
-    QString valueText = numberLabel(_model->cursorValue());
-    if (!_model->unit().isEmpty()) {
-        valueText += QStringLiteral(" %1").arg(_model->unit());
+    qreal x = 0.0;
+    qreal y = rect.center().y();
+    if (cursor.exact) {
+        x = xForTime(cursor.firstDomain, rect);
+        const bool finite = std::isfinite(cursor.value);
+        if (finite) {
+            y = yForValue(cursor.value, rect);
+        }
+        QPen crosshair(_cursor_color, 1.0, Qt::DashLine);
+        crosshair.setCosmetic(true);
+        painter->setPen(crosshair);
+        painter->drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+        if (finite) {
+            painter->drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+            painter->setBrush(_cursor_color);
+            painter->setPen(Qt::NoPen);
+            painter->drawEllipse(QPointF(x, y), 3.5, 3.5);
+        }
+    } else {
+        const qreal left = std::clamp(xForTime(cursor.firstDomain, rect), rect.left(), rect.right());
+        const qreal right = std::clamp(xForTime(cursor.lastDomain, rect), rect.left(), rect.right());
+        QColor band = _cursor_color;
+        band.setAlpha(48);
+        painter->fillRect(QRectF(QPointF(left, rect.top()),
+                                 QPointF(std::max(right, left + 1.0), rect.bottom())),
+                          band);
+        x = (left + right) * 0.5;
+        if (cursor.finiteCount > 0) {
+            const qreal top = yForValue(cursor.maximum, rect);
+            QPen extent(_cursor_color, 2.0);
+            extent.setCosmetic(true);
+            extent.setCapStyle(Qt::RoundCap);
+            painter->setPen(extent);
+            painter->drawLine(QPointF(x, top), QPointF(x, yForValue(cursor.minimum, rect)));
+            y = top;
+        }
     }
-    QString domainText = QStringLiteral("%1  %2")
-        .arg(_model->domainName().isEmpty() ? QStringLiteral("Domain")
-                                           : _model->domainName(),
-             numberLabel(_model->cursorTime()));
-    if (!_model->domainUnit().isEmpty()) {
-        domainText += QStringLiteral(" %1").arg(_model->domainUnit());
-    }
-    const QString text = QStringLiteral("%1\n%2").arg(domainText, valueText);
 
+    const QString text = _model->cursorLines().join(QLatin1Char('\n'));
     QFont font(QStringLiteral("Consolas"));
     font.setPixelSize(10);
     painter->setFont(font);
     const QFontMetrics metrics(font);
-    QRectF labelRect(QPointF(0.0, 0.0), metrics.size(Qt::TextSingleLine, valueText));
-    labelRect.setWidth(std::max(labelRect.width(),
-                                static_cast<qreal>(metrics.horizontalAdvance(domainText))));
-    labelRect.setHeight(metrics.height() * 2 + 10.0);
-    labelRect.setWidth(labelRect.width() + 14.0);
+    QRectF labelRect = metrics.boundingRect(QRect(), Qt::AlignLeft, text);
+    labelRect.setSize(labelRect.size() + QSizeF(14.0, 10.0));
 
     qreal labelX = x + 10.0;
     if (labelX + labelRect.width() > rect.right()) {
         labelX = x - labelRect.width() - 10.0;
     }
     labelX = std::clamp(labelX, rect.left() + 2.0,
-                        std::max(rect.left() + 2.0,
-                                 rect.right() - labelRect.width() - 2.0));
+                        std::max(rect.left() + 2.0, rect.right() - labelRect.width() - 2.0));
     qreal labelY = y - labelRect.height() - 10.0;
     if (labelY < rect.top()) {
         labelY = y + 10.0;
@@ -453,8 +472,8 @@ void SignalPlotItem::drawCursor(QPainter* painter, const QRectF& rect) const {
     painter->setPen(QPen(_grid, 1));
     painter->drawRoundedRect(labelRect, 3.0, 3.0);
     painter->setPen(_axis.lighter(130));
-    painter->drawText(labelRect.adjusted(7.0, 4.0, -7.0, -4.0),
-                      Qt::AlignLeft | Qt::AlignVCenter, text);
+    painter->drawText(labelRect.adjusted(7.0, 5.0, -7.0, -5.0), Qt::AlignLeft | Qt::AlignVCenter,
+                      text);
 }
 
 void SignalPlotItem::drawCenteredMessage(QPainter* painter, const QRectF& rect,
@@ -463,16 +482,5 @@ void SignalPlotItem::drawCenteredMessage(QPainter* painter, const QRectF& rect,
     font.setPixelSize(11);
     painter->setFont(font);
     painter->setPen(_axis);
-    painter->drawText(rect, Qt::AlignCenter, message);
-}
-
-QString SignalPlotItem::numberLabel(double value) {
-    if (!std::isfinite(value)) {
-        return QStringLiteral("\u2014");
-    }
-    const double magnitude = std::abs(value);
-    if ((magnitude >= 1.0e6) || (magnitude > 0.0 && magnitude < 1.0e-4)) {
-        return QString::number(value, 'e', 3);
-    }
-    return QString::number(value, 'g', 6);
+    painter->drawText(rect, Qt::AlignCenter | Qt::TextWordWrap, message);
 }

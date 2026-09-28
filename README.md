@@ -87,18 +87,23 @@ Bit-level visualization of CAN and LIN message payloads. Each signal is rendered
 
 ### Signal Plot (MDF4)
 
-Select a numeric MDF4 channel to decode and plot physical values against its
-resolved time master, or against the reader's record-index fallback when no time
-master exists. File open remains metadata-only; channel samples are decoded over
-an explicit range on a worker and held in a size-bounded cache.
+Select a numeric MDF4 channel to plot its physical values against its time
+master, or against the sample index when its group has none. File open remains
+metadata-only. A worker scans the whole channel into an overview of at most 4,096
+bins, so every sample of a long recording is represented; zooming in reads the exact
+samples of the view, at most 4 Mi at a time. Results stay within a 256 MiB allowance
+per open file.
 
-- Responsive min/max bucketing for dense and million-sample recordings
-- Direct polylines at sparse zoom levels so individual samples remain exact
-- Wheel zoom around the pointer and drag pan
-- Nearest-sample cursor readout with correctly labeled domain, value, and units
+- The overview draws each column's minimum to maximum, never joining columns as if
+  they were samples; exact samples are drawn as a line, or as columns when denser
+  than the pixels
+- Hover reports a column's time and sample range with its extrema, or an exact
+  sample's time, value and index
+- Wheel zoom around the pointer, drag pan, and reset to the whole recording
+- Progress while reading; a newer selection or view cancels obsolete reads
+- A recording that ends early is marked incomplete with the samples it holds
 - Unsupported channels stay browsable and explain why they are not plottable
 - A group's master channel is listed as its axis rather than offered as a signal
-- Late worker results are kept for their channel but never replace a newer selection
 
 ### Bidirectional Selection
 

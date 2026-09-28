@@ -1,9 +1,104 @@
 # automotive-format-explorer — handoff
 
+## 2026-09-28 — bounded recording viewer corrective re-review accepted — OPEN
+
+The [parent re-review](../../docs/audit/bounded_recording_viewer_review.md) closes
+all five I2/I3 findings and accepts the corrected uncommitted candidate. The parent
+independently passed Reader 24/24, Explorer PACKAGE 18/18 and the original session
+and production-QML reproducers. The 35-file batch delta from the G2 snapshot and all
+122 packet hashes matched. Packet: `build-i2i3-fix/final/packet.md`; parent evidence:
+`build-i2i3-parent-rereview/`, both at the workspace root.
+
+G2 stays accepted and uncommitted; land it before I2/I3 when authorized. Nothing was
+committed, pushed, tagged or released during re-review. BL-V3 remains explicit
+pre-existing detail-notification debt for final consolidation. The reference-laptop,
+platform and operator checks below remain open. Earlier performance measurements
+have not been repeated on the corrected decoder.
+
+## 2026-09-27 — bounded recording viewer, Explorer side (workspace batch I2/I3) — OPEN
+
+Uncommitted, on top of the uncommitted G2 candidate, for the
+[bounded recording viewer](../../docs/plans/bounded_recording_viewer.md); the MDF4
+reader side is the same batch's `mdf4-parser` work. The plot consumes worker-built
+results of `src/models/plotdata.h`: an overview of at most 4,096 index-aligned bins,
+merged pairwise as a scan outgrows them, with one domain decision per result set, and
+exact windows of at most 4 Mi samples built from the conservative index cover the bins
+give. `SignalPlotModel` installs them immutable, asks for the view's window
+(`detailWanted` / `detailRequest()`), holds a window only while it covers the view, and
+reports NoSignal, Pending, Empty, Failed, Refused, Overview or Detail, an incomplete
+count and progress; `plotseries.h` and the GUI-thread summaries are gone.
+`SignalPlotItem` draws bins as unjoined extrema columns and hovers bin ranges or exact
+samples with their index. `Mdf4DocumentSession` scans through the reader's
+`scan()`/`axis()`: one scan in flight with its cancellation and one pending, obsolete
+work cancelled and discarded, progress coalesced to 10 per second, results cached
+within a 256 MiB allowance that also holds the scan in flight's reservation, evicting
+only results nobody else holds and refusing with the numbers otherwise; the tree is
+admitted against a 384 MiB estimate. Contract: [MDF4 reads](arch/architecture.md#mdf4-reads),
+[signal plot](ref/signal_plot.md).
+
+Verified against the final reader (`build-i2i3/a/prefix-final`): fresh PACKAGE build
+without warnings, 17/17 suites on three runs; new `tst_plotdata`, `tst_mdf4recording`
+(a generated 4.5 M-sample irregular recording through the production adapter and the
+real reader), the rewritten session and plot model suites. Seven plot mutants and ten
+scheduler and cache mutants each fail cases. Strict `-Wshadow -Wconversion
+-Wsign-conversion` replay of the touched sources and tests: no warnings; `qmllint` on
+`SignalPlotView.qml`: no errors. Measured on the development host (64 GB, Release, warm
+page cache) with the reader's generated 14-hour 10 kS/s, unsorted and sparse 64 GiB
+recordings: overviews of 504 M samples in 6–14 s, windows of a 1 s view in 3–10 ms and
+of 4.15 M samples in 64–159 ms (unsorted: rescanning the prefix, about 0.4 s),
+cancellation 0.2–3.1 ms quiet and at most 14 ms under compile load, peaks below 22 MiB
+working set and 10 MiB commit with an overview, 86 MiB and 75 MiB with a full window;
+the result accounting matches the commit growth ([measured scale](ref/signal_plot.md#measured-scale)).
+Evidence: `build-i2i3/b/` at the workspace root (`README.txt`).
+
+UNVERIFIED — the 16 GB reference laptop: the measured figures are from a 64 GB host
+whose page cache holds the 10 GB recording; rerun `build-i2i3/b/measure/measure.exe`
+(its scenarios in `run_measurements.py`) there. Pass = the same order of overview and
+window times on a cold first read, cancellation well under 100 ms, peak commit about
+75 MiB with a full window; fail = a peak that grows with the recording, or a close or
+selection change that waits for a scan to finish.
+
+Landmines:
+- The Explorer needs the bounded reader interface (`scan`, `axis`, typed outcomes).
+  The pinned `mdf4-parser-lib` v0.1.0 headers lack it. The current release-download CI
+  needs a matching published package and pin; local landing, SOURCE builds and
+  selected local-prefix verification do not require publication. Releasing remains
+  a separate operator decision.
+- `QPromise` throttles progress callouts itself (about 25 per second), which hides a
+  missing worker-side interval in short tests; `progressIsCoalesced` runs over a
+  second to tell them apart.
+- A session test's `settle()` runs the pool dry repeatedly, because a completion
+  starts the next scan (an overview's is followed by its window's).
+- The model announces state and `detailWanted` as they stand after its earlier
+  signals, so an observer's nested change is announced once, by itself.
+
+UNVERIFIED — operator-visual, one Windows launch of a fresh build, with a large
+recording (the generated 14-hour files or a real one):
+- Selecting a channel shows "Reading samples…" with a percentage, then the whole
+  recording as vertical extrema columns with no line joining them; the header reads
+  "Overview" and the sample count. A channel that fits one window turns to "Exact
+  samples" shortly after.
+- Hovering the overview highlights a band and reports a time range, an index range,
+  the sample count and min/max; hovering exact samples shows a crosshair with the
+  value and "index N".
+- Zooming in shows a line through the exact samples, with gaps where values are
+  missing; zooming out past about four million samples returns to the overview with
+  "zoom in for exact samples". Reset view returns to the whole overview at once.
+- Clicking several channels quickly, or zooming repeatedly, settles on the last one
+  without showing an intermediate result; closing the tab during a long overview is
+  prompt.
+- A file whose source ends early shows "Incomplete: N of M samples", and still
+  "Incomplete" with the center pane dragged to its narrowest; truncating an open
+  file makes the next channel read "…the file changed since it was opened; reopen it".
+
+Fail = a line joining overview columns, a hover naming a single sample over the
+overview, a stale channel or view shown last, a short file presented as complete, a
+stuck progress indicator, a close that hangs, a crash.
+
 ## 2026-09-26 — tab and session ownership (workspace cleanup batch G2) — OPEN
 
-Uncommitted candidate on `9622fa3`, corrected after the parent review and awaiting
-re-review; the six landing steps of
+Uncommitted candidate on `9622fa3`, corrected and accepted by the
+[parent re-review](../../docs/audit/g2_candidate_review.md); the six landing steps of
 the [G2 plan](../../docs/plans/g2_tab_session_ownership.md) are recorded as patches in
 `build-g2/steps/` at the workspace root. Every tree row, categories included, carries a
 session-local node key, and `TreeModel` resolves keys through a flat key table;

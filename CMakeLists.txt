@@ -39,6 +39,7 @@ qt_add_library(explorer-core STATIC
     src/core/formatlist.cpp
     src/models/detailmodel.cpp
     src/models/memorymapmodel.cpp
+    src/models/plotdata.cpp
     src/models/signalmapmodel.cpp
     src/models/signalplotmodel.cpp
     src/models/tabmodel.cpp

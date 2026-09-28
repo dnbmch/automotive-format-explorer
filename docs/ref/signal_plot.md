@@ -6,79 +6,161 @@ types stop in the document session.
 
 ## Data seam
 
-`PlotSeries` carries signal and domain names/units plus parallel `double`
-domain/value vectors (the domain vector retains the API name `time`). A producer
-supplies the complete selected range with
-`SignalPlotModel::setSeries()` and controls only the busy indicator with
-`setBusy()`. View bounds, value bounds, cursor state, and rendering summaries
-belong to the plot model.
+`src/models/plotdata.h` holds the plot's data. A producer's worker builds it from
+the chunks of one scan, `(firstSample, time, value, size)` in sample order with
+absolute sample indices; the plot installs it immutable and shared, so a producer's
+cache and the plot hold one copy.
 
-Normalization happens at the producer's own parse boundary, in one pass over a
-freshly decoded series: the parallel vectors are trimmed to their common length
-and the domain is checked to be non-decreasing. A series that fails the check is
-re-domained onto record indices. The model therefore binary-searches a sorted
-axis without any check in the render or cursor path. Domain metadata prevents an
-index domain or a future non-time producer from being mislabelled as seconds.
+- **Overview** (`PlotOverview`, `PlotOverviewBuilder`): a whole signal in at most
+  4,096 bins. Each bin is a run of consecutive samples inside one aligned run of
+  2^`binShift` indices, with its first sample, sample count, finite-value count,
+  first and last coordinate, widest gap between consecutive coordinates and finite
+  extrema (NaN when no value is finite). Bins cover exactly the delivered samples,
+  so none is empty. The builder allocates `clamp(stated count, 2, 4096)` bins at
+  construction and never again: when the scan outgrows them, neighbors merge
+  pairwise into bins twice as wide. An overstated or unknown count therefore costs
+  no resolution, and the index arithmetic holds up to 2^64 − 1.
+- **Domain** (`PlotDomain`): one per result set, decided over the whole overview
+  scan, chunk seams included. The producer's coordinates are used only when every
+  one is finite and nondecreasing; otherwise the overview and every window of its
+  result set plot against absolute sample indices, which the bins already
+  partition. A source that ends early keeps the bounds and count it delivered and
+  reports `incomplete()`; nothing stands for the missing tail.
+- **Exact window** (`PlotWindow`, `PlotWindowBuilder`): consecutive samples with
+  their coordinates and values and per-256-sample extrema, at most 4 Mi samples
+  (64 MiB of doubles) including one neighbor each side. `PlotOverview::windowRequest()`
+  turns a domain range into the conservative index cover of the bins that may hold
+  it, widened by one sample each side; the builder scans that cover, keeps the
+  samples in range and the two neighbors by their actual coordinates, and refuses
+  when they exceed the limit. A window holds every sample whose coordinate lies
+  strictly between its first and last one, or up to the edge of the data where it
+  reaches it (`covers()`). Samples that contradict their overview (a coordinate
+  going back, or a cover that no longer brackets the range) fail the window.
+- **Storage.** `PlotOverviewBuilder::reservation()` and
+  `PlotWindowBuilder::reservation()` give the most a builder and its result hold
+  before either exists; a result's `bytes()` is its structure and array capacities.
+  An overview retains its reservation less the builder object; a window allocates
+  its arrays once, at its first kept sample, for what its cover can still deliver.
 
-`setSeries()` takes an immutable shared series, so a producer's cache and the
-model hold one buffer instead of a copy each.
+The model's producer contract is `setSignal(header, overview, note, text)`, which
+starts a new result set and shows the whole overview, `setWindow(window, note,
+text)`, which keeps bounds and zoom, `clear()`, `setBusy()` and `setProgress()`.
+`PlotHeader` carries the signal and domain names and units; an Index result set shows
+"Sample index". `PlotNote` says why nothing, or only the overview, is shown: Empty
+(with the producer's reason, or "No samples recorded"), Failed, or Refused.
 
-A producer that knows why a series is empty says so through the series'
-`placeholderText` (axis channel, unsupported type, empty recording); the plot
-surfaces show it in place of the generic "No samples available".
+## States
+
+`SignalPlotModel::plotState` is NoSignal, Pending (the overview is being read),
+Empty, Failed, Refused, Overview (each column spans the extrema of the samples it
+covers) or Detail (exact samples cover the whole view). `message` explains the
+state: the producer's note, or in Overview why the view is not exact ("More than
+4,194,304 samples in view; zoom in for exact samples", "Reading exact samples…").
+`incomplete` and `countText` ("N of M samples") mark a source that ended early.
+`busy` and `progress` (0 to 1, negative when unknown) describe the producer's work.
+
+The view asks for detail itself: after a new signal or a moved view that the
+installed window does not cover, the model emits `detailWanted`, and
+`detailRequest()` names the window it wants: the view and as much again each side
+when that fits one window, else the view alone, else none. The model holds a window
+only while it covers the view and drops it as the view leaves; resetting the view
+returns to the overview at once.
 
 ## Rendering
 
-The model precomputes min/max summaries in fixed-size sample blocks. For each
-viewport it exposes either the visible samples or one min/max bucket per pixel
-column:
+Every paint is sized by the viewport or the overview's bins:
 
-- at up to roughly two visible samples per pixel, `SignalPlotItem` draws the
-  direct sample polyline;
-- above that density, it draws min/max vertical columns so narrow spikes remain
-  visible; and
+- in Overview, `columns()` gives each pixel column the extrema of the bins that reach
+  it; a bin fills the columns between its first and last sample unless a gap inside
+  it is wider than a column. Bins are never joined, so no line suggests that one
+  bin's extremum follows another's;
+- in Detail, while the visible samples are at most two per pixel, `SignalPlotItem`
+  draws the line through them, one sample past each edge; a nonfinite value breaks
+  the line and a sample alone between breaks is a dot. Denser, each pixel column
+  spans the extrema of its samples, from the window's block summaries;
 - axes and tick labels are painted in the same item, avoiding a QML object per
   sample or tick.
 
-Summary blocks avoid rescanning every visible sample, while the cached paint
-representation stays bounded by the visible pixel width. This keeps interaction
-responsive for million-sample series. The zoom floor uses the smallest positive
-domain spacing plus floating-point precision, so irregular recordings can still
-zoom into dense bursts separated by large gaps.
+The zoom floor is the smallest positive spacing the overview found, plus
+floating-point precision, so irregular recordings can still zoom into dense bursts
+separated by large gaps.
 
 ## Interaction
 
 - Mouse wheel zooms the domain axis around the pointer.
 - Left-button drag pans the visible domain window.
-- Hover snaps the cursor to the nearest sample and exposes its domain and value.
+- Hover over exact samples snaps to the nearest one and reports its coordinate,
+  actual value and absolute sample index. Hover over the overview reports the bins
+  under the pointer's pixel column: their coordinate range, index range, sample
+  count, nonfinite count and extrema, and marks their band, never a single point.
 - Reset view restores the full domain range and recomputes the visible value
   range.
 
-The value axis automatically follows the extrema of the visible domain range,
-with padding for readability. Non-finite values do not contribute to extrema.
+The value axis follows the finite extrema in view, with padding for readability:
+of the exact samples in Detail, of the bins the view touches in Overview.
+
+The header shows the signal, its unit, the sample count where it fits, whether the
+view is the overview or exact samples, and progress. A short source is marked at
+every width the center pane allows: "Incomplete: N of M samples" where that fits,
+"Incomplete" below it. The footer shows the hover report, or the view's range with
+the state's message.
 
 ## MDF4 selection lifecycle
 
 Opening an MDF4 file indexes only its metadata graph, once, into the session's
-`mdf4::Reader`. Selecting a plottable channel reads its whole metadata-derived
-range from that reader on a worker. One read runs at a time: a channel selected
-meanwhile waits as the single pending read, replacing any earlier one, and a
-channel whose read is running is not read a second time.
+`mdf4::Reader`. Selecting a plottable channel scans its whole range into an
+overview on a worker, then the plot's detail requests scan windows. One scan runs
+at a time: a newer selection or view cancels the scan in flight that it makes
+obsolete and waits as the single pending scan, and a scan in flight that still
+serves the selection or view is kept. Results of cancelled scans are discarded
+before the next scan is admitted.
 
-A successful read is always cached by group/channel — the samples are valid for
-their channel whatever is selected by the time they arrive — while the plot is
-updated only when that channel is still the selection. Rapid selection changes
-therefore neither flash stale data, nor throw completed work away, nor read every
-channel passed on the way. A failed read is shown with its reason and not cached;
-a successful empty read shows `No samples recorded`. Ownership and teardown:
-[architecture](../arch/architecture.md#mdf4-reads).
-
-The cache is bounded by bytes rather than entries: past a 256 MiB budget it
-evicts least-recently-used channels, never the one on screen, and keeps a single
-series larger than the whole budget so that channel still plots. Re-selecting a
-cached channel refreshes its position.
+Completed results are cached by kind, channel, result set and window range within
+the session's 256 MiB allowance, which also holds the scan in flight's reservation.
+Past it the least recently used results nobody else holds are evicted, windows before
+the overview of their result set; when the results in use leave no room, the scan is
+refused and the plot shows the numbers. Refused and failed scans are not cached.
+Ownership, outcomes and teardown: [architecture](../arch/architecture.md#mdf4-reads).
 
 A group's master channel carries the domain rather than a signal against it —
 decoding a master returns its own samples in both time and value — so the tree
 lists it as the group's axis channel, with its detail view intact, and never
-decodes it.
+scans it.
+
+## Measured scale
+
+Measured on the development host: i9-12950HX, processes pinned to its eight
+performance cores, 64 GB, Samsung MZVL22T0HBLB NVMe, Windows 11 Pro 26200; Release
+(`-O3`) Explorer libraries and reader; files read from a warm page cache. The files are
+the reader's generated 14-hour 10 kS/s recordings of 504,000,000 samples per channel,
+an unsorted file of 50,000,000 samples per channel and a sparse 64 GiB file. Each figure
+is min / median / max of five runs of the production adapter and session, taken from the
+pass with less background load (other projects compiled on the same host at times).
+Evidence: `build-i2i3/b/measure/` at the workspace root.
+
+| Channel | Overview | Window, 1 s view | Window, 4.15 M samples | Peak working set / commit with that window |
+|---|---|---|---|---|
+| Row layout, 10.08 GB file, f64 `a1` | 6.90 / 7.85 / 8.52 s | 3.5 / 4.5 / 5.0 ms | 88 / 93 / 107 ms | 82.1 / 71.4 MiB |
+| Column, stored-clock value (remote f64 master, transposed deflate) | 12.51 / 12.93 / 13.94 s | 7.5 / 8.0 / 9.6 ms | 117 / 124 / 159 ms | 86.0 / 75.2 MiB |
+| Column, virtual-clock value | 6.01 / 6.09 / 6.58 s | 3.4 / 4.1 / 5.1 ms | 64 / 66 / 66 ms | 83.9 / 73.1 MiB |
+| Unsorted, channel `a` | 1.09 / 1.19 / 1.21 s | 429 / 434 / 437 ms | 363 / 371 / 393 ms | 81.9 / 70.4 MiB |
+
+- Feeding the overview builder took the row channel's scan from 6.94 / 7.32 / 8.99 s
+  with a counting visitor to 7.97 / 8.13 / 10.86 s; the whole session, scan in a worker
+  and result installed, stayed within that spread (the table's figure, same pass). With
+  only the overview shown the process peaks stay below 22 MiB of working set and 10 MiB
+  of commit, against about 15 MiB and 8.4 MiB once the file is open.
+- An unsorted window rescans the group from its start: the 1 s view sits in the
+  middle of the recording.
+- Cancellation, from the selection, view or close that makes a scan obsolete to the
+  return of its task: 0.2–1.6 ms on a selection change during an overview, 0.2–3.1 ms
+  on a zoom during a window, 0.3–1.0 ms for closing a tab during an overview; up to
+  14 ms while up to ten compilers ran beside it.
+- The sparse 64 GiB file opens in 3.9–6.7 ms. Its channel of 2,097,152 samples stored
+  60 GiB into the file overviews in 20–38 ms and fits one window, read in 25–56 ms;
+  its channel of 8,050,966,525 samples overviews in 75 s (one run) with peaks of
+  17.6 MiB working set and 8.4 MiB commit, and a window at sample 8,050,966,324 reads
+  in 34 ms. That file proves 64-bit offsets and indices, not throughput.
+
+UNVERIFIED — the 16 GB reference laptop: none of these figures is measured there, and a
+10 GB recording does not stay in its page cache between scans.

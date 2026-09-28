@@ -58,15 +58,22 @@ void TestMdf4WriterFile::writerFileOpensAndPlots() {
     const quint64 plottableKey = firstPlottableKey(*result.session);
     QVERIFY2(plottableKey != 0, "writer file contains no plottable channel");
 
+    // The overview of the whole channel, then the exact samples of the view.
     auto* model = static_cast<SignalPlotModel*>(result.session->centerPanelModel());
     result.session->selectNode(plottableKey);
-    QTRY_VERIFY_WITH_TIMEOUT(!model->busy(), 5000);
-    QVERIFY(model->hasSeries());
-    QCOMPARE(model->series().time.size(), model->series().value.size());
+    QTRY_VERIFY_WITH_TIMEOUT(model->plotState() == SignalPlotModel::Detail && !model->busy(),
+                             5000);
+    QVERIFY(model->hasSamples());
+    QVERIFY(!model->incomplete());
+    QCOMPARE(static_cast<std::uint64_t>(model->window()->time.size()),
+             model->overview()->sampleCount);
+    QCOMPARE(model->window()->time.size(), model->window()->value.size());
+    QVERIFY(model->overview()->domain == PlotDomain::Time);
 }
 
 // The session's reader keeps the file it opened. Truncating that file behind
-// it fails the next read with a reload request instead of plotting a prefix.
+// it fails the next scan with a request to reopen it instead of plotting a
+// prefix.
 void TestMdf4WriterFile::changedSourceAsksForReload() {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
@@ -83,10 +90,11 @@ void TestMdf4WriterFile::changedSourceAsksForReload() {
     QVERIFY(file.resize(file.size() - 1));
     auto* model = static_cast<SignalPlotModel*>(result.session->centerPanelModel());
     result.session->selectNode(plottableKey);
-    QTRY_VERIFY_WITH_TIMEOUT(!model->busy(), 5000);
-    QVERIFY(!model->hasSeries());
-    QVERIFY2(model->placeholderText().contains(QStringLiteral("changed since it was opened")),
-             qPrintable(model->placeholderText()));
+    QTRY_VERIFY_WITH_TIMEOUT(model->plotState() == SignalPlotModel::Failed && !model->busy(),
+                             5000);
+    QVERIFY(!model->hasSamples());
+    QVERIFY2(model->message().contains(QStringLiteral("changed since it was opened; reopen it")),
+             qPrintable(model->message()));
     result.session.reset();
 }
 

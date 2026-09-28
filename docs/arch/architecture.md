@@ -202,52 +202,107 @@ A `DocumentSession` (interface in `src/sessions/documentsession.h`) is the per-d
 | `selectNode(quint64 key)` | selects the entity with the given node key |
 | `centerPanelSource()` | `QUrl` — QML component URL; empty means the layout collapses to two columns |
 | `centerPanelModel()` | `QAbstractListModel*` for the center panel; null when there is no center panel |
-| `moveModelsToThread(QThread*)` | moves the session's `QObject`s — its models, and for MDF4 the read watcher — to the given thread |
+| `moveModelsToThread(QThread*)` | moves the session's `QObject`s — its models, and for MDF4 the scan watcher — to the given thread |
 
-`AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides what every format shares: identity, diagnostics, the tree and detail models, and row keys. The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`, `Mdf4DocumentSession`) inherit from it; each builds its tree, binds its entity rows to its own typed entity paths, answers `selectNode()` through its own presenter, and chooses its center panel. MDF4 open indexes metadata only; channel samples are read on demand from the same opened file, as described in [MDF4 reads](#mdf4-reads).
+`AdapterSessionBase` (`src/sessions/adaptersessionbase.h`) provides what every format shares: identity, diagnostics, the tree and detail models, and row keys. The per-format sessions (`A2lDocumentSession`, `DbcDocumentSession`, `LdfDocumentSession`, `Mdf4DocumentSession`) inherit from it; each builds its tree, binds its entity rows to its own typed entity paths, answers `selectNode()` through its own presenter, and chooses its center panel. MDF4 open indexes metadata only; channel samples are scanned on demand from the same opened file, as described in [MDF4 reads](#mdf4-reads).
 
 ## MDF4 reads
 
-`Mdf4Adapter::load()` opens one `mdf4::Reader` per file. The session's tree, detail
-presenter and every channel read use that reader: the session holds its metadata
-through a `std::shared_ptr<const mdf4::File>` aliasing the reader, and a read
-function bound to it. Either keeps the reader alive; there is no second metadata
-copy and no path-based read. A file that cannot be opened or indexed still opens
-as a session showing its diagnostics, and its reads fail.
+`Mdf4Adapter::load()` opens one `mdf4::Reader` per file, with the reader's default
+limits and no cancellation: opening runs to its end, like every format's load, so
+shutdown during a large MDF4 opening waits for it. The session's tree, detail
+presenter, time axes and every scan use that reader: the session holds its metadata
+through a `std::shared_ptr<const mdf4::File>` aliasing the reader, and a scan function
+and an axis function bound to it. Any of them keeps the reader alive; there is no
+second metadata copy and no path-based read. A file that cannot be opened, or whose
+opening a reader limit refused, still opens as a session showing its diagnostics (a
+refusal is one DROPPED diagnostic), and its scans fail.
 
-A session runs at most one read at a time, so the reader is never used
-concurrently. Selecting an uncached channel starts a read when none runs; while
-one runs, the selection becomes the single pending read, replacing any earlier
-one. Reselecting the running channel keeps its read and drops the pending one.
-Selecting a cached channel, a master, an unsupported channel or a non-channel row
-settles the view at once and drops the pending read. When a read completes, a
-successful result enters the cache whatever is selected, the pending read starts,
-and the plot changes only if the completed channel is still selected. Channel
-switching can wait behind a whole-channel read; the reader offers no cancellation.
+**Tree.** Before any group or channel row exists, `Mdf4DocumentSession::treeBytes()`
+estimates the tree from the metadata: 352 B per row (its item, its slot in the
+parent's children, its key and path table entries) plus 9/4 B per UTF-8 byte of title
+and subtitle text. Past `Mdf4SessionLimits::treeBytes` (384 MiB) the file row stands
+alone, with its details, and one error diagnostic, "Channel tree not shown", gives the
+counts, the estimate and the allowance; no row stands for part of the tree.
 
-The task captures a copy of the read function and plain request values, never
-the session or a model. A session-owned `QFutureWatcher` receives completions; it
-moves with the models when the open worker hands the session to the controller
-thread. Plot notifications reach observers synchronously, and an observer may
-select another node or close the session from them. Each flow therefore settles
-the active and pending read and takes the completed result before notifying,
-notifies last — the series, then the busy state recomputed from the state as it
-stands — and touches nothing after a notification that destroyed the session.
-Destroying a session from inside the plot model's own reset or series
-notifications is not supported; the completion's final notification is the busy
-change.
+**Result sets.** Selecting a plottable channel scans its whole metadata range once
+into an overview; the overview decides the domain of its result set. The plot then
+names the exact window its view wants (`SignalPlotModel::detailRequest()`, announced
+by `detailWanted`): a scan of the conservative index cover the overview's bins give.
+Both are built on the worker from the scan's chunks
+([signal plot](../ref/signal_plot.md)). The domain's name and unit are those of the
+time master `Reader::axis()` resolved at opening, local or remote; a group without
+one plots against the sample index. The session resolves no master itself.
 
-A failed read (`mdf4::ReadResult::ok` false) is never cached. The plot shows
-`Samples could not be read: <reason> (<channel>)`, which for a file changed since
-it was opened asks for a reload. A successful empty read, like a channel with no
-recorded samples, shows `No samples recorded`. A successful read has equal-length
-arrays; a domain that is not non-decreasing is replaced by record indices.
+**Scheduling.** A session runs one scan at a time, so the reader is never used
+concurrently. It keeps the scan in flight (channel, overview or window with its range
+and result set, cancellation flag and reserved bytes) and at most one pending scan,
+the latest wanted:
 
-Destroying the session disconnects delivery, drops the pending read, and waits on
-this thread for the running read, whose result is released here. The task may
-drop its reference to the reader on the worker afterwards; nothing else touches
-it. Closing a tab or exiting therefore waits for a running whole-channel read to
-return.
+- Selecting a channel with a cached overview shows it at once, and the plot's detail
+  request follows. Otherwise an overview in flight for that channel is kept; else the
+  overview becomes the pending scan and the scan in flight is cancelled.
+- A new view is served by a cached window that covers it, or by a window in flight
+  whose range covers it; otherwise the window the plot names becomes the pending scan
+  and a window in flight is cancelled. A view with more samples than one window holds
+  keeps the overview and cancels windows.
+- Selecting a master, an unsupported channel or a row that is no channel drops the
+  pending scan and cancels the one in flight.
+- The completion of a cancelled scan is taken before the pending scan starts, even
+  when the scan finished before it saw the cancellation. Its result is released
+  while its reservation still stands, then its request with the reservation, before
+  anything else is admitted or announced.
+
+The worker passes on progress at most once per 100 ms and only when it grew; the plot
+shows the progress of the scan in flight only while that scan is not cancelled and
+belongs to the selection.
+
+The task captures a copy of the scan function and plain request values, never the
+session, a model or a result. It hands over its result only after the scan returned
+Ok, which the reader reports after checking the source once more, so no chunk of a
+cancelled, refused or failed scan reaches the plot. Each launch creates one
+cancellation flag, shared by the scan in flight and its task, which passes it to the
+reader as `Control::cancel`; cancelling sets that flag and nothing else, and a
+completion whose flag is set is obsolete however far its scan got. One session-owned
+`QFutureWatcher` watches the task in flight. A scan launches only when none is in
+flight, so the watcher is handed a new task only after the previous completion was
+taken. It delivers completions and progress, and it moves with the models when the
+open worker hands the session to the controller thread. Plot notifications reach
+observers synchronously, and an observer may select another node, change the view or
+close the session from them. Each flow therefore settles the scans, the cache and the
+selection before notifying, notifies last, the busy state last of all, and touches
+nothing after a notification that destroyed the session. The busy state is read
+again after the progress notification, whose observer may have started other work.
+The plot model survives its own destruction from any of its notifications.
+
+**Storage.** One allowance per session, `Mdf4SessionLimits::resultBytes` (256 MiB),
+covers the retained results, cached or shown, and the reservation of the scan in
+flight. A scan's `PlotOverviewBuilder::reservation()` or
+`PlotWindowBuilder::reservation()` is admitted before it launches; its completion
+replaces the reservation with the result's own `bytes()` in the same step, and a
+cancelled, refused or failed scan releases it; a cancelled scan's result goes first,
+so no result outlives its charge. Admission evicts the least recently used
+results nobody else holds. A result is held while the plot shows it, a window pending
+or in flight holds the overview of its result set, and a cached window holds that
+overview too, so a window goes before its overview. When held results leave no room,
+the scan is refused and the plot says how much it needed and how much is held; no
+result is exempt from the allowance. Results are keyed by kind, channel, result set
+(and with it the domain) and, for a window, its sample range.
+
+**Outcomes.** A scan that returns Ok with samples shows the overview, then the view's
+window; Short coverage shows "N of M samples" and bounds the view by the last sample
+read. Ok with no samples shows "No samples recorded" and is kept like any result. A
+cancelled scan shows and keeps nothing. ResourceLimit shows the refusal with the
+reader's numbers, or the window's sample limit; SourceChanged asks to reopen the file;
+Error gives the reader's reason and location. Refused and failed scans are not kept:
+selecting the channel again scans again.
+
+**Teardown.** Destroying the session disconnects delivery, drops the pending scan,
+cancels the one in flight and waits on this thread until it returns; its result is
+released there. The task may drop its copy of the scan function on the worker
+afterwards; nothing else touches it. The reader checks cancellation at its
+checkpoints, so closing a tab waits for the next one, and for a blocking file call in
+progress.
 
 The nav panel never binds a session's `TreeModel` directly: it shows the current tab's `TreeFilterModel` (`src/models/treefiltermodel.h`) — a `QSortFilterProxyModel` with recursive filtering and auto-accepted child rows that also exposes `nodeKeyRole` and a source-mapped `indexForNodeKey()` to QML. The tab owns the proxy, so the filter text is per tab, and the proxy goes with its tab. Sessions and backends know nothing about filtering.
 
@@ -301,14 +356,16 @@ The grid items emit `hoveredTooltip` (string) and `nodeKeyClicked(int)` signals;
 
 Each painted item holds its model through a `QPointer`. A replaced center view lives until a later event-loop turn, so it can outlive its model; the model's destruction then counts as being given no model. The item drops the hover, selections, highlight flash and drag that name the model's rows, notifies `modelChanged`, paints its empty state and ignores input.
 
-The signal plot consumes only `PlotSeries` (`QString` signal/domain metadata plus
-parallel `std::vector<double>` domain/value arrays). `SignalPlotModel` builds fixed-size
-min/max summaries when a series arrives and derives viewport-width buckets from
-those summaries. The paint representation therefore follows the viewport rather than the
-recording size. `SignalPlotItem` draws direct polylines when the visible data is
-sparse and min/max columns when it is dense; wheel zoom, drag pan, and nearest-
-sample cursor lookup remain in the format-neutral plot stack. MDF4 protobuf and
-reader types stop at `Mdf4DocumentSession`.
+The signal plot consumes only the format-neutral results of `src/models/plotdata.h`:
+an overview of at most 4,096 bins and exact windows of at most 4 Mi samples, which a
+producer's worker builds from ordered sample chunks, with their summaries, domain
+decision and zoom floor. `SignalPlotModel` installs them immutable and does only
+viewport-sized work on the GUI thread: one extrema column per pixel from the bins or
+from a window's block summaries. `SignalPlotItem` draws overview bins as columns
+never joined to each other, an exact window as a line while it is sparser than two
+samples per pixel and as columns beyond, and handles wheel zoom, drag pan and hover.
+MDF4 protobuf and reader types stop at `Mdf4DocumentSession`. Details:
+[signal plot](../ref/signal_plot.md).
 
 ### Overlap stripes
 
@@ -328,7 +385,7 @@ src/
   core/         appcontroller, documenttab, formatlist, detailsection, treeitem,
                 formatid, diagnostics
   models/       treemodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel,
-                plotseries, signalplotmodel
+                plotdata (overview, window and their builders), signalplotmodel
   sessions/     documentsession (interface), adaptersessionbase, presentertext
                 (shared text/detail helpers), a2l/dbc/ldf/mdf4 sessions and
                 detail presenters (a2l splits ifdata helpers into
@@ -348,6 +405,7 @@ Each format's detail rendering lives in its own presenter class, which also decl
 
 - `AppController` owns its `FormatList` (and through it every adapter), the pending load, and `TabModel` with its `DocumentTab`s; each tab owns its session and its filter proxy, destroyed first. A pending load is joined before any of them is destroyed.
 - Each `DocumentSession` owns its tree and detail models, its presenter and its center-panel model. QML holds non-owning references; each painted item tracks its model's lifetime (see [Rendering](#rendering)).
+- Plot results are immutable and shared: an MDF4 session's cache and its plot model hold the same overview and window, and the plot holds only what it shows, dropping a window once the view leaves it. The session accounts every result it retains and the reservation of its scan in flight against one allowance, and evicts only results nobody else holds ([MDF4 reads](#mdf4-reads)).
 - Closing a tab takes it out of the `TabModel`, announces the new current tab, and then destroys the tab with its session, filter and models, and every key from that document. The UI has already bound the new current tab's models by then.
 
 ## See Also

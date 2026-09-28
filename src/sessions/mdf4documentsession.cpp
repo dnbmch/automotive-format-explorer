@@ -5,14 +5,17 @@
 
 #include <QObject>
 #include <QPointer>
+#include <QPromise>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include <chrono>
 #include <cstddef>
 #include <utility>
 
 namespace {
 
-const QString kNoSamples = QStringLiteral("No samples recorded");
+// Scan progress reaches the GUI at most this often.
+constexpr std::chrono::milliseconds kProgressInterval{100};
 
 QString groupTitle(const mdf4::ChannelGroup& group, int index) {
     return group.name().empty()
@@ -42,69 +45,60 @@ QString channelSubtitle(const mdf4::Channel& channel) {
     return unit.isEmpty() ? role : QStringLiteral("%1  ·  %2").arg(unit, role);
 }
 
-// Rejects NaN as well as an out-of-order sample: both break a binary search.
-bool nonDecreasing(const std::vector<double>& domain) {
-    for (std::size_t i = 1; i < domain.size(); ++i) {
-        if (!(domain[i] >= domain[i - 1])) {
-            return false;
-        }
-    }
-    return true;
+QString countText(std::uint64_t count, const char* noun) {
+    return QStringLiteral("%1 %2%3")
+        .arg(static_cast<qulonglong>(count))
+        .arg(QLatin1String(noun), count == 1 ? QString() : QStringLiteral("s"));
 }
 
-// A successful read has equal-length arrays, but the plot binary-searches its
-// domain. When the domain is not usable as a search key, plot the channel
-// against record indices rather than silently mislocating its samples.
-void normalizeDomain(PlotSeries& series) {
-    if (nonDecreasing(series.time)) {
-        return;
-    }
-
-    for (std::size_t i = 0; i < series.time.size(); ++i) {
-        series.time[i] = static_cast<double>(i);
-    }
-    series.domainName = QStringLiteral("Record index");
-    series.domainUnit.clear();
+// Rounded up, so a size never reads smaller than it is.
+QString sizeText(std::uint64_t bytes) {
+    return bytes < (std::uint64_t{1} << 20)
+        ? QStringLiteral("%1 KiB").arg(static_cast<qulonglong>((bytes >> 10) + ((bytes & 0x3FF) != 0)))
+        : QStringLiteral("%1 MiB").arg(static_cast<qulonglong>((bytes >> 20) + ((bytes & 0xFFFFF) != 0)));
 }
 
-struct DomainMetadata {
-    QString name;
-    QString unit;
-};
-
-DomainMetadata domainMetadata(const mdf4::File& document, int groupIndex) {
-    if (groupIndex < 0 || groupIndex >= document.groups_size()) {
-        return {QStringLiteral("Record index"), {}};
+// Why a finished scan shows nothing, in the plot's terms. `what` names the
+// samples: the channel's, or the exact ones of a view. Cancelled work shows
+// nothing at all and never gets here.
+std::pair<PlotNote, QString> noteFor(const mdf4::ScanResult& scan, PlotBuild build,
+                                     const QString& what) {
+    const mdf4::Outcome& outcome = scan.outcome;
+    const QString at = outcome.location.empty()
+        ? QString()
+        : QStringLiteral(" (%1)").arg(QString::fromStdString(outcome.location));
+    if (build == PlotBuild::Fail || outcome.status == mdf4::Status::SourceChanged) {
+        return {PlotNote::Failed,
+                QStringLiteral("%1 could not be read: the file changed since it was opened; "
+                               "reopen it")
+                    .arg(what)};
     }
-
-    const mdf4::ChannelGroup* owner = &document.groups(groupIndex);
-    if (owner->remote_master() && owner->master_resolved() &&
-        owner->master_group() < static_cast<std::uint32_t>(document.groups_size())) {
-        owner = &document.groups(static_cast<int>(owner->master_group()));
+    if (outcome.status != mdf4::Status::ResourceLimit) {
+        return {PlotNote::Failed, QStringLiteral("%1 could not be read: %2%3")
+                                      .arg(what, QString::fromUtf8(outcome.message), at)};
     }
-
-    for (const mdf4::Channel& channel : owner->channels()) {
-        if (channel.is_master() && channel.sync_type() == 1) {
-            return {
-                channel.name().empty() ? QStringLiteral("Time") : text(channel.name()),
-                text(channel.unit()),
-            };
-        }
+    switch (outcome.resource) {
+    case mdf4::Resource::Consumer:
+        // The window's own limit: the plot explains it.
+        return {PlotNote::Refused, QString()};
+    case mdf4::Resource::Scratch:
+        return {PlotNote::Refused,
+                QStringLiteral("%1 need more working memory than the decoder allows: %2 for one "
+                               "step, %3 allowed%4")
+                    .arg(what,
+                         outcome.required > 0 ? sizeText(outcome.required)
+                                              : QStringLiteral("more"),
+                         sizeText(outcome.limit), at)};
+    default:
+        return {PlotNote::Refused, QStringLiteral("%1 exceed a reader limit: %2%3")
+                                       .arg(what, QString::fromUtf8(outcome.message), at)};
     }
-
-    // The reader deliberately falls back to record indices when no time
-    // master can be resolved. Keep that useful degradation visible instead of
-    // presenting an index/angle/distance domain as seconds.
-    return {QStringLiteral("Record index"), {}};
 }
 
-// A failed read is shown with its reason, never cached as an empty channel.
-QString failureText(const mdf4::ReadResult& result) {
-    const QString reason = QString::fromUtf8(result.message);
-    return result.location.empty()
-        ? QStringLiteral("Samples could not be read: %1").arg(reason)
-        : QStringLiteral("Samples could not be read: %1 (%2)")
-              .arg(reason, QString::fromStdString(result.location));
+// Held by someone besides the cache: shown by the plot, pending or in flight
+// as the result set of a window, or the result set of a cached window.
+bool held(const PlotOverviewPtr& overview, const PlotWindowPtr& window) {
+    return window ? window.use_count() > 1 : overview.use_count() > 1;
 }
 
 } // namespace
@@ -112,32 +106,42 @@ QString failureText(const mdf4::ReadResult& result) {
 Mdf4DocumentSession::Mdf4DocumentSession(QString displayName,
                                          QString sourcePath,
                                          std::shared_ptr<const mdf4::File> metadata,
-                                         ReadFunction read,
-                                         QList<DiagnosticMessage> diagnostics)
+                                         ScanFunction scan,
+                                         AxisFunction axis,
+                                         QList<DiagnosticMessage> diagnostics,
+                                         const Mdf4SessionLimits& limits)
     : AdapterSessionBase(FormatId::MDF4,
                          QStringLiteral("MDF4"),
                          std::move(displayName),
                          std::move(sourcePath),
                          std::move(diagnostics)),
       _metadata(std::move(metadata)),
+      _limits(limits),
       _presenter(*_metadata),
-      _read(std::move(read)),
+      _scan(std::move(scan)),
+      _axis(std::move(axis)),
       _plot_model(std::make_unique<SignalPlotModel>()) {
-    QObject::connect(&_read_watcher, &QFutureWatcher<mdf4::ReadResult>::finished,
-                     &_read_watcher, [this] { onReadFinished(); });
+    QObject::connect(&_watcher, &QFutureWatcher<Completion>::finished, &_watcher,
+                     [this] { onScanFinished(); });
+    QObject::connect(&_watcher, &QFutureWatcher<Completion>::progressValueChanged, &_watcher,
+                     [this](int permille) { onProgress(permille); });
+    QObject::connect(_plot_model.get(), &SignalPlotModel::detailWanted, &_watcher,
+                     [this] { onDetailWanted(); });
     buildTree();
 }
 
 Mdf4DocumentSession::~Mdf4DocumentSession() {
-    // The task holds its own reference to the source and never touches this
-    // session, so it may still release that reference on its worker after the
-    // wait below.
-    QObject::disconnect(&_read_watcher, nullptr, nullptr, nullptr);
-    _pending_read.reset();
-    if (_active_read) {
-        QFuture<mdf4::ReadResult> active = _read_watcher.future();
+    // The task holds its own copy of the scan function and never touches this
+    // session, so it may still release that copy on its worker after the wait
+    // below.
+    QObject::disconnect(&_watcher, nullptr, nullptr, nullptr);
+    QObject::disconnect(_plot_model.get(), nullptr, &_watcher, nullptr);
+    _pending.reset();
+    if (_active) {
+        _active->cancel->store(true);
+        QFuture<Completion> active = _watcher.future();
         active.waitForFinished();
-        const mdf4::ReadResult discarded = active.takeResult();
+        const Completion discarded = active.takeResult();
     }
 }
 
@@ -151,21 +155,26 @@ QAbstractListModel* Mdf4DocumentSession::centerPanelModel() {
 
 void Mdf4DocumentSession::selectNode(quint64 key) {
     const auto it = _paths.find(key);
+    const Mdf4Path path = it == _paths.end() ? Mdf4Path{} : it->second;
     if (it == _paths.end()) {
         _detail_model.setSelection({}, {});
-        clearPlot();
+    } else {
+        _detail_model.setSelection(_presenter.buildDetails(path),
+                                   [this, path] { return _presenter.buildRawJson(path); });
+    }
+    if (it != _paths.end() && path.kind == Mdf4EntityKind::Channel) {
+        selectChannel(path);
         return;
     }
-
-    const Mdf4Path path = it->second;
-    _detail_model.setSelection(_presenter.buildDetails(path),
-                               [this, path] { return _presenter.buildRawJson(path); });
-    if (path.kind != Mdf4EntityKind::Channel) {
-        clearPlot();
-        return;
+    // A row that is no channel: nothing to plot, no scan wanted.
+    _selected.reset();
+    _pending.reset();
+    cancelActive();
+    QPointer<SignalPlotModel> model(_plot_model.get());
+    model->clear();
+    if (model) {
+        updateBusy();
     }
-
-    selectChannel(path);
 }
 
 TreeItem* Mdf4DocumentSession::appendEntity(TreeItem* parent, const QString& title,
@@ -179,7 +188,402 @@ TreeItem* Mdf4DocumentSession::appendEntity(TreeItem* parent, const QString& tit
 void Mdf4DocumentSession::moveModelsToThread(QThread* thread) {
     AdapterSessionBase::moveModelsToThread(thread);
     _plot_model->moveToThread(thread);
-    _read_watcher.moveToThread(thread);
+    _watcher.moveToThread(thread);
+}
+
+Mdf4DocumentSession::ResultBytes Mdf4DocumentSession::resultBytes() const {
+    ResultBytes bytes;
+    bytes.retained = _retained_bytes;
+    bytes.reserved = _active ? _active->reserved : 0;
+    bytes.results = _retained.size();
+    for (const Retained& entry : _retained) {
+        if (held(entry.overview, entry.window)) {
+            ++bytes.held;
+        }
+    }
+    return bytes;
+}
+
+// The domain is the axis the source resolved at opening: its time master, or
+// the sample index when the group has none.
+PlotHeader Mdf4DocumentSession::header(ChannelKey key) const {
+    const int channelIndex = static_cast<int>(key.second);
+    const mdf4::Channel& channel =
+        _metadata->groups(static_cast<int>(key.first)).channels(channelIndex);
+    PlotHeader result{channelTitle(channel, channelIndex), text(channel.unit()),
+                      QStringLiteral("Sample index"), {}};
+    const mdf4::Axis axis = _axis(key.first);
+    if (axis.kind == mdf4::AxisKind::Master) {
+        const mdf4::Channel& master = _metadata->groups(static_cast<int>(axis.group))
+                                          .channels(static_cast<int>(axis.channel));
+        result.domainName = master.name().empty() ? QStringLiteral("Time") : text(master.name());
+        result.domainUnit = text(master.unit());
+    }
+    return result;
+}
+
+std::uint64_t Mdf4DocumentSession::statedCount(ChannelKey key) const {
+    return _metadata->groups(static_cast<int>(key.first))
+        .channels(static_cast<int>(key.second))
+        .sample_count();
+}
+
+// Plot model observers run synchronously and may select another node or close
+// this session. Every flow therefore settles the scans, the cache and the
+// selection first and notifies last, the busy state last of all, and touches
+// nothing after a notification that destroyed the session.
+void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
+    const ChannelKey key{static_cast<std::uint32_t>(path.groupIndex),
+                         static_cast<std::uint32_t>(path.channelIndex)};
+    const mdf4::Channel& channel =
+        _metadata->groups(path.groupIndex).channels(path.channelIndex);
+    QPointer<SignalPlotModel> model(_plot_model.get());
+
+    // A master is the group's own domain, not a signal against it.
+    if (channel.is_master() || !channel.decodable()) {
+        _selected.reset();
+        _pending.reset();
+        cancelActive();
+        model->setSignal(header(key), {}, PlotNote::Empty,
+                         channel.is_master()
+                             ? QStringLiteral("Master channel — this group's time axis")
+                             : QStringLiteral("This channel type is not plottable"));
+        if (model) {
+            updateBusy();
+        }
+        return;
+    }
+
+    _selected = key;
+    if (Retained* cached = retainedOverview(key)) {
+        cached->lastUse = ++_clock;
+        const PlotOverviewPtr overview = cached->overview;
+        _pending.reset();
+        cancelActive();
+        // Showing it asks for the detail of the whole view.
+        model->setSignal(header(key), overview);
+        if (model) {
+            updateBusy();
+        }
+        return;
+    }
+
+    // The overview in flight for this channel serves; anything else is obsolete.
+    if (_active && !_active->cancel->load() && !_active->request.set &&
+        _active->request.channel == key) {
+        _pending.reset();
+    } else {
+        cancelActive();
+        _pending = Request{key, nullptr, {}};
+    }
+    model->setSignal(header(key));
+    if (!model) {
+        return;
+    }
+    startPending();
+    if (model) {
+        updateBusy();
+    }
+}
+
+// The view shows more than the plot's window covers: install a cached window
+// that covers it, keep the scan in flight whose range covers it, or ask for the
+// window the plot names. Windows for other views are obsolete.
+void Mdf4DocumentSession::onDetailWanted() {
+    const PlotOverviewPtr set = _plot_model->overview();
+    if (!_selected || !set) {
+        return;
+    }
+    const ChannelKey key = *_selected;
+    const double start = _plot_model->viewStart();
+    const double end = _plot_model->viewEnd();
+    const std::optional<PlotWindowRequest> wanted = _plot_model->detailRequest();
+    const bool windowActive = _active && _active->request.set;
+    QPointer<SignalPlotModel> model(_plot_model.get());
+
+    if (_pending && _pending->set) {
+        _pending.reset();
+    }
+    if (!wanted) {
+        // Too many samples in view for one window.
+        if (windowActive) {
+            cancelActive();
+        }
+        updateBusy();
+        return;
+    }
+    if (Retained* cached = retainedWindow(key, set.get(), start, end)) {
+        cached->lastUse = ++_clock;
+        const PlotWindowPtr window = cached->window;
+        if (windowActive) {
+            cancelActive();
+        }
+        model->setWindow(window);
+        if (model) {
+            updateBusy();
+        }
+        return;
+    }
+    if (windowActive && !_active->cancel->load() && _active->request.channel == key &&
+        _active->request.set == set && _active->request.window.start <= start &&
+        end <= _active->request.window.end) {
+        updateBusy();
+        return;
+    }
+    if (windowActive) {
+        cancelActive();
+    }
+    _pending = Request{key, set, *wanted};
+    startPending();
+    if (model) {
+        updateBusy();
+    }
+}
+
+// Takes the completion and settles before notifying.
+void Mdf4DocumentSession::onScanFinished() {
+    QPointer<SignalPlotModel> model(_plot_model.get());
+    if (_active->cancel->load()) {
+        // Cancelled work keeps nothing, even when its scan finished first.
+        // Taking the completion releases its result while the reservation still
+        // covers it; the request goes with the reservation, before anything
+        // else is admitted or announced.
+        _watcher.future().takeResult();
+        _active.reset();
+    } else {
+        // The reservation becomes the result's own charge in one step. The
+        // work is for the selection and view as they stand.
+        Completion completion = _watcher.future().takeResult();
+        const Request request = std::move(_active->request);
+        if (completion.overview) {
+            retain({request.channel, completion.overview, {}, completion.overview->bytes(),
+                    ++_clock});
+        } else if (completion.window) {
+            retain({request.channel, request.set, completion.window, completion.window->bytes(),
+                    ++_clock});
+        }
+        _active.reset();
+
+        if (!request.set) {
+            if (completion.overview) {
+                model->setSignal(header(request.channel), completion.overview);
+            } else {
+                const auto [note, text] =
+                    noteFor(completion.scan, completion.build, QStringLiteral("Samples"));
+                model->setSignal(header(request.channel), {}, note, text);
+            }
+        } else if (completion.window) {
+            model->setWindow(completion.window);
+        } else {
+            const auto [note, text] =
+                noteFor(completion.scan, completion.build, QStringLiteral("Exact samples"));
+            model->setWindow({}, note, text);
+        }
+        if (!model) {
+            return;
+        }
+    }
+    startPending();
+    if (model) {
+        updateBusy();
+    }
+}
+
+// Progress of the scan in flight, already coalesced on the worker. Progress of
+// cancelled work, or of another channel's, never reaches the plot.
+void Mdf4DocumentSession::onProgress(int permille) {
+    if (!_active || _active->cancel->load() || _selected != _active->request.channel) {
+        return;
+    }
+    _active->progress = permille / 1000.0;
+    _plot_model->setProgress(_active->progress);
+}
+
+void Mdf4DocumentSession::cancelActive() {
+    if (_active) {
+        _active->cancel->store(true);
+    }
+}
+
+void Mdf4DocumentSession::startPending() {
+    if (_active || !_pending) {
+        return;
+    }
+    Request request = std::move(*_pending);
+    _pending.reset();
+    const std::uint64_t bytes = request.set
+        ? PlotWindowBuilder::reservation(request.window)
+        : PlotOverviewBuilder::reservation(statedCount(request.channel));
+    if (admit(bytes)) {
+        launch(std::move(request), bytes);
+        return;
+    }
+
+    // Results in use leave no room: say so where the result would have shown.
+    const QString text =
+        QStringLiteral("%1 need %2 of plot memory, but results in use hold %3 of the plot's %4")
+            .arg(request.set ? QStringLiteral("Exact samples") : QStringLiteral("Samples"),
+                 sizeText(bytes), sizeText(heldBytes()), sizeText(_limits.resultBytes));
+    if (request.set) {
+        _plot_model->setWindow({}, PlotNote::Refused, text);
+    } else {
+        _plot_model->setSignal(header(request.channel), {}, PlotNote::Refused, text);
+    }
+}
+
+// The task owns a copy of the scan function, and with it the source, plus plain
+// request values: it never reaches this session, its models or its results. It
+// builds its result from the scan's chunks and hands it over only after an Ok
+// outcome, when the reader has checked the source after the traversal.
+void Mdf4DocumentSession::launch(Request request, std::uint64_t reserved) {
+    auto cancel = std::make_shared<std::atomic<bool>>(false);
+    const ChannelKey channel = request.channel;
+    const bool window = request.set != nullptr;
+    const PlotWindowRequest cover = request.window;
+    const std::uint64_t stated = statedCount(channel);
+    _active = Active{std::move(request), cancel, reserved, -1.0};
+    _watcher.setFuture(QtConcurrent::run(
+        [scan = _scan, channel, window, cover, stated, cancel](QPromise<Completion>& promise) {
+            // At most one progress value per interval, and only when it grew.
+            promise.setProgressRange(0, 1000);
+            auto shownAt = std::chrono::steady_clock::now() - kProgressInterval;
+            int shown = 0;
+            mdf4::Control control;
+            control.cancel = cancel.get();
+            control.progress = [&](std::uint64_t done, std::uint64_t total) {
+                const auto now = std::chrono::steady_clock::now();
+                if (total == 0 || now - shownAt < kProgressInterval) {
+                    return;
+                }
+                const int permille = static_cast<int>(
+                    static_cast<double>(std::min(done, total)) * 1000.0 /
+                    static_cast<double>(total));
+                if (permille > shown) {
+                    shown = permille;
+                    shownAt = now;
+                    promise.setProgressValue(permille);
+                }
+            };
+
+            Completion completion;
+            if (window) {
+                PlotWindowBuilder builder(cover);
+                completion.scan = scan(
+                    channel.first, channel.second, cover.firstSample, cover.sampleCount, control,
+                    [&builder](const mdf4::SampleChunk& chunk) {
+                        switch (builder.add(chunk.firstSample, chunk.time, chunk.value, chunk.size)) {
+                        case PlotBuild::Continue: return mdf4::Visit::Continue;
+                        case PlotBuild::Refuse: return mdf4::Visit::ResourceLimit;
+                        case PlotBuild::Fail: break;
+                        }
+                        return mdf4::Visit::Cancel;
+                    });
+                if (completion.scan.outcome.status == mdf4::Status::Ok) {
+                    completion.window = builder.finish();
+                }
+                completion.build = builder.state();
+            } else {
+                PlotOverviewBuilder builder(stated);
+                completion.scan = scan(channel.first, channel.second, 0, stated, control,
+                                       [&builder](const mdf4::SampleChunk& chunk) {
+                                           builder.add(chunk.firstSample, chunk.time,
+                                                       chunk.value, chunk.size);
+                                           return mdf4::Visit::Continue;
+                                       });
+                if (completion.scan.outcome.status == mdf4::Status::Ok) {
+                    completion.overview = builder.finish(completion.scan.sampleCount);
+                }
+            }
+            promise.addResult(std::move(completion));
+        }));
+}
+
+// Busy while the selected channel has a scan pending or in flight that was not
+// cancelled; progress is that scan's. An observer of the progress may select or
+// view anew and start a scan, so the busy state is read after it returns.
+void Mdf4DocumentSession::updateBusy() {
+    const auto running = [this] {
+        return _active && !_active->cancel->load() && _selected == _active->request.channel;
+    };
+    QPointer<SignalPlotModel> model(_plot_model.get());
+    model->setProgress(running() ? _active->progress : -1.0);
+    if (model) {
+        model->setBusy(running() || (_pending && _selected == _pending->channel));
+    }
+}
+
+bool Mdf4DocumentSession::admit(std::uint64_t bytes) {
+    while (_retained_bytes + bytes > _limits.resultBytes) {
+        auto victim = _retained.end();
+        for (auto it = _retained.begin(); it != _retained.end(); ++it) {
+            if (!held(it->overview, it->window) &&
+                (victim == _retained.end() || it->lastUse < victim->lastUse)) {
+                victim = it;
+            }
+        }
+        if (victim == _retained.end()) {
+            return false;
+        }
+        _retained_bytes -= victim->bytes;
+        _retained.erase(victim);
+    }
+    return true;
+}
+
+std::uint64_t Mdf4DocumentSession::heldBytes() const {
+    std::uint64_t bytes = 0;
+    for (const Retained& entry : _retained) {
+        bytes += held(entry.overview, entry.window) ? entry.bytes : 0;
+    }
+    return bytes;
+}
+
+Mdf4DocumentSession::Retained* Mdf4DocumentSession::retainedOverview(ChannelKey key) {
+    for (Retained& entry : _retained) {
+        if (!entry.window && entry.channel == key) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+Mdf4DocumentSession::Retained* Mdf4DocumentSession::retainedWindow(ChannelKey key,
+                                                                    const PlotOverview* set,
+                                                                    double start, double end) {
+    for (Retained& entry : _retained) {
+        if (entry.window && entry.channel == key && entry.overview.get() == set &&
+            entry.window->covers(start, end)) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+void Mdf4DocumentSession::retain(Retained entry) {
+    _retained_bytes += entry.bytes;
+    _retained.push_back(std::move(entry));
+}
+
+// Measured with the process allocator, a row costs 318 to 322 bytes of commit
+// before its text; UTF-16 text costs at most two bytes per UTF-8 byte, and the
+// allocator rounds long strings up by less than an eighth.
+std::uint64_t Mdf4DocumentSession::treeBytes(const mdf4::File& document) {
+    constexpr std::uint64_t kRowBytes = 352;
+    std::uint64_t rows = 1;
+    std::uint64_t textBytes = 64 + document.version().size();
+    for (const mdf4::ChannelGroup& group : document.groups()) {
+        ++rows;
+        // The name or "Channel Group <n>", then "<cycle count> samples".
+        textBytes += (group.name().empty() ? 24 : group.name().size()) + 28;
+        for (const mdf4::Channel& channel : group.channels()) {
+            ++rows;
+            // The name or "Channel <n>", then the unit and an axis or unplottable role.
+            textBytes += (channel.name().empty() ? 18 : channel.name().size()) +
+                         channel.unit().size() +
+                         (channel.is_master() || !channel.decodable() ? 19 : 0);
+        }
+    }
+    return rows * kRowBytes + textBytes * 9 / 4;
 }
 
 void Mdf4DocumentSession::buildTree() {
@@ -195,6 +599,27 @@ void Mdf4DocumentSession::buildTree() {
         QStringLiteral("file"),
         SemanticKind::Root,
         Mdf4Path{Mdf4EntityKind::File, -1, -1});
+
+    // The tree is admitted before any group or channel row exists. Past its
+    // allowance the file row stands alone, with its details, and a diagnostic
+    // says why nothing is listed under it.
+    const std::uint64_t required = treeBytes(*_metadata);
+    if (required > _limits.treeBytes) {
+        std::uint64_t channels = 0;
+        for (const mdf4::ChannelGroup& group : _metadata->groups()) {
+            channels += static_cast<std::uint64_t>(group.channels_size());
+        }
+        const auto groups = static_cast<std::uint64_t>(_metadata->groups_size());
+        file->subtitle = QStringLiteral("%1  ·  channel tree not shown").arg(file->subtitle);
+        addDiagnostic({DiagnosticSeverity::Error,
+                       QStringLiteral("Channel tree not shown"),
+                       QStringLiteral("Listing %1 in %2 needs about %3; the navigation tree's "
+                                      "allowance is %4.")
+                           .arg(countText(channels, "channel"), countText(groups, "channel group"),
+                                sizeText(required), sizeText(_limits.treeBytes))});
+        setRootItem(std::move(root));
+        return;
+    }
 
     for (int groupIndex = 0; groupIndex < _metadata->groups_size(); ++groupIndex) {
         const auto& group = _metadata->groups(groupIndex);
@@ -228,178 +653,3 @@ void Mdf4DocumentSession::buildTree() {
     setRootItem(std::move(root));
 }
 
-// Plot model observers run synchronously and may select another node or close
-// this session. Every flow therefore settles its state first and notifies last:
-// the series, then a busy state derived from the state as it is by then.
-void Mdf4DocumentSession::show(PlotSeriesPtr series) {
-    QPointer<SignalPlotModel> model(_plot_model.get());
-    model->setSeries(std::move(series));
-    if (model) {
-        model->setBusy(reading());
-    }
-}
-
-bool Mdf4DocumentSession::reading() const {
-    return _selected_channel &&
-           (_selected_channel == _active_read || _selected_channel == _pending_read);
-}
-
-void Mdf4DocumentSession::clearPlot() {
-    _selected_channel.reset();
-    _pending_read.reset();
-    show(nullptr);
-}
-
-PlotSeries Mdf4DocumentSession::seriesHeader(ChannelKey key) const {
-    const int groupIndex = static_cast<int>(key.first);
-    const int channelIndex = static_cast<int>(key.second);
-    const mdf4::Channel& channel = _metadata->groups(groupIndex).channels(channelIndex);
-    const DomainMetadata domain = domainMetadata(*_metadata, groupIndex);
-    PlotSeries header;
-    header.name = channelTitle(channel, channelIndex);
-    header.unit = text(channel.unit());
-    header.domainName = domain.name;
-    header.domainUnit = domain.unit;
-    return header;
-}
-
-PlotSeriesPtr Mdf4DocumentSession::cachedSeries(ChannelKey key) {
-    const auto entry = _decode_cache.find(key);
-    if (entry == _decode_cache.end()) {
-        return {};
-    }
-    entry->second.lastUse = ++_cache_clock;
-    return entry->second.series;
-}
-
-void Mdf4DocumentSession::cacheSeries(ChannelKey key, PlotSeriesPtr series) {
-    const std::uint64_t bytes =
-        (series->time.size() + series->value.size()) * sizeof(double);
-    CacheEntry& entry = _decode_cache[key];
-    _cache_bytes -= entry.bytes;
-    entry = CacheEntry{std::move(series), bytes, ++_cache_clock};
-    _cache_bytes += bytes;
-
-    // Evict least-recently-used channels until the budget holds. The channel on
-    // screen and the entry just stored are never the victim, so a single series
-    // larger than the whole budget stays cached alone and still plots.
-    while (_cache_bytes > kDecodeCacheBudget) {
-        auto victim = _decode_cache.end();
-        for (auto it = _decode_cache.begin(); it != _decode_cache.end(); ++it) {
-            if (it->first == key || _selected_channel == it->first) {
-                continue;
-            }
-            if (victim == _decode_cache.end() ||
-                it->second.lastUse < victim->second.lastUse) {
-                victim = it;
-            }
-        }
-        if (victim == _decode_cache.end()) {
-            return;
-        }
-        _cache_bytes -= victim->second.bytes;
-        _decode_cache.erase(victim);
-    }
-}
-
-void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
-    if (path.groupIndex < 0 || path.groupIndex >= _metadata->groups_size()) {
-        clearPlot();
-        return;
-    }
-
-    const auto& group = _metadata->groups(path.groupIndex);
-    if (path.channelIndex < 0 || path.channelIndex >= group.channels_size()) {
-        clearPlot();
-        return;
-    }
-
-    const auto& channel = group.channels(path.channelIndex);
-    const ChannelKey key{
-        static_cast<std::uint32_t>(path.groupIndex),
-        static_cast<std::uint32_t>(path.channelIndex),
-    };
-    PlotSeries header = seriesHeader(key);
-
-    // A master is the group's own domain, not a signal against it.
-    if (channel.is_master() || !channel.decodable()) {
-        header.placeholderText = channel.is_master()
-            ? QStringLiteral("Master channel — this group's time axis")
-            : QStringLiteral("This channel type is not plottable");
-        _selected_channel.reset();
-        _pending_read.reset();
-        show(std::make_shared<const PlotSeries>(std::move(header)));
-        return;
-    }
-
-    _selected_channel = key;
-    if (PlotSeriesPtr cached = cachedSeries(key)) {
-        _pending_read.reset();
-        show(std::move(cached));
-        return;
-    }
-
-    if (channel.sample_count() == 0) {
-        _pending_read.reset();
-        header.placeholderText = kNoSamples;
-        show(std::make_shared<const PlotSeries>(std::move(header)));
-        return;
-    }
-
-    // One read at a time: the active one is reused, and a channel selected
-    // while another reads waits as the single pending request.
-    if (_active_read == key) {
-        _pending_read.reset();
-    } else if (_active_read) {
-        _pending_read = key;
-    } else {
-        startRead(key);
-    }
-    show(std::make_shared<const PlotSeries>(std::move(header)));
-}
-
-// The task owns a copy of the read function, and with it the source, plus plain
-// request values; it never reaches this session or its models.
-void Mdf4DocumentSession::startRead(ChannelKey key) {
-    const std::uint64_t sampleCount = _metadata->groups(static_cast<int>(key.first))
-                                          .channels(static_cast<int>(key.second))
-                                          .sample_count();
-    _active_read = key;
-    _read_watcher.setFuture(QtConcurrent::run([read = _read, key, sampleCount] {
-        return read(key.first, key.second, 0, sampleCount);
-    }));
-}
-
-void Mdf4DocumentSession::onReadFinished() {
-    // Take the result and settle which read is active before notifying.
-    mdf4::ReadResult result = _read_watcher.future().takeResult();
-    const ChannelKey key = *_active_read;
-    _active_read.reset();
-
-    PlotSeries series = seriesHeader(key);
-    if (result.ok) {
-        series.time = std::move(result.series.time);
-        series.value = std::move(result.series.value);
-        normalizeDomain(series);
-        if (series.time.empty()) {
-            series.placeholderText = kNoSamples;
-        }
-    } else {
-        series.placeholderText = failureText(result);
-    }
-    PlotSeriesPtr completed = std::make_shared<const PlotSeries>(std::move(series));
-
-    // Samples are valid for their channel whatever is selected now; only the
-    // plot follows the selection.
-    if (result.ok) {
-        cacheSeries(key, completed);
-    }
-    if (_pending_read) {
-        const ChannelKey next = *_pending_read;
-        _pending_read.reset();
-        startRead(next);
-    }
-    if (_selected_channel == key) {
-        show(std::move(completed));
-    }
-}

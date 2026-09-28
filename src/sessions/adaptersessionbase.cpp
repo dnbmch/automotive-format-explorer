@@ -55,6 +55,10 @@ void AdapterSessionBase::setRootItem(std::unique_ptr<TreeItem> root) {
     _tree_model.setRoot(std::move(root));
 }
 
+void AdapterSessionBase::addDiagnostic(DiagnosticMessage diagnostic) {
+    _diagnostics.push_back(std::move(diagnostic));
+}
+
 TreeItem* AdapterSessionBase::appendNode(TreeItem* parent,
                                          const QString& title,
                                          const QString& subtitle,

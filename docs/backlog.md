@@ -51,6 +51,41 @@ state saved into the tab and restored around the rebuild, for each of the views.
 
 **Size:** S per view; wanted only if the reset proves a real annoyance.
 
+## Viewer data
+
+### BL-V1: MDF4 opening cannot be cancelled
+
+`Mdf4Adapter::load()` constructs its `mdf4::Reader` without a cancellation flag,
+although the reader stops an opening when one is set. The load contract has none:
+`AppController::shutdown()` waits for a pending load, so closing the application
+while a large MDF4 file opens waits for its opening (bounded by the reader's
+`openingBytes`). Threading a flag from the controller through `FormatAdapter::load()`
+would make shutdown prompt for MDF4; the text formats would ignore it.
+
+**Size:** S.
+
+### BL-V2: a channel that fits one window is scanned twice
+
+Selecting a channel scans it for its overview; when the whole view fits one exact
+window, the plot then asks for that window and the session scans the same range
+again. One scan could feed both builders when the stated count fits a window, the
+window taking the overview's domain decision when both finish. Wanted only if the
+second scan proves noticeable on real recordings; it must stay the same scan and
+domain rules, not a second decode path.
+
+**Size:** S.
+
+### BL-V3: an MDF4 selection notifies the detail panel before its plot flow
+
+`Mdf4DocumentSession::selectNode()` sets the detail model's selection, which
+notifies, and then runs the plot flow with its local path and no lifetime check. An
+observer of the detail model that selects another row or closes the tab would leave
+that flow on a superseded selection or a destroyed session. No such observer exists.
+The fix is the session's own rule: check the session's lifetime after the detail
+notification (or settle the plot state first), and cover it with a reentry test.
+
+**Size:** S.
+
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant

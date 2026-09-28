@@ -32,6 +32,9 @@ int main(int argc, char* argv[]) {
     qmlRegisterType<MemoryGridItem>("ExplorerApp", 1, 0, "MemoryGridItem");
     qmlRegisterType<SignalGridItem>("ExplorerApp", 1, 0, "SignalGridItem");
     qmlRegisterType<SignalPlotItem>("ExplorerApp", 1, 0, "SignalPlotItem");
+    // For its states in QML; a document session creates it.
+    qmlRegisterUncreatableType<SignalPlotModel>("ExplorerApp", 1, 0, "SignalPlotModel",
+                                                QStringLiteral("Provided by a document session"));
 
     AppController controller(builtInFormats());
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &controller, &AppController::shutdown);

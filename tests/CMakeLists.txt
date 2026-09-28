@@ -47,6 +47,21 @@ explorer_add_test(tst_signalplotitem explorer-core Qt6::Quick)
 target_sources(tst_signalplotitem PRIVATE ${PROJECT_SOURCE_DIR}/src/ui/signalplotitem.cpp)
 set_property(TEST tst_signalplotitem APPEND PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+# The production signal plot view in a test-time ExplorerApp module:
+# SignalPlotView.qml and Theme.qml are copied from qml/components, and the test
+# registers the painted plot it compiles and the plot model as main.cpp does.
+explorer_add_test(tst_signalplotview explorer-core Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+target_sources(tst_signalplotview PRIVATE ${PROJECT_SOURCE_DIR}/src/ui/signalplotitem.cpp)
+set(_plotview_module "${CMAKE_CURRENT_BINARY_DIR}/plotview_module/ExplorerApp")
+configure_file(${PROJECT_SOURCE_DIR}/qml/components/SignalPlotView.qml ${_plotview_module}/SignalPlotView.qml COPYONLY)
+configure_file(${PROJECT_SOURCE_DIR}/qml/components/Theme.qml ${_plotview_module}/Theme.qml COPYONLY)
+configure_file(plotview/qmldir ${_plotview_module}/qmldir COPYONLY)
+target_compile_definitions(tst_signalplotview PRIVATE
+    PLOTVIEW_IMPORT_PATH="${CMAKE_CURRENT_BINARY_DIR}/plotview_module")
+set_property(TEST tst_signalplotview APPEND PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+explorer_add_test(tst_plotdata explorer-core)
+
 explorer_add_test(tst_signalplotmodel explorer-core)
 
 explorer_add_test(tst_documenttab explorer-core)
@@ -86,6 +101,15 @@ explorer_add_test(tst_mdf4detailpresenter
 )
 
 explorer_add_test(tst_mdf4documentsession
+    explorer-core
+    explorer-mdf4-backend
+    Qt6::Concurrent
+    protobuf::libprotobuf
+    mdf4parser::mdf4parser
+)
+
+# Generated recordings through the production adapter and the real reader.
+explorer_add_test(tst_mdf4recording
     explorer-core
     explorer-mdf4-backend
     Qt6::Concurrent

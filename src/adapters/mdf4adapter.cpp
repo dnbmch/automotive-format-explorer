@@ -26,8 +26,9 @@ DiagnosticMessage toDiagnostic(const mdf4::Diagnostic& diagnostic) {
 
 } // namespace
 
-// The file is opened and indexed once. The session's tree, details and every
-// channel read use that one reader, which lives as long as either handle.
+// The file is opened and indexed once, with the reader's default limits and no
+// cancellation. The session's tree, details, time axes and every scan use that
+// one reader, which lives as long as any of its handles.
 LoadResult Mdf4Adapter::load(const QString& path) const {
     auto reader = std::make_shared<mdf4::Reader>(path.toStdString());
     std::shared_ptr<const mdf4::File> metadata(reader, &reader->metadata());
@@ -42,7 +43,11 @@ LoadResult Mdf4Adapter::load(const QString& path) const {
         path,
         std::move(metadata),
         [reader](std::uint32_t group, std::uint32_t channel, std::uint64_t first,
-                 std::uint64_t count) { return reader->read(group, channel, first, count); },
+                 std::uint64_t count, const mdf4::Control& control,
+                 const mdf4::Visitor& visitor) {
+            return reader->scan(group, channel, first, count, control, visitor);
+        },
+        [reader](std::uint32_t group) { return reader->axis(group); },
         diagnostics);
     return LoadResult{std::move(session), diagnostics};
 }

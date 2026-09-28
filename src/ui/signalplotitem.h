@@ -13,6 +13,9 @@ class QMouseEvent;
 class QPainter;
 class QWheelEvent;
 
+// Paints the plot model: overview bins as the extrema each pixel column
+// covers, exact samples as a line, or as columns when denser than the pixels.
+// Wheel zoom, drag pan and hover run here; state lives in the model.
 class SignalPlotItem : public QQuickPaintedItem {
     Q_OBJECT
 
@@ -51,18 +54,18 @@ protected:
 
 private:
     void onModelReplaced();
+    bool interactive() const;
     QRectF plotRect() const;
     double timeAtX(qreal x) const;
     qreal xForTime(double time, const QRectF& rect) const;
     qreal yForValue(double value, const QRectF& rect) const;
     void updateCursorAt(const QPointF& position);
     void drawAxes(QPainter* painter, const QRectF& rect) const;
-    void drawSeries(QPainter* painter, const QRectF& rect) const;
+    void drawColumns(QPainter* painter, const QRectF& rect) const;
+    void drawSamples(QPainter* painter, const QRectF& rect) const;
     void drawCursor(QPainter* painter, const QRectF& rect) const;
     void drawCenteredMessage(QPainter* painter, const QRectF& rect,
                              const QString& message) const;
-
-    static QString numberLabel(double value);
 
     // Reads null once the model is destroyed, which counts as a replacement.
     QPointer<SignalPlotModel> _model;

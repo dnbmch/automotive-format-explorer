@@ -15,10 +15,11 @@ built-in format list is how a format arrives, not a change to the shell.
 
 ## Format coverage
 
-- MDF4 structure browsing, metadata details, and lazy single-channel plotting
-  are implemented and build against the published parser artifacts. Packaging
-  MDF4 into a shipped release remains in the release phase of
-  [the locked plan](docs/plans/mdf4_viewer.md).
+- MDF4 structure browsing, metadata details, and single-channel plotting of whole
+  recordings (a bounded overview plus exact windows of the view) are implemented.
+  They need the bounded reader interface, which no published `mdf4-parser-lib`
+  carries yet; packaging MDF4 into a shipped release remains in the release phase
+  of [the locked plan](docs/plans/mdf4_viewer.md).
 - New-format backends follow the workspace parser-research priority once their
   parsers exist: ARXML → ODX → FIBEX. Each plugs in as a `FormatAdapter` +
   `DocumentSession` with its own tree/detail/center wiring.

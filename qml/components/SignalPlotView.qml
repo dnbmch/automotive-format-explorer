@@ -17,9 +17,15 @@ Item {
     // provider updates mapModel asynchronously; there is nothing to scroll.
     function scrollToNodeKey(nodeKey) {}
 
+    readonly property int plotState: mapModel ? mapModel.plotState : SignalPlotModel.NoSignal
+    readonly property bool hasSamples: mapModel ? mapModel.hasSamples : false
+    readonly property color noteColor: plotState === SignalPlotModel.Failed ? Theme.accentRed
+                                     : plotState === SignalPlotModel.Refused ? Theme.accentOrange
+                                     : Theme.textMuted
+
     function numberText(value) {
         if (!isFinite(value))
-            return "\u2014"
+            return "—"
         let magnitude = Math.abs(value)
         if (magnitude >= 1000000 || (magnitude > 0 && magnitude < 0.0001))
             return Number(value).toExponential(3)
@@ -78,15 +84,49 @@ Item {
                     }
                 }
 
+                // The sample count where it fits. A source that ended early
+                // says so at every width, and how much of it arrived where
+                // that fits.
                 Label {
-                    visible: mapModel && mapModel.hasSeries && plotView.width >= 500
-                    text: mapModel ? Number(mapModel.sampleCount).toLocaleString() + " samples" : ""
+                    readonly property bool incomplete: mapModel ? mapModel.incomplete : false
+                    readonly property bool wide: plotView.width >= 500
+                    visible: mapModel && mapModel.countText.length > 0 && (wide || incomplete)
+                    text: !mapModel ? "" : !incomplete ? mapModel.countText
+                        : wide ? "Incomplete: " + mapModel.countText : "Incomplete"
+                    font.family: Theme.fontMono
+                    font.pixelSize: Theme.fontSizeS
+                    color: incomplete ? Theme.accentOrange : Theme.textMuted
+                }
+
+                // Whether the view shows every sample or the range of each column.
+                Rectangle {
+                    visible: plotView.hasSamples && plotView.width >= 420
+                    Layout.preferredWidth: modeLabel.implicitWidth + 12
+                    Layout.preferredHeight: 18
+                    radius: 9
+                    color: "transparent"
+                    border.color: plotView.plotState === SignalPlotModel.Detail ? Theme.accentGreen
+                                                                                 : Theme.border
+
+                    Label {
+                        id: modeLabel
+                        anchors.centerIn: parent
+                        text: plotView.plotState === SignalPlotModel.Detail ? "Exact samples"
+                                                                             : "Overview"
+                        font.pixelSize: Theme.fontSizeS
+                        color: Theme.textSecondary
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Label {
+                    visible: mapModel && mapModel.busy && mapModel.progress >= 0
+                    text: mapModel ? Math.round(mapModel.progress * 100) + "%" : ""
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fontSizeS
                     color: Theme.textMuted
                 }
-
-                Item { Layout.fillWidth: true }
 
                 BusyIndicator {
                     visible: running
@@ -105,7 +145,7 @@ Item {
                     color: resetMouse.pressed ? Theme.bgButtonPrs
                          : resetMouse.containsMouse ? Theme.bgButtonHov : Theme.bgButton
                     border.color: Theme.border
-                    opacity: mapModel && mapModel.hasSeries ? 1.0 : 0.45
+                    opacity: plotView.hasSamples ? 1.0 : 0.45
 
                     Label {
                         anchors.centerIn: parent
@@ -117,7 +157,7 @@ Item {
                     MouseArea {
                         id: resetMouse
                         anchors.fill: parent
-                        enabled: mapModel && mapModel.hasSeries
+                        enabled: plotView.hasSamples
                         hoverEnabled: true
                         cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                         onClicked: plotItem.resetZoom()
@@ -162,50 +202,40 @@ Item {
                 anchors.rightMargin: 9
                 spacing: 8
 
+                // The hovered sample or columns; else the view with any note on
+                // why it is not exact; else why nothing is plotted.
                 Label {
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fontSizeS
-                    color: mapModel && mapModel.cursorVisible
-                           ? Theme.textSecondary : Theme.textMuted
+                    color: mapModel && mapModel.cursorVisible ? Theme.textSecondary
+                                                              : plotView.noteColor
                     text: {
                         if (!mapModel)
                             return ""
-                        if (mapModel.busy)
-                            return "Preparing samples\u2026"
-                        if (mapModel.cursorVisible) {
+                        if (mapModel.cursorVisible)
+                            return mapModel.cursorText
+                        let note = mapModel.message
+                        if (plotView.hasSamples) {
                             let domainName = mapModel.domainName.length > 0
                                            ? mapModel.domainName : "Domain"
                             let domainSuffix = mapModel.domainUnit.length > 0
                                              ? " " + mapModel.domainUnit : ""
-                            let suffix = mapModel.unit.length > 0 ? " " + mapModel.unit : ""
-                            return domainName + " = " + plotView.numberText(mapModel.cursorTime)
-                                 + domainSuffix + "  \u00b7  "
-                                 + plotView.numberText(mapModel.cursorValue) + suffix
-                                 + "  \u00b7  sample " + (Number(mapModel.cursorIndex) + 1)
+                            let range = domainName + " window  "
+                                      + plotView.numberText(mapModel.viewStart) + " — "
+                                      + plotView.numberText(mapModel.viewEnd) + domainSuffix
+                            return note.length > 0 ? range + "  ·  " + note : range
                         }
-                        if (mapModel.hasSeries) {
-                            let domainName = mapModel.domainName.length > 0
-                                           ? mapModel.domainName : "Domain"
-                            let domainSuffix = mapModel.domainUnit.length > 0
-                                             ? " " + mapModel.domainUnit : ""
-                            return domainName + " window  "
-                                 + plotView.numberText(mapModel.viewStart) + " \u2014 "
-                                 + plotView.numberText(mapModel.viewEnd) + domainSuffix
-                        }
-                        if (mapModel.placeholderText.length > 0)
-                            return mapModel.placeholderText
-                        if (mapModel.name.length > 0)
-                            return "No samples available"
+                        if (note.length > 0)
+                            return note
                         return "Choose a signal in the tree to begin"
                     }
                 }
 
                 Label {
-                    visible: mapModel && mapModel.hasSeries && !mapModel.busy
-                             && plotView.width >= 620
-                    text: "Wheel: zoom  \u00b7  Drag: pan  \u00b7  Double-click: reset"
+                    visible: plotView.hasSamples && plotView.width >= 620
+                    text: "Wheel: zoom  ·  Drag: pan  ·  Double-click: reset"
                     font.pixelSize: Theme.fontSizeS
                     color: Theme.textDisabled
                 }

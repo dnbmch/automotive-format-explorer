@@ -29,6 +29,8 @@ public:
 
 protected:
     void setRootItem(std::unique_ptr<TreeItem> root);
+    // A diagnostic the session raises while building its own views.
+    void addDiagnostic(DiagnosticMessage diagnostic);
     // Appends a row with the session's next key.
     TreeItem* appendNode(TreeItem* parent,
                          const QString& title,

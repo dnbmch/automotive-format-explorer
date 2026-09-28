@@ -1,0 +1,3 @@
+module ExplorerApp
+singleton Theme 1.0 Theme.qml
+SignalPlotView 1.0 SignalPlotView.qml

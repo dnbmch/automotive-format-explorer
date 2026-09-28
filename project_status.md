@@ -21,18 +21,23 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   identity. Painted items track their model's lifetime.
 - A2L memory-map view and DBC/LDF signal-map view via `QQuickPaintedItem`
   C++ renderers (`MemoryGridItem`, `SignalGridItem`) with FBO scrolling.
-- Format-neutral single-channel signal plot (`PlotSeries`, `SignalPlotModel`,
-  `SignalPlotItem`) with summary-backed min/max bucketing, zoom, pan, and
-  nearest-sample cursor readout.
+- Format-neutral single-channel signal plot (`plotdata`, `SignalPlotModel`,
+  `SignalPlotItem`): a worker-built overview of at most 4,096 bins covers every
+  sample of a channel, and exact windows of at most 4 Mi samples follow the view;
+  bins are painted as unjoined extrema columns, exact samples as a line or, when
+  dense, as columns. Hover reports a bin range or an exact sample with its index;
+  a source that ended early shows "N of M samples"; zoom, pan and reset.
 - MDF4 open indexes metadata once into one retained `mdf4::Reader` shared by the
-  tree, detail cards and every channel read. Channel reads run on a worker one at
-  a time, with a single replaceable pending selection; successful reads land in a
-  byte-budget LRU cache shared with the plot model and reach the plot only while
-  their channel is still selected. A failed read shows its reason (a changed file
-  asks for a reload) and is not cached; an empty success shows no samples. Closing
-  the tab waits for a running read. Non-monotonic domains fall back to record
-  indices at the session seam; group masters are listed as axis channels, not
-  signals.
+  tree, detail cards, time axes and every scan. The tree is admitted against a
+  384 MiB estimate before it is built. One scan runs at a time with a single
+  replaceable pending scan; obsolete scans are cancelled and their results and
+  progress discarded. Completed overviews and windows share one 256 MiB allowance
+  per session with the scan in flight's reservation, evicting only results nobody
+  else holds and refusing, with the numbers, when held results leave no room.
+  Empty, short, refused, changed-file and failed scans read differently; the domain
+  is the reader's time axis or the sample index; group masters are listed as axis
+  channels, not signals. Closing a tab cancels its scan and waits for the reader's
+  next checkpoint.
 - Memory grid: sparse byte queries remove the 16 MiB coverage cap and support tested
   multi-GiB spans, with overlap hatching (bytes claimed by more than
   one object), click-drag byte-range selection with status readout, and hover
@@ -49,10 +54,13 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - Splash overlay + DWM cloak startup.
 - Links the four canonical parser targets, from complete installed packages or
   source workspace composition. GPL-3.0.
-- QTest coverage for tree filtering, memory and signal-plot models, A2L/MDF4
-  detail presenters, MDF4 serialized reads, stale completions, failure versus
-  empty results, cache eviction, domain validation, worker-thread hand-off and
-  teardown from and during reads, the production format list (suffixes, dialog filters, sample
+- QTest coverage for tree filtering, memory models, the plot builders (bin
+  partition up to 2^64, domain decision, exact windows over gaps, repeats and
+  nonfinite values, storage), the plot model and painted item, A2L/MDF4 detail
+  presenters, MDF4 scan scheduling and cancellation, stale progress and results,
+  outcomes, reservation and eviction, tree admission, worker-thread hand-off and
+  teardown from and during scans, a generated 4.5 M-sample recording through the
+  real reader, the production format list (suffixes, dialog filters, sample
   classification, one bundled sample per format opened through the controller)
   controller load/shutdown lifetimes and the tab contract through a fake adapter,
   tab navigation and pre-filter snapshots, lazy raw JSON, the painted items'

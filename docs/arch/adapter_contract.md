@@ -102,20 +102,30 @@ If your format has nothing graphical to show in the middle column, leave `center
 | MDF4 | `qrc:/qt/qml/ExplorerApp/qml/components/SignalPlotView.qml` | `SignalPlotModel` |
 
 The center views use `QQuickPaintedItem` C++ renderers. Grid views are driven by
-pre-computed flat occupancy arrays; the signal plot uses a format-neutral
-`PlotSeries` seam and min/max summaries. Adding a new recording format that can
-produce `PlotSeries` needs no plot changes.
+pre-computed flat occupancy arrays; the signal plot consumes the format-neutral
+overview and exact windows of `src/models/plotdata.h`, which its builders make from
+ordered sample chunks. Adding a new recording format that can deliver such chunks
+needs no plot changes.
 
 ### Lazy bulk-data sessions
 
 Keep metadata extraction inside `FormatAdapter::load()` so opening and browsing
 a large recording does not read sample payloads. The session owns lazy work:
 
-- translate its format document into tree and detail models at open;
-- translate a selected channel into `PlotSeries` at the plot seam;
-- dispatch sample decoding away from the GUI thread and pass an explicit range;
-- cache completed channels; and
-- tag each request so a result from an older selection cannot update the model.
+- translate its format document into tree and detail models at open, admitting the
+  tree against a finite allowance before building it;
+- scan a selected channel away from the GUI thread, feeding its chunks to a
+  `PlotOverviewBuilder`, and scan the covers the plot's `detailRequest()` names into
+  `PlotWindowBuilder`s;
+- run one scan at a time, keep only the latest wanted one pending, cancel work a
+  newer selection or view makes obsolete, let no cancelled result or stale progress
+  reach the model, and release a cancelled result before its reservation and
+  before the next scan is admitted;
+- reserve each builder's bytes before launch and cache completed results within
+  one allowance, evicting only results nobody else holds; and
+- install results only after the scan completed successfully.
+
+`Mdf4DocumentSession` is the reference: [MDF4 reads](architecture.md#mdf4-reads).
 
 Decoder/library types must not appear under `src/models/`, `src/ui/`, or the
 plot QML component. This keeps the plot reusable by future recording backends.

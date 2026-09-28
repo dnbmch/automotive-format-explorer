@@ -32,8 +32,9 @@ viewer-side plan of record.
   reader + session only, zero plot work.
 - **Plot rendering: custom `QQuickPaintedItem`** (`SignalPlotItem`), following the
   `SignalGridItem` precedent. No new Qt modules, no new deploy surface.
-- **Load strategy: metadata-only at open into one retained reader, one channel read
-  at a time on demand** on a worker thread, cached per channel.
+- **Load strategy: metadata-only at open into one retained reader, one scan at a
+  time on demand** on a worker thread: a bounded overview of the selected channel,
+  then exact windows of the view, cached within one allowance per session.
 - **v1 plot scope: single channel** — click a channel in the tree, it plots.
 
 ## v1 reader scope (writer output + foreign-writer gate)
@@ -62,32 +63,13 @@ The `-lib` surface is a hybrid — protobuf for the document, plain C++ for bulk
   keeps the explorer's detail cards, raw-JSON toggle, and
   diagnostics badge/popup working unchanged.
 - **Samples as a direct C++ API** — bulk time-series data does not round-trip through
-  protobuf.
-
-```cpp
-// lib/include/mdf4/reader.h         namespace mdf4
-class Reader {                                             // one opened, indexed source
-    explicit Reader(const std::string& path);              // block graph walk, no sample read
-    const File& metadata() const;                          // immutable for the reader's life
-    bool ready() const;
-    ReadResult read(uint32_t group, uint32_t channel,      // samples + time master, physical
-                    uint64_t firstSample = 0,
-                    uint64_t sampleCount = UINT64_MAX);    // sample window, clamped
-};
-struct ReadResult { bool ok; Series series; std::string location; const char* message; };
-// lib/include/mdf4/extract.h        metadata of a temporary Reader
-mdf4::File extract::extractFile(const std::string& path);
-// lib/include/mdf4/series.h
-struct Series { std::vector<double> time; std::vector<double> value; };
-```
-
-The reader indexes once and serves every read from the file it opened; a file changed
-since then fails the read and needs a new reader. One thread uses a reader at a time,
-while its metadata may be read from any thread. Indexing reads block headers only;
-sample count comes from CG cycle counts, so open cost is proportional to structure, not
-file size. A read materializes the whole clamped window of one channel (16
-bytes/sample) and inflates a compressed fragment whole. Normative contract:
-[reader architecture](../../../mdf4-parser/docs/arch/reader.md).
+  protobuf. `mdf4::Reader` (`lib/include/mdf4/reader.h`) opens and indexes one source
+  within finite `Limits`, reports a typed `Outcome`, resolves each group's time axis
+  (`axis()`), and serves `scan()` (ordered chunks to a visitor, cancellable, with
+  progress) and `read()` (an owned window within its sample allowance); a file changed
+  since opening is `SourceChanged` and needs a new reader. `extract::extractFile(path)`
+  is the metadata of a temporary reader. Normative contract:
+  [reader architecture](../../../mdf4-parser/docs/arch/reader.md).
 
 ## mdf4-parser repo
 
@@ -140,11 +122,11 @@ the open parser for verification, never the reverse.
   derive from it. `FormatId::MDF4` + display name live in `src/core/formatid.h`.
 - **Adapter** `src/adapters/mdf4adapter.{h,cpp}`: `load()` opens one `mdf4::Reader`, maps
   its metadata diagnostics to `DiagnosticMessage`s, and constructs the session with that
-  reader's metadata and a read function bound to it.
+  reader's metadata and scan and axis functions bound to it.
 - **Session** `src/sessions/mdf4documentsession.{h,cpp}` (extends `AdapterSessionBase`):
   tree = file → channel groups → channels (unit as subtitle) from the reader's metadata;
-  owns the decode cache and the one-read-at-a-time flow; converts read results into the
-  plot module's series type at this seam.
+  owns the result cache and the one-scan-at-a-time flow; feeds scans into the plot
+  module's builders at this seam.
 - **Presenter** `src/sessions/mdf4detailpresenter.{h,cpp}`: channel cards — data type,
   bit geometry, unit, conversion kind + coefficients, sample count, master type; group
   cards — record size, cycle count, storage layout. Unsupported channels appear in tree +
@@ -152,35 +134,29 @@ the open parser for verification, never the reverse.
 
 ## Plot module (format-agnostic)
 
-The seam is an explorer-local value type — sessions produce it, the plot stack consumes
-only it, and no `mdf4::` (or future format) type crosses the line:
-
-```cpp
-// src/models/plotseries.h
-struct PlotSeries {
-    QString name, unit;
-    QString domainName, domainUnit;
-    std::vector<double> time, value;
-};
-```
+The seam is explorer-local — sessions feed it sample chunks, the plot stack consumes
+only its results, and no `mdf4::` (or future format) type crosses the line:
+`src/models/plotdata.h` holds the overview, the exact window and their builders
+([signal plot](../ref/signal_plot.md)).
 
 - `src/models/signalplotmodel.{h,cpp}` — `QAbstractListModel` (center-panel contract,
-  `src/sessions/documentsession.h:30`) holding the current `PlotSeries` + view state
-  (visible time window, y-range, cursor, busy flag) and the min/max-per-pixel bucket
-  computation. API surface: `setSeries(PlotSeries)`, `setBusy(bool)` — that is the whole
-  provider contract for v1; a formal interface class waits until a second producer
-  exists.
-- `src/ui/signalplotitem.{h,cpp}` — `QQuickPaintedItem`: bucketed min/max column polyline
-  when samples exceed ~2× pixel width, direct polyline otherwise; axes + tick labels;
-  wheel zoom around cursor; drag pan; hover readout (time + value at nearest sample).
-  Theme colors via `setColors()` like `SignalGridItem`. Registered in `main.cpp`.
+  `src/sessions/documentsession.h`) holding the installed overview and window, view
+  state (visible range, value range, cursor, busy and progress) and the per-pixel
+  extrema columns. Provider contract: `setSignal()`, `setWindow()`, `clear()`,
+  `setBusy()`, `setProgress()`, and the `detailWanted` / `detailRequest()` pair by which
+  the view asks for exact samples.
+- `src/ui/signalplotitem.{h,cpp}` — `QQuickPaintedItem`: overview bins as unjoined
+  extrema columns, exact samples as a line or, above two per pixel, as columns; axes +
+  tick labels; wheel zoom around the cursor; drag pan; hover readout (a bin range or
+  the nearest exact sample with its index). Theme colors via `setColors()` like
+  `SignalGridItem`. Registered in `main.cpp`, with the model type for its states.
 - `qml/components/SignalPlotView.qml` — toolbar (signal name, unit, sample count,
   reset-zoom), plot item, status bar; returned by `centerPanelSource()`; registered in
   `qt_add_qml_module`.
-- **Selection flow**: `selectNode(channel)` → session cache check → on miss, a read via
-  `QtConcurrent` + one `QFutureWatcher`, or the single pending read while another runs;
-  plot shows busy state; a successful result is always cached but reaches the plot only
-  while its channel is still selected. Contract: [architecture](../arch/architecture.md#mdf4-reads).
+- **Selection flow**: `selectNode(channel)` → session cache check → on miss, an overview
+  scan via `QtConcurrent` + one `QFutureWatcher`, or the single pending scan while another
+  runs, which a newer selection cancels; then the windows the view asks for. Contract:
+  [architecture](../arch/architecture.md#mdf4-reads).
 - **Reuse note**: the plot module is a candidate for later lift into the proprietary apps
   (live view off the UDP feed). Keep it contribution-clean — operator-authored only — so
   self-relicensing stays possible.
@@ -224,10 +200,10 @@ struct PlotSeries {
    CMake). Done when: opening an `.mf4` (seeded, unreleased parser) shows the channel
    tree + metadata cards; unsupported channels carry diagnostics; existing formats
    unaffected.
-5. **Plot module — complete** (plotseries, model, painted item, QML view, lazy decode wiring). Done
-   when: clicking a channel plots it; zoom/pan/cursor work; a million-sample channel
-   stays responsive; switching channels mid-decode doesn't race; no format types in the
-   plot module (grep-checkable).
+5. **Plot module — complete** (plot data and builders, model, painted item, QML view, lazy
+   scan wiring). Done when: clicking a channel plots it; zoom/pan/cursor work; a
+   million-sample channel stays responsive; switching channels mid-decode doesn't race; no
+   format types in the plot module (grep-checkable).
 6. **Release + docs — explorer release remainder only.** `mdf4-parser` v0.1.0 is published, the
    artifact-repo CI builds its examples against those assets, and explorer `master` consumes the
    headers archive under a sha256 pin with the manifest entry recorded. What remains: the real
