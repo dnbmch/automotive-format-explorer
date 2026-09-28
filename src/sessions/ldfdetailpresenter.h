@@ -1,12 +1,35 @@
 #pragma once
 
-#include "core/detailpresenter.h"
 #include "sessions/presentertext.h"
 
 #pragma push_macro("signals")
 #undef signals
 #include "ldf/ldf.pb.h"
 #pragma pop_macro("signals")
+
+enum class LdfEntityKind {
+    Overview,
+    MasterNode,
+    SlaveNode,
+    Frame,
+    FrameSignal,
+    Signal,
+    Encoding,
+    ScheduleTable,
+    EventFrame,
+    DiagnosticAddress,
+    SignalGroup,
+    DiagnosticSignal,
+    DiagnosticFrame
+};
+
+// An LDF entity a tree row shows: its kind, its index in the document's list
+// and, for a frame's signal, its index in the frame.
+struct LdfPath {
+    LdfEntityKind kind = LdfEntityKind::Frame;
+    int primaryIndex = -1;
+    int secondaryIndex = -1;
+};
 
 // Format-specific helpers live in ldfdetail so they don't collide with other
 // backends' same-named global helpers (e.g. A2L's differently-defined
@@ -30,14 +53,16 @@ QString scheduleEntryLabel(const ldf::ScheduleEntry& entry);
 
 } // namespace ldfdetail
 
-class LdfDetailPresenter final : public DetailPresenter {
+class LdfDetailPresenter final {
 public:
     explicit LdfDetailPresenter(const ldf::LdfFile& document)
         : _document(document) {
     }
 
-    QList<DetailSection> buildDetails(const NodeBinding& binding) const override;
-    QString buildRawJson(const NodeBinding& binding) const override;
+    QList<DetailSection> buildDetails(const LdfPath& path) const;
+    // The overview is assembled from several fields and has no single raw message.
+    static bool hasRawJson(const LdfPath& path) { return path.kind != LdfEntityKind::Overview; }
+    QString buildRawJson(const LdfPath& path) const;
 
 private:
     const ldf::Signal* findSignal(const std::string& name) const;

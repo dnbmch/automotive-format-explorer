@@ -49,6 +49,8 @@ public:
     bool waitUntilLoading() { return waitUntil(_loadActive); }
     bool waitUntilTeardown() { return waitUntil(_teardown); }
     void noteTimeout() { update([this] { _timedOut = true; }); }
+    void note(const QString& event) { update([this, event] { _events.push_back(event); }); }
+    QStringList destroyed() { return read([this] { return _destroyed; }); }
     bool timedOut() { return read([this] { return _timedOut; }); }
     int loads() { return read([this] { return _loads; }); }
     QStringList events() { return read([this] { return _events; }); }
@@ -72,11 +74,12 @@ public:
             _events.push_back(QStringLiteral("load returned"));
         });
     }
-    void sessionDestroyed(QThread* models) {
-        update([this, models] {
+    void sessionDestroyed(QThread* models, const QString& name) {
+        update([this, models, name] {
             _sessionThread = QThread::currentThread();
             _modelThread = models;
             _events.push_back(QStringLiteral("session destroyed"));
+            _destroyed.push_back(name);
         });
     }
     void adapterDestroyed() {
@@ -94,6 +97,7 @@ private:
     bool _loadActive = false;
     int _loads = 0;
     QStringList _events;
+    QStringList _destroyed;
     QThread* _sessionThread = nullptr;
     QThread* _modelThread = nullptr;
 };
@@ -104,7 +108,11 @@ public:
         : AdapterSessionBase(FormatId::Unknown, QStringLiteral("Fake"),
                              QFileInfo(path).fileName(), path),
           _probe(probe) {}
-    ~FakeSession() override { _probe.sessionDestroyed(_tree_model.thread()); }
+    ~FakeSession() override { _probe.sessionDestroyed(_tree_model.thread(), displayName()); }
+
+    void selectNode(quint64 key) override {
+        _probe.note(QStringLiteral("select %1 %2").arg(displayName()).arg(key));
+    }
 
 private:
     Probe& _probe;
@@ -189,6 +197,53 @@ void callOnce(Sender* sender, Signal signal, When when, Action action) {
     });
 }
 
+const QString A = QStringLiteral("a.fake");
+const QString B = QStringLiteral("b.fake");
+const QString C = QStringLiteral("c.fake");
+
+// Opens one fake file per name, each delivered as its own tab before the next.
+bool openTabs(AppController& controller, const QStringList& names) {
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+    for (const QString& name : names) {
+        const qsizetype before = loaded.count();
+        controller.openFile(fakeFile(name));
+        while (loaded.count() == before) {
+            if (!loaded.wait(10000)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+QStringList titles(AppController& controller) {
+    TabModel* tabs = controller.tabModel();
+    QStringList result;
+    for (int row = 0; row < tabs->rowCount(); ++row) {
+        result << tabs->data(tabs->index(row), TabModel::TitleRole).toString();
+    }
+    return result;
+}
+
+QString currentTitle(AppController& controller) {
+    TabModel* tabs = controller.tabModel();
+    return tabs->data(tabs->index(controller.currentTabIndex()), TabModel::TitleRole).toString();
+}
+
+// Records the current-tab notifications in the probe's log, in order with
+// session destruction.
+void noteNotifications(AppController& controller, Probe& probe) {
+    QObject::connect(&controller, &AppController::currentTabIndexChanged, &controller,
+                     [&probe] { probe.note(QStringLiteral("index")); });
+    QObject::connect(&controller, &AppController::currentSessionChanged, &controller,
+                     [&probe] { probe.note(QStringLiteral("session")); });
+}
+
+QStringList sorted(QStringList list) {
+    list.sort();
+    return list;
+}
+
 } // namespace
 
 class TestAppController : public QObject {
@@ -209,6 +264,27 @@ private slots:
     void shutdownFromClearedErrorRefusesOpen();
     void shutdownDuringDeliveryStopsFileLoaded();
     void shutdownFromCurrentTabIndexStopsDelivery();
+    void closeCurrentTabWithSuccessor();
+    void closeTabBeforeCurrent();
+    void closeTabAfterCurrent();
+    void closeOnlyTab();
+    void closedSessionOutlivesNotifications();
+    void shutdownFromRowRemovalDuringClose();
+    void shutdownFromIndexNotificationDuringClose();
+    void shutdownFromSessionNotificationDuringClose();
+    void closeAfterShutdown();
+    void switchAfterShutdown();
+    void everyPublicActionInertAfterShutdown();
+    void closeCurrentFromIndexNotification();
+    void closeCurrentFromSessionNotification();
+    void selectionStaysInCurrentTab();
+    void requestsDuringRowRemovalAreDeferred();
+    void requestsAfterRowRemovalKeepTheirTabs();
+    void deferredRequestsKeepTabIdentity();
+    void closeEarlierTabDuringInsertion();
+    void closeInsertedTabDuringInsertion();
+    void deferredRequestsAfterShutdownAreInert();
+    void shutdownDuringRowRemovalFinishesIt();
 };
 
 void TestAppController::deliversSuccessfulLoad() {
@@ -230,7 +306,7 @@ void TestAppController::deliversSuccessfulLoad() {
     QVERIFY(controller.lastError().isEmpty());
     QCOMPARE(controller.tabModel()->rowCount(), 1);
     QCOMPARE(controller.currentTabIndex(), 0);
-    DocumentSession* session = controller.tabModel()->sessionAt(0);
+    DocumentSession* session = controller.tabModel()->tabAt(0)->session();
     QCOMPARE(session->formatName(), QStringLiteral("Fake"));
     QCOMPARE(session->treeModel()->thread(), controller.thread());
     QCOMPARE(session->detailModel()->thread(), controller.thread());
@@ -456,7 +532,7 @@ void TestAppController::openFromIdleNotificationDeliversBoth() {
     TabModel* tabs = controller.tabModel();
     QCOMPARE(tabs->rowCount(), 2);
     for (int row = 0; row < 2; row++) {
-        DocumentSession* session = tabs->sessionAt(row);
+        DocumentSession* session = tabs->tabAt(row)->session();
         QCOMPARE(session->displayName(),
                  row == 0 ? QStringLiteral("first.fake") : QStringLiteral("second.fake"));
         QCOMPARE(session->treeModel()->thread(), controller.thread());
@@ -525,6 +601,471 @@ void TestAppController::shutdownFromCurrentTabIndexStopsDelivery() {
     QCOMPARE(index.count(), 1);
     QCOMPARE(current.count(), 0);
     QCOMPARE(loaded.count(), 0);
+}
+
+// Closing the current tab hands over to its successor at the same row: the row
+// value did not change, but the tab behind it did, and both are announced.
+void TestAppController::closeCurrentTabWithSuccessor() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    controller.setCurrentTabIndex(1);
+    QSignalSpy index(&controller, &AppController::currentTabIndexChanged);
+    QSignalSpy current(&controller, &AppController::currentSessionChanged);
+
+    controller.closeTab(1);
+
+    QCOMPARE(titles(controller), QStringList({A, C}));
+    QCOMPARE(controller.currentTabIndex(), 1);
+    QCOMPARE(currentTitle(controller), C);
+    QCOMPARE(index.count(), 1);
+    QCOMPARE(current.count(), 1);
+}
+
+// Closing a tab before the current one moves the current tab up a row. Its
+// session did not change, so observers are not told it did.
+void TestAppController::closeTabBeforeCurrent() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    QSignalSpy index(&controller, &AppController::currentTabIndexChanged);
+    QSignalSpy current(&controller, &AppController::currentSessionChanged);
+
+    controller.closeTab(0);
+
+    QCOMPARE(titles(controller), QStringList({B, C}));
+    QCOMPARE(controller.currentTabIndex(), 1);
+    QCOMPARE(currentTitle(controller), C);
+    QCOMPARE(index.count(), 1);
+    QCOMPARE(current.count(), 0);
+}
+
+void TestAppController::closeTabAfterCurrent() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    controller.setCurrentTabIndex(0);
+    QSignalSpy index(&controller, &AppController::currentTabIndexChanged);
+    QSignalSpy current(&controller, &AppController::currentSessionChanged);
+
+    controller.closeTab(2);
+
+    QCOMPARE(titles(controller), QStringList({A, B}));
+    QCOMPARE(currentTitle(controller), A);
+    QCOMPARE(index.count(), 0);
+    QCOMPARE(current.count(), 0);
+}
+
+void TestAppController::closeOnlyTab() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A}));
+    QSignalSpy index(&controller, &AppController::currentTabIndexChanged);
+    QSignalSpy current(&controller, &AppController::currentSessionChanged);
+
+    controller.closeTab(0);
+
+    QCOMPARE(controller.tabModel()->rowCount(), 0);
+    QCOMPARE(controller.currentTabIndex(), -1);
+    QCOMPARE(index.count(), 1);
+    QCOMPARE(current.count(), 1);
+    QCOMPARE(probe.destroyed(), QStringList({A}));
+}
+
+// The closed session outlives both notifications, so no view is told about a
+// destroyed model; it is destroyed on the controller's thread.
+void TestAppController::closedSessionOutlivesNotifications() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    controller.setCurrentTabIndex(1);
+    noteNotifications(controller, probe);
+    const qsizetype from = probe.events().size();
+
+    controller.closeTab(1);
+
+    QCOMPARE(probe.events().mid(from), QStringList({QStringLiteral("index"),
+                                                    QStringLiteral("session"),
+                                                    QStringLiteral("session destroyed")}));
+    QCOMPARE(probe.destroyed(), QStringList({B}));
+    QCOMPARE(probe.sessionDestroyedOn(), QThread::currentThread());
+}
+
+// A shutdown from the row removal ends the close there: the removal completes,
+// no current-tab notification follows, and the closed session is destroyed when
+// closeTab() returns.
+void TestAppController::shutdownFromRowRemovalDuringClose() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    controller.setCurrentTabIndex(1);
+    QSignalSpy index(&controller, &AppController::currentTabIndexChanged);
+    QSignalSpy current(&controller, &AppController::currentSessionChanged);
+    QSignalSpy removed(controller.tabModel(), &QAbstractItemModel::rowsRemoved);
+    callOnce(controller.tabModel(), &QAbstractItemModel::rowsRemoved,
+             [] { return true; }, [&controller] { controller.shutdown(); });
+
+    controller.closeTab(1);
+
+    QCOMPARE(removed.count(), 1);
+    QCOMPARE(index.count(), 0);
+    QCOMPARE(current.count(), 0);
+    QCOMPARE(titles(controller), QStringList({A, C}));
+    QCOMPARE(probe.destroyed(), QStringList({B}));
+}
+
+void TestAppController::shutdownFromIndexNotificationDuringClose() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    QSignalSpy index(&controller, &AppController::currentTabIndexChanged);
+    QSignalSpy current(&controller, &AppController::currentSessionChanged);
+    callOnce(&controller, &AppController::currentTabIndexChanged,
+             [] { return true; }, [&controller] { controller.shutdown(); });
+
+    controller.closeTab(2);
+
+    QCOMPARE(index.count(), 1);
+    QCOMPARE(current.count(), 0);
+    QCOMPARE(probe.destroyed(), QStringList({C}));
+}
+
+// The closed session is destroyed after shutdown returns, when the close does.
+void TestAppController::shutdownFromSessionNotificationDuringClose() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    controller.setCurrentTabIndex(1);
+    callOnce(&controller, &AppController::currentSessionChanged, [] { return true; },
+             [&controller, &probe] {
+                 controller.shutdown();
+                 probe.note(QStringLiteral("shutdown returned"));
+             });
+    const qsizetype from = probe.events().size();
+
+    controller.closeTab(1);
+
+    QCOMPARE(probe.events().mid(from), QStringList({QStringLiteral("shutdown returned"),
+                                                    QStringLiteral("session destroyed")}));
+}
+
+// After shutdown a close changes nothing and notifies no one; the tabs go with
+// the controller.
+void TestAppController::closeAfterShutdown() {
+    Probe probe;
+    auto controller = std::make_unique<AppController>(fakeFormats(probe));
+    QVERIFY(openTabs(*controller, {A, B}));
+    controller->shutdown();
+    QSignalSpy index(controller.get(), &AppController::currentTabIndexChanged);
+    QSignalSpy current(controller.get(), &AppController::currentSessionChanged);
+    QSignalSpy removed(controller->tabModel(), &QAbstractItemModel::rowsRemoved);
+
+    controller->closeTab(0);
+    QCoreApplication::processEvents();
+
+    QCOMPARE(titles(*controller), QStringList({A, B}));
+    QCOMPARE(index.count(), 0);
+    QCOMPARE(current.count(), 0);
+    QCOMPARE(removed.count(), 0);
+    QVERIFY(probe.destroyed().isEmpty());
+    controller.reset();
+    QCOMPARE(sorted(probe.destroyed()), QStringList({A, B}));
+}
+
+void TestAppController::switchAfterShutdown() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B}));
+    controller.shutdown();
+    QSignalSpy index(&controller, &AppController::currentTabIndexChanged);
+    QSignalSpy current(&controller, &AppController::currentSessionChanged);
+
+    controller.setCurrentTabIndex(0);
+
+    QCOMPARE(controller.currentTabIndex(), 1);
+    QCOMPARE(index.count(), 0);
+    QCOMPARE(current.count(), 0);
+}
+
+// Each public action is called with a value that would otherwise change state:
+// after shutdown none changes state or notifies.
+void TestAppController::everyPublicActionInertAfterShutdown() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B}));
+    controller.openFile(QUrl::fromLocalFile(QDir::temp().filePath(QStringLiteral("notes.txt"))));
+    const QString error = controller.lastError();
+    QVERIFY(!error.isEmpty());
+    const QString status = controller.startupStatusText();
+    controller.shutdown();
+    const qsizetype events = probe.events().size();
+    const int loads = probe.loads();
+    QSignalSpy index(&controller, &AppController::currentTabIndexChanged);
+    QSignalSpy current(&controller, &AppController::currentSessionChanged);
+    QSignalSpy errors(&controller, &AppController::lastErrorChanged);
+    QSignalSpy loading(&controller, &AppController::fileLoadingChanged);
+    QSignalSpy startup(&controller, &AppController::startupLoadingChanged);
+    QSignalSpy statusText(&controller, &AppController::startupStatusTextChanged);
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+    QSignalSpy inserted(controller.tabModel(), &QAbstractItemModel::rowsInserted);
+    QSignalSpy removed(controller.tabModel(), &QAbstractItemModel::rowsRemoved);
+
+    controller.openFile(fakeFile(C));
+    controller.closeTab(0);
+    controller.setCurrentTabIndex(0);
+    controller.selectCurrentNode(1);
+    controller.clearLastError();
+    controller.setStartupLoading(false);
+    controller.setStartupStatusText(QStringLiteral("Ready"));
+    QVERIFY(QThreadPool::globalInstance()->waitForDone(10000));
+    QCoreApplication::processEvents();
+
+    QCOMPARE(titles(controller), QStringList({A, B}));
+    QCOMPARE(controller.currentTabIndex(), 1);
+    QCOMPARE(controller.lastError(), error);
+    QVERIFY(controller.startupLoading());
+    QCOMPARE(controller.startupStatusText(), status);
+    QVERIFY(!controller.fileLoading());
+    QCOMPARE(probe.loads(), loads);
+    QCOMPARE(probe.events().size(), events);
+    for (const QSignalSpy* spy : {&index, &current, &errors, &loading, &startup, &statusText,
+                                  &loaded, &inserted, &removed}) {
+        QCOMPARE(spy->count(), 0);
+    }
+}
+
+// Closing the current tab from inside a close's index notification ends as two
+// closes in sequence would. Each closed session is destroyed once, after its
+// own close's notifications; the notification the nested close superseded is
+// never sent.
+void TestAppController::closeCurrentFromIndexNotification() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    controller.setCurrentTabIndex(1);
+    noteNotifications(controller, probe);
+    callOnce(&controller, &AppController::currentTabIndexChanged, [] { return true; },
+             [&controller] { controller.closeTab(controller.currentTabIndex()); });
+    const qsizetype from = probe.events().size();
+
+    controller.closeTab(1);
+
+    QCOMPARE(titles(controller), QStringList({A}));
+    QCOMPARE(controller.currentTabIndex(), 0);
+    QCOMPARE(probe.events().mid(from), QStringList({QStringLiteral("index"),
+                                                    QStringLiteral("index"),
+                                                    QStringLiteral("session"),
+                                                    QStringLiteral("session destroyed"),
+                                                    QStringLiteral("session destroyed")}));
+    QCOMPARE(probe.destroyed(), QStringList({C, B}));
+}
+
+void TestAppController::closeCurrentFromSessionNotification() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    controller.setCurrentTabIndex(1);
+    noteNotifications(controller, probe);
+    callOnce(&controller, &AppController::currentSessionChanged, [] { return true; },
+             [&controller] { controller.closeTab(controller.currentTabIndex()); });
+    const qsizetype from = probe.events().size();
+
+    controller.closeTab(1);
+
+    QCOMPARE(titles(controller), QStringList({A}));
+    QCOMPARE(controller.currentTabIndex(), 0);
+    QCOMPARE(probe.events().mid(from), QStringList({QStringLiteral("index"),
+                                                    QStringLiteral("session"),
+                                                    QStringLiteral("index"),
+                                                    QStringLiteral("session"),
+                                                    QStringLiteral("session destroyed"),
+                                                    QStringLiteral("session destroyed")}));
+    QCOMPARE(probe.destroyed(), QStringList({C, B}));
+}
+
+// Keys are session-local: the same key selects in the current tab's session only.
+void TestAppController::selectionStaysInCurrentTab() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B}));
+    const qsizetype from = probe.events().size();
+
+    controller.selectCurrentNode(1);
+    controller.setCurrentTabIndex(0);
+    controller.selectCurrentNode(1);
+
+    QCOMPARE(probe.events().mid(from), QStringList({QStringLiteral("select b.fake 1"),
+                                                    QStringLiteral("select a.fake 1")}));
+}
+
+// From the removal's about-to notification an observer switches to the closing
+// tab, still in the model, and closes another. Both wait for the event loop and
+// keep their tabs' identities: the closing tab never becomes current, and on
+// delivery the switch to it does nothing while the other close proceeds.
+void TestAppController::requestsDuringRowRemovalAreDeferred() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    controller.setCurrentTabIndex(1);
+    QSignalSpy removed(controller.tabModel(), &QAbstractItemModel::rowsRemoved);
+    callOnce(controller.tabModel(), &QAbstractItemModel::rowsAboutToBeRemoved, [] { return true; },
+             [&controller] {
+                 controller.setCurrentTabIndex(1);
+                 controller.closeTab(0);
+             });
+
+    controller.closeTab(1);
+
+    QCOMPARE(removed.count(), 1);
+    QCOMPARE(titles(controller), QStringList({A, C}));
+    QCOMPARE(currentTitle(controller), C);
+    QCOMPARE(probe.destroyed(), QStringList({B}));
+
+    QCoreApplication::processEvents();
+    QCOMPARE(titles(controller), QStringList({C}));
+    QCOMPARE(currentTitle(controller), C);
+    QCOMPARE(probe.destroyed(), QStringList({B, A}));
+}
+
+// From the completed removal an observer asks by row for a switch and a close.
+// Rows name tabs as they stand then, and the deferred requests keep those tabs.
+void TestAppController::requestsAfterRowRemovalKeepTheirTabs() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C}));
+    controller.setCurrentTabIndex(1);
+    callOnce(controller.tabModel(), &QAbstractItemModel::rowsRemoved, [] { return true; },
+             [&controller] {
+                 controller.setCurrentTabIndex(0);   // A
+                 controller.closeTab(1);             // C, now in B's row
+             });
+
+    controller.closeTab(1);
+    QCoreApplication::processEvents();
+
+    QCOMPARE(titles(controller), QStringList({A}));
+    QCOMPARE(currentTitle(controller), A);
+    QCOMPARE(probe.destroyed(), QStringList({B, C}));
+}
+
+// Deferred closes name tabs, not rows: delivering the first close shifts the rows,
+// and the second still closes the tab it named.
+void TestAppController::deferredRequestsKeepTabIdentity() {
+    const QString D = QStringLiteral("d.fake");
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B, C, D}));
+    controller.setCurrentTabIndex(1);
+    callOnce(controller.tabModel(), &QAbstractItemModel::rowsAboutToBeRemoved, [] { return true; },
+             [&controller] {
+                 controller.closeTab(0);   // A
+                 controller.closeTab(3);   // D
+             });
+
+    controller.closeTab(1);
+    QCoreApplication::processEvents();
+
+    QCOMPARE(titles(controller), QStringList({C}));
+    QCOMPARE(currentTitle(controller), C);
+    QCOMPARE(probe.destroyed(), QStringList({B, A, D}));
+}
+
+// While a loaded tab's row is inserted, an observer closes an earlier tab. The
+// completion still selects the tab it inserted, by identity, and the close
+// follows from the event loop.
+void TestAppController::closeEarlierTabDuringInsertion() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B}));
+    callOnce(controller.tabModel(), &QAbstractItemModel::rowsInserted, [] { return true; },
+             [&controller] { controller.closeTab(0); });
+    QString currentAtLoad;
+    QObject::connect(&controller, &AppController::fileLoaded, &controller,
+                     [&controller, &currentAtLoad] { currentAtLoad = currentTitle(controller); });
+
+    QVERIFY(openTabs(controller, {C}));
+    QCoreApplication::processEvents();
+
+    QCOMPARE(currentAtLoad, C);
+    QCOMPARE(titles(controller), QStringList({B, C}));
+    QCOMPARE(currentTitle(controller), C);
+    QCOMPARE(probe.destroyed(), QStringList({A}));
+}
+
+// An observer closes the inserted tab itself: the tab is selected and announced
+// as loaded first, then closed from the event loop.
+void TestAppController::closeInsertedTabDuringInsertion() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B}));
+    callOnce(controller.tabModel(), &QAbstractItemModel::rowsInserted, [] { return true; },
+             [&controller] { controller.closeTab(2); });
+    QString currentAtLoad;
+    QObject::connect(&controller, &AppController::fileLoaded, &controller,
+                     [&controller, &currentAtLoad] { currentAtLoad = currentTitle(controller); });
+
+    QVERIFY(openTabs(controller, {C}));
+    QCoreApplication::processEvents();
+
+    QCOMPARE(currentAtLoad, C);
+    QCOMPARE(titles(controller), QStringList({A, B}));
+    QCOMPARE(currentTitle(controller), B);
+    QCOMPARE(probe.destroyed(), QStringList({C}));
+}
+
+// Requests deferred from a row insertion are delivered after a shutdown that
+// came first: they do nothing.
+void TestAppController::deferredRequestsAfterShutdownAreInert() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QVERIFY(openTabs(controller, {A, B}));
+    callOnce(controller.tabModel(), &QAbstractItemModel::rowsInserted, [] { return true; },
+             [&controller] {
+                 controller.closeTab(0);
+                 controller.setCurrentTabIndex(0);
+             });
+    callOnce(&controller, &AppController::fileLoaded, [] { return true; },
+             [&controller] { controller.shutdown(); });
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+    controller.openFile(fakeFile(C));
+    QVERIFY(loaded.wait(10000));
+    QSignalSpy index(&controller, &AppController::currentTabIndexChanged);
+    QSignalSpy current(&controller, &AppController::currentSessionChanged);
+    QSignalSpy removed(controller.tabModel(), &QAbstractItemModel::rowsRemoved);
+
+    QCoreApplication::processEvents();
+
+    QCOMPARE(titles(controller), QStringList({A, B, C}));
+    QCOMPARE(currentTitle(controller), C);
+    QCOMPARE(index.count(), 0);
+    QCOMPARE(current.count(), 0);
+    QCOMPARE(removed.count(), 0);
+    QVERIFY(probe.destroyed().isEmpty());
+}
+
+// A shutdown from the removal's about-to notification lets the model finish the
+// removal it began, then nothing more: no controller notification, and each
+// removed session is destroyed once.
+void TestAppController::shutdownDuringRowRemovalFinishesIt() {
+    Probe probe;
+    auto controller = std::make_unique<AppController>(fakeFormats(probe));
+    QVERIFY(openTabs(*controller, {A, B, C}));
+    controller->setCurrentTabIndex(1);
+    QSignalSpy removed(controller->tabModel(), &QAbstractItemModel::rowsRemoved);
+    QSignalSpy index(controller.get(), &AppController::currentTabIndexChanged);
+    QSignalSpy current(controller.get(), &AppController::currentSessionChanged);
+    callOnce(controller->tabModel(), &QAbstractItemModel::rowsAboutToBeRemoved,
+             [] { return true; }, [&controller] { controller->shutdown(); });
+
+    controller->closeTab(1);
+
+    QCOMPARE(removed.count(), 1);
+    QCOMPARE(titles(*controller), QStringList({A, C}));
+    QCOMPARE(index.count(), 0);
+    QCOMPARE(current.count(), 0);
+    QCOMPARE(probe.destroyed(), QStringList({B}));
+    controller.reset();
+    QCOMPARE(sorted(probe.destroyed()), QStringList({A, B, C}));
 }
 
 QTEST_GUILESS_MAIN(TestAppController)

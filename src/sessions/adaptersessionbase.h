@@ -1,15 +1,14 @@
 #pragma once
 
-#include "core/detailpresenter.h"
-#include "core/noderegistry.h"
 #include "core/treeitem.h"
 #include "models/detailmodel.h"
 #include "models/treemodel.h"
 #include "sessions/documentsession.h"
 
 #include <memory>
-#include <optional>
 
+// Identity, tree and detail model shared by the format sessions. Each format
+// session binds its rows to its own typed entities and answers selectNode().
 class AdapterSessionBase : public DocumentSession {
 public:
     AdapterSessionBase(FormatId formatId,
@@ -26,21 +25,18 @@ public:
     DetailModel* detailModel() override;
     QList<DiagnosticMessage> diagnostics() const override;
     bool hasDiagnostics() const override;
-    void selectNode(quint64 key) override;
     void moveModelsToThread(QThread* thread) override;
 
 protected:
     void setRootItem(std::unique_ptr<TreeItem> root);
-    void setDetailPresenter(std::unique_ptr<DetailPresenter> presenter);
-    NodeRef bindNode(NodeBinding binding);
+    // Appends a row with the session's next key.
     TreeItem* appendNode(TreeItem* parent,
                          const QString& title,
                          const QString& subtitle,
                          const QString& iconKey,
                          SemanticKind semanticKind,
-                         std::optional<NodeBinding> binding = std::nullopt);
+                         bool selectable = false);
 
-    NodeRegistry _registry;
     TreeModel _tree_model;
     DetailModel _detail_model;
 
@@ -50,5 +46,5 @@ private:
     QString _display_name;
     QString _source_path;
     QList<DiagnosticMessage> _diagnostics;
-    std::unique_ptr<DetailPresenter> _detail_presenter;
+    quint64 _last_key = 0;
 };

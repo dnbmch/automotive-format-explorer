@@ -5,6 +5,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <algorithm>
+
 TabModel::TabModel(QObject* parent)
     : QAbstractListModel(parent) {
 }
@@ -14,14 +16,15 @@ int TabModel::rowCount(const QModelIndex& parent) const {
         return 0;
     }
 
-    return static_cast<int>(_sessions.size());
+    return static_cast<int>(_tabs.size());
 }
 
 QVariant TabModel::data(const QModelIndex& index, int role) const {
-    const DocumentSession* session = sessionAt(index.row());
-    if (!session) {
+    const DocumentTab* tab = tabAt(index.row());
+    if (!tab) {
         return {};
     }
+    const DocumentSession* session = tab->session();
 
     switch (role) {
     case TitleRole:
@@ -63,36 +66,35 @@ QHash<int, QByteArray> TabModel::roleNames() const {
     };
 }
 
-int TabModel::addSession(std::unique_ptr<DocumentSession> session) {
-    const int row = static_cast<int>(_sessions.size());
+DocumentTab* TabModel::addTab(std::unique_ptr<DocumentTab> tab) {
+    DocumentTab* added = tab.get();
+    const int row = static_cast<int>(_tabs.size());
     beginInsertRows({}, row, row);
-    _sessions.push_back(std::move(session));
+    _tabs.push_back(std::move(tab));
     endInsertRows();
-    return row;
+    return added;
 }
 
-void TabModel::closeSession(int index) {
-    if (index < 0 || index >= static_cast<int>(_sessions.size())) {
-        return;
-    }
-
+std::unique_ptr<DocumentTab> TabModel::takeTab(int index) {
     beginRemoveRows({}, index, index);
-    _sessions.erase(_sessions.begin() + index);
+    std::unique_ptr<DocumentTab> tab = std::move(_tabs[static_cast<std::size_t>(index)]);
+    _tabs.erase(_tabs.begin() + index);
     endRemoveRows();
+    return tab;
 }
 
-DocumentSession* TabModel::sessionAt(int index) {
-    if (index < 0 || index >= static_cast<int>(_sessions.size())) {
+DocumentTab* TabModel::tabAt(int index) const {
+    if (index < 0 || index >= static_cast<int>(_tabs.size())) {
         return nullptr;
     }
 
-    return _sessions[static_cast<std::size_t>(index)].get();
+    return _tabs[static_cast<std::size_t>(index)].get();
 }
 
-const DocumentSession* TabModel::sessionAt(int index) const {
-    if (index < 0 || index >= static_cast<int>(_sessions.size())) {
-        return nullptr;
-    }
-
-    return _sessions[static_cast<std::size_t>(index)].get();
+int TabModel::indexOf(const DocumentTab* tab) const {
+    const auto it = std::find_if(_tabs.begin(), _tabs.end(),
+                                 [tab](const std::unique_ptr<DocumentTab>& held) {
+                                     return held.get() == tab;
+                                 });
+    return !tab || it == _tabs.end() ? -1 : static_cast<int>(it - _tabs.begin());
 }

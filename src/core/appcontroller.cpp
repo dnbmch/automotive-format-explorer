@@ -3,12 +3,12 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QPointer>
 #include <QtConcurrent/QtConcurrentRun>
 
 AppController::AppController(FormatList formats, QObject* parent)
     : QObject(parent),
       _formats(std::move(formats)) {
-    _empty_tree_filter.setSourceModel(&_empty_tree_model);
     connect(&_load_watcher, &QFutureWatcher<LoadResult>::finished,
             this, &AppController::onLoadFinished);
 }
@@ -21,54 +21,104 @@ TabModel* AppController::tabModel() {
     return &_tab_model;
 }
 
-TreeFilterModel* AppController::currentTreeModel() {
-    DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
-    if (!session) {
-        return &_empty_tree_filter;
-    }
-
-    auto& filter = _tree_filters[session];
-    if (!filter) {
-        filter = std::make_unique<TreeFilterModel>();
-        filter->setSourceModel(session->treeModel());
-    }
-    return filter.get();
+DocumentTab* AppController::currentTab() const {
+    return _current_tab;
 }
 
 DetailModel* AppController::currentDetailModel() {
-    DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
-    return session ? session->detailModel() : &_empty_detail_model;
+    return _current_tab ? _current_tab->session()->detailModel() : &_empty_detail_model;
 }
 
 QUrl AppController::centerPanelSource() {
-    DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
-    return session ? session->centerPanelSource() : QUrl();
+    return _current_tab ? _current_tab->session()->centerPanelSource() : QUrl();
 }
 
 QAbstractListModel* AppController::centerPanelModel() {
-    DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
-    return session ? session->centerPanelModel() : nullptr;
+    return _current_tab ? _current_tab->session()->centerPanelModel() : nullptr;
 }
 
 int AppController::currentTabIndex() const {
-    return _current_tab_index;
+    return _tab_model.indexOf(_current_tab);
 }
 
 void AppController::setCurrentTabIndex(int index) {
-    if (index < -1 || index >= _tab_model.rowCount()) {
+    if (_shut_down || index < -1 || index >= _tab_model.rowCount()) {
         return;
     }
 
-    if (_current_tab_index == index) {
+    DocumentTab* tab = _tab_model.tabAt(index);
+    if (_in_row_change) {
+        deferSwitch(tab);
         return;
     }
+    makeCurrent(tab);
+}
 
-    _current_tab_index = index;
-    emit currentTabIndexChanged();
+void AppController::makeCurrent(DocumentTab* tab) {
+    _current_tab = tab;
+    announceCurrentTab();
+}
+
+// Tells observers about the current tab as it stands: its row
+// (currentTabIndexChanged), then the tab itself (currentSessionChanged). Each is
+// sent only when it differs from what observers were last told, and never after
+// shutdown. An observer may switch, close or open tabs from either notification;
+// a nested change announces itself, and nothing stale follows it.
+void AppController::announceCurrentTab() {
     if (_shut_down) {
         return;
     }
-    emit currentSessionChanged();
+    if (_current_tab != _announced_row_tab || currentTabIndex() != _announced_row) {
+        _announced_row_tab = _current_tab;
+        _announced_row = currentTabIndex();
+        emit currentTabIndexChanged();
+        if (_shut_down) {
+            return;
+        }
+    }
+    if (_current_tab != _announced_tab) {
+        _announced_tab = _current_tab;
+        emit currentSessionChanged();
+    }
+}
+
+// The tab model's row insertion and removal notify observers synchronously.
+// Meanwhile tab switches and closes are deferred: another row change inside
+// this one would break the model's transaction.
+DocumentTab* AppController::insertTab(std::unique_ptr<DocumentTab> tab) {
+    _in_row_change = true;
+    DocumentTab* inserted = _tab_model.addTab(std::move(tab));
+    _in_row_change = false;
+    return inserted;
+}
+
+std::unique_ptr<DocumentTab> AppController::removeTab(int index) {
+    _in_row_change = true;
+    std::unique_ptr<DocumentTab> removed = _tab_model.takeTab(index);
+    _in_row_change = false;
+    return removed;
+}
+
+// A deferred request names its tab, not a row, and is revalidated when the event
+// loop delivers it: it does nothing once the tab has left the model or the
+// controller has shut down. Making no tab current is a request of its own.
+void AppController::deferSwitch(DocumentTab* tab) {
+    const bool none = tab == nullptr;
+    QMetaObject::invokeMethod(this, [this, none, target = QPointer<DocumentTab>(tab)] {
+        if (none) {
+            setCurrentTabIndex(-1);
+        } else if (target && _tab_model.indexOf(target) >= 0) {
+            setCurrentTabIndex(_tab_model.indexOf(target));
+        }
+    }, Qt::QueuedConnection);
+}
+
+void AppController::deferClose(DocumentTab* tab) {
+    QMetaObject::invokeMethod(this, [this, target = QPointer<DocumentTab>(tab)] {
+        if (target) {
+            closeTab(_tab_model.indexOf(target));
+        }
+    }, Qt::QueuedConnection);
 }
 
 QString AppController::lastError() const {
@@ -135,9 +185,11 @@ void AppController::onLoadFinished() {
     }
 
     const QString name = result.session->displayName();
-    const int newIndex = _tab_model.addSession(std::move(result.session));
+    // Closes requested while the row is inserted are deferred, so the new tab is
+    // still in the model here and is selected by identity, not by its row.
+    DocumentTab* tab = insertTab(std::make_unique<DocumentTab>(std::move(result.session)));
     if (!_shut_down) {
-        setCurrentTabIndex(newIndex);
+        makeCurrent(tab);
     }
     if (!_shut_down) {
         emit fileLoaded(name);
@@ -174,49 +226,37 @@ void AppController::setFileLoading(bool loading) {
     emit fileLoadingChanged();
 }
 
+// The current tab is settled before the row leaves, so the row notifications
+// see it. The closed tab stays alive through every notification and is destroyed
+// on this thread when they have returned.
 void AppController::closeTab(int index) {
-    if (index < 0 || index >= _tab_model.rowCount()) {
+    DocumentTab* closing = _shut_down ? nullptr : _tab_model.tabAt(index);
+    if (!closing) {
+        return;
+    }
+    if (_in_row_change) {
+        deferClose(closing);
         return;
     }
 
-    const int previousCurrentIndex = _current_tab_index;
-    _tree_filters.erase(_tab_model.sessionAt(index));
-    _tab_model.closeSession(index);
-    if (_tab_model.rowCount() == 0) {
-        if (_current_tab_index != -1) {
-            _current_tab_index = -1;
-            emit currentTabIndexChanged();
-            emit currentSessionChanged();
-        }
-        return;
+    if (closing == _current_tab) {
+        DocumentTab* successor = _tab_model.tabAt(index + 1);
+        _current_tab = successor ? successor : _tab_model.tabAt(index - 1);
     }
-
-    if (previousCurrentIndex > index) {
-        setCurrentTabIndex(previousCurrentIndex - 1);
-        return;
-    }
-
-    if (previousCurrentIndex == index) {
-        const int newIndex = qMin(index, _tab_model.rowCount() - 1);
-        if (_current_tab_index != newIndex) {
-            _current_tab_index = newIndex;
-            emit currentTabIndexChanged();
-        }
-        emit currentSessionChanged();
-    }
+    const std::unique_ptr<DocumentTab> closed = removeTab(index);
+    announceCurrentTab();
 }
 
 void AppController::selectCurrentNode(qulonglong nodeKey) {
-    DocumentSession* session = _tab_model.sessionAt(_current_tab_index);
-    if (!session) {
+    if (_shut_down || !_current_tab) {
         return;
     }
 
-    session->selectNode(static_cast<quint64>(nodeKey));
+    _current_tab->session()->selectNode(static_cast<quint64>(nodeKey));
 }
 
 void AppController::clearLastError() {
-    if (_last_error.isEmpty()) {
+    if (_shut_down || _last_error.isEmpty()) {
         return;
     }
 
@@ -229,7 +269,7 @@ bool AppController::startupLoading() const {
 }
 
 void AppController::setStartupLoading(bool loading) {
-    if (_startup_loading == loading) {
+    if (_shut_down || _startup_loading == loading) {
         return;
     }
 
@@ -242,7 +282,7 @@ QString AppController::startupStatusText() const {
 }
 
 void AppController::setStartupStatusText(const QString& text) {
-    if (_startup_status_text == text) {
+    if (_shut_down || _startup_status_text == text) {
         return;
     }
 

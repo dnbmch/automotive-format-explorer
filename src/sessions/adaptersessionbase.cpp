@@ -46,24 +46,6 @@ bool AdapterSessionBase::hasDiagnostics() const {
     return !_diagnostics.isEmpty();
 }
 
-void AdapterSessionBase::selectNode(quint64 key) {
-    if (!_detail_presenter) {
-        _detail_model.setSections({});
-        _detail_model.setRawJsonText({});
-        return;
-    }
-
-    const NodeBinding* binding = _registry.resolve(NodeRef{_format_id, key});
-    if (!binding || !binding->selectable) {
-        _detail_model.setSections({});
-        _detail_model.setRawJsonText({});
-        return;
-    }
-
-    _detail_model.setSections(_detail_presenter->buildDetails(*binding));
-    _detail_model.setRawJsonText(_detail_presenter->buildRawJson(*binding));
-}
-
 void AdapterSessionBase::moveModelsToThread(QThread* thread) {
     _tree_model.moveToThread(thread);
     _detail_model.moveToThread(thread);
@@ -73,33 +55,20 @@ void AdapterSessionBase::setRootItem(std::unique_ptr<TreeItem> root) {
     _tree_model.setRoot(std::move(root));
 }
 
-void AdapterSessionBase::setDetailPresenter(std::unique_ptr<DetailPresenter> presenter) {
-    _detail_presenter = std::move(presenter);
-}
-
-NodeRef AdapterSessionBase::bindNode(NodeBinding binding) {
-    return _registry.registerBinding(_format_id, std::move(binding));
-}
-
 TreeItem* AdapterSessionBase::appendNode(TreeItem* parent,
                                          const QString& title,
                                          const QString& subtitle,
                                          const QString& iconKey,
                                          SemanticKind semanticKind,
-                                         std::optional<NodeBinding> binding) {
+                                         bool selectable) {
     auto child = std::make_unique<TreeItem>();
     child->title = title;
     child->subtitle = subtitle;
     child->iconKey = iconKey;
     child->semanticKind = semanticKind;
+    child->nodeKey = ++_last_key;
+    child->selectable = selectable;
     child->parent = parent;
-
-    if (binding.has_value()) {
-        child->selectable = binding->selectable;
-        if (child->selectable) {
-            child->nodeKey = bindNode(std::move(*binding)).key;
-        }
-    }
 
     TreeItem* rawChild = child.get();
     parent->children.push_back(std::move(child));

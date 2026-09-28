@@ -7,10 +7,31 @@
 // still resolves through the proxy while a filter is active.
 
 #include "models/treefiltermodel.h"
+#include "sessions/adaptersessionbase.h"
 
 #include <QTest>
 
 namespace {
+
+// A session tree shaped like the format sessions build theirs: a category row
+// with entities below it, all appended through the session base.
+class CategorySession final : public AdapterSessionBase {
+public:
+    CategorySession()
+        : AdapterSessionBase(FormatId::Unknown, QStringLiteral("Fake"), QStringLiteral("doc"),
+                             QStringLiteral("doc")) {
+        auto root = std::make_unique<TreeItem>();
+        TreeItem* messages = appendNode(root.get(), QStringLiteral("Messages"), {}, {},
+                                        SemanticKind::Section);
+        TreeItem* engine = appendNode(messages, QStringLiteral("Engine"), {}, {},
+                                      SemanticKind::Entity);
+        appendNode(engine, QStringLiteral("EngineSpeed"), {}, {}, SemanticKind::Entity);
+        appendNode(messages, QStringLiteral("Chassis"), {}, {}, SemanticKind::Entity);
+        setRootItem(std::move(root));
+    }
+
+    void selectNode(quint64) override {}
+};
 
 quint64 nextKey = 1;
 
@@ -86,6 +107,7 @@ private slots:
     void clearingFilterRestoresTree();
     void nodeKeyResolvesThroughProxyWhileFiltered();
     void nodeKeyOfFilteredOutRowIsInvalid();
+    void categoryKeyResolvesThroughProxy();
 };
 
 void TestTreeFilterModel::init() {
@@ -165,6 +187,23 @@ void TestTreeFilterModel::nodeKeyOfFilteredOutRowIsInvalid() {
     // WheelSpeed lives under the pruned Chassis branch.
     QVERIFY(_source.indexForNodeKey(5).isValid());
     QVERIFY(!_proxy.indexForNodeKey(5).isValid());
+}
+
+// The nav panel re-expands a category by its key, unfiltered and while one of
+// its descendants matches.
+void TestTreeFilterModel::categoryKeyResolvesThroughProxy() {
+    CategorySession session;
+    TreeFilterModel proxy;
+    proxy.setSourceModel(session.treeModel());
+    const QModelIndex messages = session.treeModel()->index(0, 0);
+    const quint64 key = session.treeModel()->data(messages, TreeModel::NodeKeyRole).toULongLong();
+    QVERIFY(key != 0);
+
+    QCOMPARE(proxy.mapToSource(proxy.indexForNodeKey(key)), messages);
+    proxy.setFilterText(QStringLiteral("Speed"));
+    const QModelIndex filtered = proxy.indexForNodeKey(key);
+    QVERIFY(filtered.isValid());
+    QCOMPARE(filtered.data(TreeModel::TitleRole).toString(), QStringLiteral("Messages"));
 }
 
 QTEST_MAIN(TestTreeFilterModel)

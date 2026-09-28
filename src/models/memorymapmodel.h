@@ -24,7 +24,7 @@ struct MemoryObject {
     uint64_t size = 0;      // byte footprint (0 = unknown)
     bool sizeApproximate = false;
     int colorIndex = 0;     // index into color palette (0-7)
-    quint64 nodeKey = 0;    // key into NodeRegistry for tree/detail selection
+    quint64 nodeKey = 0;    // the object's tree row, for tree/detail selection
     QString recordLayoutRef;
     QString conversion;
 };

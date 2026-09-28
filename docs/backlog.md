@@ -39,6 +39,18 @@ header directly; do the same here, inside the existing `signals` macro guard.
 
 **Size:** XS.
 
+### BL-E5: center-grid view state is not kept per tab
+
+A tab keeps its tree navigation, and each center model keeps its own state (A2L
+segment and bytes per row, DBC/LDF message and multiplexer group, MDF4 plot range).
+The memory grid's scroll position and object and byte-range selection, and the
+signal grid's selected signal, live in the painted items, which the center Loader
+builds anew whenever a tab is shown, so they reset on an actual tab switch. Closing
+another tab does not rebuild the current view. Keeping them would need the items'
+state saved into the tab and restored around the rebuild, for each of the views.
+
+**Size:** S per view; wanted only if the reset proves a real annoyance.
+
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant

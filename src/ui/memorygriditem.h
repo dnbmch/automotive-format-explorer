@@ -6,6 +6,7 @@
 #include <QQuickPaintedItem>
 #include <QColor>
 #include <QPointF>
+#include <QPointer>
 
 #include <vector>
 
@@ -91,6 +92,7 @@ private slots:
     void onLayoutChanged();
 
 private:
+    void onModelReplaced();
     int rowHeight() const;
     void rebuildObjectColors();
     void updateContentHeight();
@@ -100,7 +102,8 @@ private:
     // (used while dragging a range selection).
     qint64 byteOffsetAtPixel(qreal px, qreal py, bool clamp) const;
 
-    MemoryMapModel* _model = nullptr;
+    // Reads null once the model is destroyed, which counts as a replacement.
+    QPointer<MemoryMapModel> _model;
     qreal _scroll_y = 0;
     int _cell_size = 18;
     int _cell_gap = 1;

@@ -4,8 +4,8 @@
 
 namespace {
 
-NodeBinding bindingFor(Mdf4EntityKind kind, int group = -1, int channel = -1) {
-    return NodeBinding{SemanticKind::Entity, Mdf4Path{kind, group, channel}, true};
+Mdf4Path pathFor(Mdf4EntityKind kind, int group = -1, int channel = -1) {
+    return Mdf4Path{kind, group, channel};
 }
 
 QString fieldValue(const QList<DetailSection>& sections,
@@ -76,7 +76,7 @@ void TestMdf4DetailPresenter::fileCardSummarizesDocument() {
     const Mdf4DetailPresenter presenter(document);
 
     const QList<DetailSection> details = presenter.buildDetails(
-        bindingFor(Mdf4EntityKind::File));
+        pathFor(Mdf4EntityKind::File));
 
     QCOMPARE(fieldValue(details, QStringLiteral("File"), QStringLiteral("Version")),
              QStringLiteral("4.20"));
@@ -89,7 +89,7 @@ void TestMdf4DetailPresenter::groupCardDescribesStorage() {
     const Mdf4DetailPresenter presenter(document);
 
     const QList<DetailSection> details = presenter.buildDetails(
-        bindingFor(Mdf4EntityKind::ChannelGroup, 0));
+        pathFor(Mdf4EntityKind::ChannelGroup, 0));
 
     QCOMPARE(fieldValue(details, QStringLiteral("Recording"), QStringLiteral("Storage Layout")),
              QStringLiteral("Column fragments (LD)"));
@@ -104,7 +104,7 @@ void TestMdf4DetailPresenter::channelCardExplainsPlotSupport() {
     const Mdf4DetailPresenter presenter(document);
 
     const QList<DetailSection> details = presenter.buildDetails(
-        bindingFor(Mdf4EntityKind::Channel, 0, 0));
+        pathFor(Mdf4EntityKind::Channel, 0, 0));
 
     QCOMPARE(fieldValue(details, QStringLiteral("Bit Geometry"), QStringLiteral("Bit Count")),
              QStringLiteral("16"));
@@ -121,11 +121,11 @@ void TestMdf4DetailPresenter::selectedEntityYieldsRawJson() {
     const Mdf4DetailPresenter presenter(document);
 
     const QString json = presenter.buildRawJson(
-        bindingFor(Mdf4EntityKind::Channel, 0, 0));
+        pathFor(Mdf4EntityKind::Channel, 0, 0));
 
     QVERIFY(json.contains(QStringLiteral("EngineSpeed")));
     QVERIFY(json.contains(QStringLiteral("notDecodableReason")));
-    QVERIFY(presenter.buildRawJson(bindingFor(Mdf4EntityKind::Channel, 5, 0)).isEmpty());
+    QVERIFY(presenter.buildRawJson(pathFor(Mdf4EntityKind::Channel, 5, 0)).isEmpty());
 }
 
 QTEST_MAIN(TestMdf4DetailPresenter)

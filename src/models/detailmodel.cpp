@@ -47,20 +47,27 @@ QHash<int, QByteArray> DetailModel::roleNames() const {
     };
 }
 
-void DetailModel::setSections(QList<DetailSection> sections) {
+// The cards, the producer and the cleared text change together inside the
+// reset, so an observer of the reset already reads the new selection.
+void DetailModel::setSelection(QList<DetailSection> sections, std::function<QString()> rawJson) {
     beginResetModel();
     _sections = std::move(sections);
+    _raw_json = std::move(rawJson);
+    _raw_json_text.reset();
     endResetModel();
+    emit rawJsonChanged();
+}
+
+bool DetailModel::rawJsonAvailable() const {
+    return static_cast<bool>(_raw_json);
 }
 
 QString DetailModel::rawJsonText() const {
-    return _raw_json_text;
-}
-
-void DetailModel::setRawJsonText(const QString& json) {
-    if (_raw_json_text == json) {
-        return;
+    if (!_raw_json) {
+        return {};
     }
-    _raw_json_text = json;
-    emit rawJsonTextChanged();
+    if (!_raw_json_text) {
+        _raw_json_text = _raw_json();
+    }
+    return *_raw_json_text;
 }

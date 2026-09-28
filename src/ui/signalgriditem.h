@@ -6,6 +6,7 @@
 #include <QQuickPaintedItem>
 #include <QColor>
 #include <QPointF>
+#include <QPointer>
 
 #include <vector>
 
@@ -57,6 +58,7 @@ private slots:
     void onModelUpdated();
 
 private:
+    void onModelReplaced();
     int signalIndexAtPixel(qreal px, qreal py) const;
     void rebuildColorMap();
     void selectNextSignal(int direction);
@@ -71,7 +73,8 @@ private:
     int rowHeight() const { return kCellSize + kCellGap; }
     int totalHeight() const;
 
-    SignalMapModel* _model = nullptr;
+    // Reads null once the model is destroyed, which counts as a replacement.
+    QPointer<SignalMapModel> _model;
     int _hovered_sig = -1;
     int _selected_sig = -1;
     QPointF _mouse_pos;

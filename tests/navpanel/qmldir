@@ -1,0 +1,4 @@
+module ExplorerApp
+singleton Theme 1.0 Theme.qml
+singleton AppController 1.0 AppController.qml
+NavPanel 1.0 NavPanel.qml

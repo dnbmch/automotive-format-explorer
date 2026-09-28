@@ -88,8 +88,20 @@ void SignalPlotItem::setModel(SignalPlotModel* model) {
                 [this] { update(); });
         connect(_model, &SignalPlotModel::cursorChanged, this,
                 [this] { update(); });
+        connect(_model, &QObject::destroyed, this, &SignalPlotItem::onModelReplaced);
     }
+    onModelReplaced();
+}
 
+// A drag in progress belongs to the previous model and ends as a release would;
+// the model's destruction lands here too.
+void SignalPlotItem::onModelReplaced() {
+    if (_panning) {
+        _panning = false;
+        setKeepMouseGrab(false);
+        ungrabMouse();
+        emit panningChanged();
+    }
     emit modelChanged();
     update();
 }

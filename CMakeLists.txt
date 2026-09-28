@@ -35,8 +35,8 @@ qt_standard_project_setup(REQUIRES 6.5)
 # backend stays its own target so focused tests link a single format.
 qt_add_library(explorer-core STATIC
     src/core/appcontroller.cpp
+    src/core/documenttab.cpp
     src/core/formatlist.cpp
-    src/core/noderegistry.cpp
     src/models/detailmodel.cpp
     src/models/memorymapmodel.cpp
     src/models/signalmapmodel.cpp

@@ -1,7 +1,11 @@
 #include "builtinformats.h"
 #include "core/appcontroller.h"
+#include "models/detailmodel.h"
+#include "models/treemodel.h"
 
 #include <QFile>
+#include <QJsonDocument>
+#include <QSet>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -23,10 +27,46 @@ private slots:
     void opensBundledSamples();
     void opensUppercaseSuffix();
     void reportsUnsupportedFile();
+    void everyRowHasSessionKey_data();
+    void everyRowHasSessionKey();
+    void rawJsonFollowsAvailability_data();
+    void rawJsonFollowsAvailability();
 
 private:
     void openAndCheck(const QString& path, const QString& format);
 };
+
+namespace {
+
+// Walks every row below `parent`: each carries a nonzero key of its own that
+// resolves back to that row.
+void checkKeys(const TreeModel& tree, const QModelIndex& parent, QSet<quint64>& seen) {
+    for (int row = 0; row < tree.rowCount(parent); ++row) {
+        const QModelIndex index = tree.index(row, 0, parent);
+        const quint64 key = tree.data(index, TreeModel::NodeKeyRole).toULongLong();
+        QVERIFY2(key != 0, qPrintable(tree.data(index, TreeModel::TitleRole).toString()));
+        QVERIFY(!seen.contains(key));
+        seen.insert(key);
+        QCOMPARE(tree.indexForNodeKey(key), index);
+        checkKeys(tree, index, seen);
+        if (QTest::currentTestFailed()) {
+            return;
+        }
+    }
+}
+
+// The keys of the selectable rows below `parent`, in tree order.
+void selectableKeys(const TreeModel& tree, const QModelIndex& parent, QList<quint64>& keys) {
+    for (int row = 0; row < tree.rowCount(parent); ++row) {
+        const QModelIndex index = tree.index(row, 0, parent);
+        if (tree.data(index, TreeModel::SelectableRole).toBool()) {
+            keys << tree.data(index, TreeModel::NodeKeyRole).toULongLong();
+        }
+        selectableKeys(tree, index, keys);
+    }
+}
+
+} // namespace
 
 void TestBuiltInFormats::resolvesSupportedSuffixes_data() {
     QTest::addColumn<QString>("path");
@@ -147,6 +187,68 @@ void TestBuiltInFormats::reportsUnsupportedFile() {
     QCOMPARE(controller.tabModel()->rowCount(), 0);
 }
 
+void TestBuiltInFormats::everyRowHasSessionKey_data() {
+    opensBundledSamples_data();
+}
+
+// Categories included: a row the nav panel cannot find by key cannot be
+// re-expanded, and nothing below it can be reached.
+void TestBuiltInFormats::everyRowHasSessionKey() {
+    QFETCH(QString, file);
+    AppController controller(builtInFormats());
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+    controller.openFile(QUrl::fromLocalFile(QDir(QStringLiteral(EXPLORER_SAMPLES_DIR)).filePath(file)));
+    QVERIFY2(loaded.wait(30000), qPrintable(controller.lastError()));
+
+    const TreeModel& tree = *controller.tabModel()->tabAt(0)->session()->treeModel();
+    QSet<quint64> seen;
+    checkKeys(tree, {}, seen);
+    QVERIFY(!seen.isEmpty());
+}
+
+void TestBuiltInFormats::rawJsonFollowsAvailability_data() {
+    opensBundledSamples_data();
+}
+
+// Each format's first entity with a raw form yields parseable JSON when read;
+// LDF's overview, assembled from several fields, has none.
+void TestBuiltInFormats::rawJsonFollowsAvailability() {
+    QFETCH(QString, file);
+    QFETCH(QString, format);
+    AppController controller(builtInFormats());
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+    controller.openFile(QUrl::fromLocalFile(QDir(QStringLiteral(EXPLORER_SAMPLES_DIR)).filePath(file)));
+    QVERIFY2(loaded.wait(30000), qPrintable(controller.lastError()));
+
+    DocumentSession* session = controller.tabModel()->tabAt(0)->session();
+    const TreeModel& tree = *session->treeModel();
+    const DetailModel& detail = *session->detailModel();
+    QList<quint64> keys;
+    selectableKeys(tree, {}, keys);
+    QVERIFY(!keys.isEmpty());
+
+    if (format == QLatin1String("LDF")) {
+        QCOMPARE(tree.data(tree.indexForNodeKey(keys.first()), TreeModel::TitleRole).toString(),
+                 QStringLiteral("Overview"));
+        session->selectNode(keys.first());
+        QVERIFY(detail.rowCount() > 0);
+        QVERIFY(!detail.rawJsonAvailable());
+    }
+
+    bool parsed = false;
+    for (const quint64 key : keys) {
+        session->selectNode(key);
+        if (detail.rawJsonAvailable()) {
+            QJsonParseError error;
+            QJsonDocument::fromJson(detail.rawJsonText().toUtf8(), &error);
+            QCOMPARE(error.error, QJsonParseError::NoError);
+            parsed = true;
+            break;
+        }
+    }
+    QVERIFY(parsed);
+}
+
 // Opens path through a controller composed from the production list and checks
 // the resulting tab's identity, which the session reports.
 void TestBuiltInFormats::openAndCheck(const QString& path, const QString& format) {
@@ -165,7 +267,7 @@ void TestBuiltInFormats::openAndCheck(const QString& path, const QString& format
     QCOMPARE(tabs->data(tab, TabModel::FormatRole).toString(), format);
     QCOMPARE(tabs->data(tab, TabModel::SourcePathRole).toString(), path);
     QCOMPARE(controller.currentTabIndex(), 0);
-    QVERIFY(controller.currentTreeModel()->rowCount() > 0);
+    QVERIFY(controller.currentTab()->treeModel()->rowCount() > 0);
     QVERIFY(controller.lastError().isEmpty());
 }
 

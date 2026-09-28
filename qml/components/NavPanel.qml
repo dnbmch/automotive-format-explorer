@@ -7,28 +7,38 @@ Rectangle {
     id: navPanel
     color: Theme.bgPanel
 
-    property var treeModel: null
+    property var tab: null          // the current DocumentTab
     // Source-backed content: stays true while a filter yields zero visible rows.
-    readonly property bool hasSource: treeModel && treeModel.sourceModel
-        ? treeModel.sourceModel.rowCount() > 0 : false
+    readonly property bool hasSource: tab ? tab.treeModel.sourceModel.rowCount() > 0 : false
 
-    // Per-model state: expand keys, selected node key, scroll position.
-    // Keyed by model object identity so tab close/reorder doesn't invalidate entries.
-    property var _expandState: ({})
-    property var _selectionState: ({})
-    property var _scrollState: ({})
-    property var _prevModel: null
-    readonly property int _nodeKeyRole: treeModel ? treeModel.nodeKeyRole : 0
+    // The tab whose navigation the view shows. It is null while a newly shown tab
+    // waits for its restore: that view is not the tab's navigation, so it is never
+    // saved over it.
+    property var _appliedTab: null
+    // Every tab or filter change starts a new generation, so a scheduled restore
+    // of the current generation targets the tab still shown.
+    property int _restoreGeneration: 0
 
-    onTreeModelChanged: {
-        let nextModel = treeModel
-        _saveState(_prevModel)
-        treeView.model = nextModel
-        Qt.callLater(function() {
-            searchField.text = nextModel ? nextModel.filterText : ""
-            _restoreState(nextModel)
-        })
-        _prevModel = nextModel
+    onTabChanged: {
+        if (_appliedTab)
+            _save(_appliedTab)
+        _appliedTab = null
+        const target = tab
+        const generation = ++_restoreGeneration
+        treeView.model = target ? target.treeModel : null
+        searchField.text = target ? target.filterText : ""
+        // The view lays out the new rows before their state can be applied.
+        if (target)
+            Qt.callLater(function() { _restore(target, generation) })
+    }
+
+    // A superseded restore does nothing, and so does one whose tab was destroyed
+    // meanwhile: a destroyed tab reads no tree.
+    function _restore(target, generation) {
+        if (generation !== _restoreGeneration || !target.treeModel)
+            return
+        _apply(target)
+        _appliedTab = target
     }
 
     function focusSearch() {
@@ -36,90 +46,64 @@ Rectangle {
         searchField.selectAll()
     }
 
-    // Drives the per-tab filter. Snapshots the expand/selection/scroll state on
-    // the empty->filtered edge and restores it when the filter clears.
+    // Drives the tab's filter. Entering a filter saves the view as the tab's
+    // navigation, which the tab keeps as the pre-filter snapshot; clearing it
+    // applies the snapshot the tab gives back. While a restore is pending, the
+    // tab's saved navigation already is the one to keep.
     function _applyFilter(text) {
         if (searchField.text !== text)
             searchField.text = text
-        let model = treeView.model
-        if (!model || model.filterText === text)
+        if (!tab || tab.filterText === text)
             return
-        if (model.filterText.length === 0 && text.length > 0)
-            _saveState(model)
-        model.filterText = text
+        if (tab.filterText.length === 0 && _appliedTab === tab)
+            _save(tab)
+        ++_restoreGeneration
+        tab.setFilterText(text)
         if (text.length > 0) {
             treeView.expandRecursively()
             treeView.forceLayout()
         } else {
             treeView.collapseRecursively()
             treeView.forceLayout()
-            _restoreState(model)
+            _apply(tab)
         }
+        _appliedTab = tab
     }
 
-    function _modelKey(model) {
-        return model ? model.toString() : ""
-    }
-
-    function _saveState(model) {
-        if (!model) return
-        let mk = _modelKey(model)
-
-        // Expand state
+    // Saves what the view shows: the keys of the expanded rows in row order, so
+    // parents precede children, the current row's key and the scroll position.
+    // The view's rows and scroll position follow its layout, brought up to date
+    // first.
+    function _save(target) {
+        treeView.forceLayout()
+        const model = treeView.model
         let keys = []
         for (let r = 0; r < treeView.rows; ++r) {
-            if (treeView.isExpanded(r)) {
-                let idx = treeView.index(r, 0)
-                let key = model.data(idx, _nodeKeyRole)
-                if (key !== undefined) keys.push(key)
-            }
+            if (treeView.isExpanded(r))
+                keys.push(model.data(treeView.index(r, 0), model.nodeKeyRole))
         }
-        _expandState[mk] = keys
-
-        // Selected node
-        let cur = treeView.selectionModel.currentIndex
-        if (cur.valid)
-            _selectionState[mk] = model.data(cur, _nodeKeyRole)
-
-        // Scroll position
-        _scrollState[mk] = treeView.contentY
+        const current = treeView.selectionModel.currentIndex
+        target.saveNavigation(keys, current.valid ? model.data(current, model.nodeKeyRole) : 0,
+                              treeView.contentY)
     }
 
-    function _restoreState(model) {
-        if (!model || treeView.model !== model) return
-        let mk = _modelKey(model)
-
-        // Restore expand state — forceLayout after each expand so children become visible rows.
-        let keys = _expandState[mk]
-        if (keys && keys.length > 0) {
-            for (let i = 0; i < keys.length; ++i) {
-                let idx = model.indexForNodeKey(keys[i])
-                if (idx.valid) {
-                    let row = treeView.rowAtIndex(idx)
-                    if (row >= 0 && !treeView.isExpanded(row)) {
-                        treeView.expand(row)
-                        treeView.forceLayout()
-                    }
-                }
+    // Applies a tab's saved navigation to the view showing its tree. Every row,
+    // category or entity, has a key, so each saved row is found again.
+    function _apply(target) {
+        const model = target.treeModel
+        const keys = target.expandedKeys
+        for (let i = 0; i < keys.length; ++i) {
+            const row = treeView.rowAtIndex(model.indexForNodeKey(keys[i]))
+            if (row >= 0 && !treeView.isExpanded(row)) {
+                treeView.expand(row)
+                treeView.forceLayout()
             }
         }
-
-        // Restore selection
-        let selKey = _selectionState[mk]
-        if (selKey !== undefined) {
-            let idx = model.indexForNodeKey(selKey)
-            if (idx.valid) {
-                let row = treeView.rowAtIndex(idx)
-                if (row >= 0)
-                    treeView.selectionModel.setCurrentIndex(
-                        treeView.index(row, 0), ItemSelectionModel.ClearAndSelect)
-            }
-        }
-
-        // Restore scroll position
-        let scrollY = _scrollState[mk]
-        if (scrollY !== undefined)
-            treeView.contentY = scrollY
+        // The saved model index itself, not its row: a current row hidden under a
+        // collapsed parent is restored, and key 0 clears the selection.
+        treeView.selectionModel.setCurrentIndex(model.indexForNodeKey(target.currentKey),
+                                                ItemSelectionModel.ClearAndSelect)
+        treeView.contentY = target.contentY
     }
 
     signal nodeSelected(var nodeKey)
@@ -425,6 +409,7 @@ Rectangle {
             TreeView {
                 id: treeView
                 anchors.fill: parent
+                model: null   // the current tab's tree, set when the tab changes
                 visible: navPanel.hasSource
                 clip: true
                 columnWidthProvider: function(column) {

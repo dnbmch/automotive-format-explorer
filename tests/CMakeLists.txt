@@ -29,6 +29,8 @@ endfunction()
 
 explorer_add_test(tst_treefiltermodel explorer-core)
 
+explorer_add_test(tst_detailmodel explorer-core)
+
 explorer_add_test(tst_memorymapmodel explorer-core)
 
 # The painted grid is compiled into the executable; its test compiles the same
@@ -37,7 +39,30 @@ explorer_add_test(tst_memorygriditem explorer-core Qt6::Quick)
 target_sources(tst_memorygriditem PRIVATE ${PROJECT_SOURCE_DIR}/src/ui/memorygriditem.cpp)
 set_property(TEST tst_memorygriditem APPEND PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+explorer_add_test(tst_signalgriditem explorer-core Qt6::Quick)
+target_sources(tst_signalgriditem PRIVATE ${PROJECT_SOURCE_DIR}/src/ui/signalgriditem.cpp)
+set_property(TEST tst_signalgriditem APPEND PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+explorer_add_test(tst_signalplotitem explorer-core Qt6::Quick)
+target_sources(tst_signalplotitem PRIVATE ${PROJECT_SOURCE_DIR}/src/ui/signalplotitem.cpp)
+set_property(TEST tst_signalplotitem APPEND PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 explorer_add_test(tst_signalplotmodel explorer-core)
+
+explorer_add_test(tst_documenttab explorer-core)
+
+# The production nav panel in a test-time ExplorerApp module: NavPanel.qml and
+# Theme.qml are copied from qml/components next to a stand-in AppController.
+explorer_add_test(tst_navpanel explorer-core Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+set(_navpanel_module "${CMAKE_CURRENT_BINARY_DIR}/navpanel_module/ExplorerApp")
+configure_file(${PROJECT_SOURCE_DIR}/qml/components/NavPanel.qml ${_navpanel_module}/NavPanel.qml COPYONLY)
+configure_file(${PROJECT_SOURCE_DIR}/qml/components/Theme.qml ${_navpanel_module}/Theme.qml COPYONLY)
+configure_file(navpanel/AppController.qml ${_navpanel_module}/AppController.qml COPYONLY)
+configure_file(navpanel/qmldir ${_navpanel_module}/qmldir COPYONLY)
+target_compile_definitions(tst_navpanel PRIVATE
+    NAVPANEL_IMPORT_PATH="${CMAKE_CURRENT_BINARY_DIR}/navpanel_module"
+    NAVPANEL_HOST="${CMAKE_CURRENT_SOURCE_DIR}/navpanel/host.qml")
+set_property(TEST tst_navpanel APPEND PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 explorer_add_test(tst_appcontroller explorer-core)
 

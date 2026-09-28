@@ -17,12 +17,7 @@ void addNumberField(QList<DetailField>& fields, const QString& key, T value) {
 
 } // namespace
 
-QList<DetailSection> DbcDetailPresenter::buildDetails(const NodeBinding& binding) const {
-    if (!std::holds_alternative<DbcPath>(binding.payload)) {
-        return {};
-    }
-
-    const DbcPath path = std::get<DbcPath>(binding.payload);
+QList<DetailSection> DbcDetailPresenter::buildDetails(const DbcPath& path) const {
     switch (path.kind) {
     case DbcEntityKind::Node:
         return nodeDetails(path);
@@ -47,12 +42,7 @@ QList<DetailSection> DbcDetailPresenter::buildDetails(const NodeBinding& binding
     return {};
 }
 
-QString DbcDetailPresenter::buildRawJson(const NodeBinding& binding) const {
-    if (!std::holds_alternative<DbcPath>(binding.payload)) {
-        return {};
-    }
-
-    const DbcPath path = std::get<DbcPath>(binding.payload);
+QString DbcDetailPresenter::buildRawJson(const DbcPath& path) const {
     const google::protobuf::Message* msg = nullptr;
     int i = path.primaryIndex;
     int j = path.secondaryIndex;

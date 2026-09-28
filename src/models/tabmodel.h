@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sessions/documentsession.h"
+#include "core/documenttab.h"
 
 #include <QAbstractListModel>
 
@@ -25,11 +25,14 @@ public:
     QVariant data(const QModelIndex& index, int role) const override;
     QHash<int, QByteArray> roleNames() const override;
 
-    int addSession(std::unique_ptr<DocumentSession> session);
-    void closeSession(int index);
-    DocumentSession* sessionAt(int index);
-    const DocumentSession* sessionAt(int index) const;
+    // Appends the tab as the last row. It stays owned here.
+    DocumentTab* addTab(std::unique_ptr<DocumentTab> tab);
+    // Removes the row and hands its tab to the caller.
+    std::unique_ptr<DocumentTab> takeTab(int index);
+    DocumentTab* tabAt(int index) const;
+    // The tab's row, or -1 when the model does not hold it.
+    int indexOf(const DocumentTab* tab) const;
 
 private:
-    std::vector<std::unique_ptr<DocumentSession>> _sessions;
+    std::vector<std::unique_ptr<DocumentTab>> _tabs;
 };

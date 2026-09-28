@@ -17,7 +17,6 @@ void TreeFilterModel::setFilterText(const QString& text) {
 
     _filter_text = text;
     invalidate();
-    emit filterTextChanged();
 }
 
 int TreeFilterModel::nodeKeyRole() const {

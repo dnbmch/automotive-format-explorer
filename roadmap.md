@@ -10,7 +10,7 @@ A single-binary Qt/QML viewer that opens automotive description and recording
 files (A2L, DBC, LDF, MDF4) through statically linked per-format backends and
 renders them with a tree view, detail panel, and format-specific center views
 (A2L memory map, DBC/LDF signal map, MDF4 signal plot). The backend seam
-(`FormatAdapter` / `DocumentSession` / `DetailPresenter`) plus one entry in the
+(`FormatAdapter` / `DocumentSession`, with the format's own presenter) plus one entry in the
 built-in format list is how a format arrives, not a change to the shell.
 
 ## Format coverage
@@ -36,9 +36,6 @@ built — [docs/ref/memory_view.md](docs/ref/memory_view.md)):
 
 ## Quality & lifecycle
 
-- Tab and view-model lifetimes: session-local tree identity, per-tab navigation
-  state, and painted items that outlive their model (workspace cleanup plan G2).
-  Controller teardown of a pending load is in place.
 - Render documentation: per-pattern rules for the signal/memory grid stripes.
 
 ## Packaging

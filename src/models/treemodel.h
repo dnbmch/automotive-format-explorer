@@ -5,6 +5,7 @@
 #include <QAbstractItemModel>
 
 #include <memory>
+#include <vector>
 
 class TreeModel : public QAbstractItemModel {
     Q_OBJECT
@@ -29,14 +30,14 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void setRoot(std::unique_ptr<TreeItem> root);
-    TreeItem* rootItem();
-    const TreeItem* rootItem() const;
 
     Q_INVOKABLE QModelIndex indexForNodeKey(qulonglong nodeKey) const;
 
 private:
     TreeItem* itemForIndex(const QModelIndex& index) const;
-    int rowForItem(const TreeItem* item) const;
+    void fileItems(TreeItem* parent);
 
     std::unique_ptr<TreeItem> _root;
+    // Rows by key. A session numbers its rows 1..n as it appends them.
+    std::vector<TreeItem*> _items_by_key;
 };

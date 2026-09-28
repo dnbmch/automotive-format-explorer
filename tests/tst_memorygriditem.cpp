@@ -13,6 +13,7 @@
 #include <QTest>
 
 #include <limits>
+#include <memory>
 
 namespace {
 
@@ -37,6 +38,7 @@ MemoryObject makeObject(const QString& name, uint64_t address, uint64_t size,
 // Test access to the item's input handler.
 class GridItem : public MemoryGridItem {
 public:
+    using MemoryGridItem::mouseMoveEvent;
     using MemoryGridItem::mousePressEvent;
 };
 
@@ -73,6 +75,12 @@ void click(GridItem& item, QPoint at) {
     item.mousePressEvent(&press);
 }
 
+void drag(GridItem& item, QPoint from, QPoint to) {
+    click(item, from);
+    QMouseEvent move(QEvent::MouseMove, to, to, Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+    item.mouseMoveEvent(&move);
+}
+
 } // namespace
 
 class TestMemoryGridItem : public QObject {
@@ -82,6 +90,7 @@ private slots:
     void objectBeyondSixteenMiBPainted();
     void farObjectPaintedAndSelectable();
     void colorsStableAcrossScrolling();
+    void modelDestroyedBeforeItem();
 };
 
 void TestMemoryGridItem::objectBeyondSixteenMiBPainted() {
@@ -176,6 +185,36 @@ void TestMemoryGridItem::colorsStableAcrossScrolling() {
     const QImage scrolled = render(item);
     QCOMPARE(scrolled.pixel(cellCenter(item, model, 0x30)), darker.rgb());
     QCOMPARE(scrolled.pixel(cellCenter(item, model, 0x50)), plain.rgb());
+}
+
+// A view can outlive its model: the item then holds no model, keeps no state
+// naming the model's rows, paints nothing and ignores input.
+void TestMemoryGridItem::modelDestroyedBeforeItem() {
+    auto model = std::make_unique<MemoryMapModel>();
+    model->addObject(makeObject(QStringLiteral("A"), 0x1000, 32, 0, 7));
+    model->finalize();
+    GridItem item;
+    prepare(item, *model);
+    const QPoint first = cellCenter(item, *model, 2);
+    drag(item, first, cellCenter(item, *model, 20));
+    QCOMPARE(item.selectedObjectIndex(), 0);
+    QVERIFY(item.hasSelection());
+
+    QSignalSpy changed(&item, &MemoryGridItem::modelChanged);
+    QSignalSpy clicked(&item, &MemoryGridItem::nodeKeyClicked);
+    model.reset();
+
+    QVERIFY(!item.model());
+    QCOMPARE(changed.count(), 1);
+    QCOMPARE(item.selectedObjectIndex(), -1);
+    QVERIFY(!item.hasSelection());
+    QCOMPARE(item.selectionStart(), quint64(0));
+    QCOMPARE(item.contentHeight(), 0.0);
+    QVERIFY(item.hoveredTooltip().isEmpty());
+    QCOMPARE(render(item).pixel(first), QColor(Qt::black).rgb());
+    click(item, first);
+    QCOMPARE(clicked.count(), 0);
+    QCOMPARE(item.selectedObjectIndex(), -1);
 }
 
 QTEST_MAIN(TestMemoryGridItem)
