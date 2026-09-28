@@ -101,8 +101,9 @@ If your format has nothing graphical to show in the middle column, leave `center
 | DBC, LDF | `qrc:/qt/qml/ExplorerApp/qml/components/SignalMapView.qml` | `SignalMapModel` |
 | MDF4 | `qrc:/qt/qml/ExplorerApp/qml/components/SignalPlotView.qml` | `SignalPlotModel` |
 
-The center views use `QQuickPaintedItem` C++ renderers. Grid views are driven by
-pre-computed flat occupancy arrays; the signal plot consumes the format-neutral
+The center views use `QQuickPaintedItem` C++ renderers. The signal grid is driven by
+pre-computed per-bit arrays, the memory grid by byte queries over sorted object
+intervals ([rendering](architecture.md#rendering)); the signal plot consumes the format-neutral
 overview and exact windows of `src/models/plotdata.h`, which its builders make from
 ordered sample chunks. Adding a new recording format that can deliver such chunks
 needs no plot changes.

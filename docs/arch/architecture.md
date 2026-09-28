@@ -117,10 +117,14 @@ remaining tabs are destroyed with the controller.
 ## Tabs
 
 Each open file is one `DocumentTab` (`src/core/documenttab.h`), owned by the
-`TabModel`. The tab owns its session and the `TreeFilterModel` over the session's
-tree, and is the proxy's only writer (`setFilterText()`). QML reaches the current tab
-through `AppController.currentTab`, a property; a tab is never the result of an
-invokable, which would hand it to the JavaScript engine.
+`TabModel`. The tab owns its session and the `TreeFilterModel`
+(`src/models/treefiltermodel.h`) over the session's tree, and is the proxy's only
+writer (`setFilterText()`). The proxy filters recursively, auto-accepts the children
+of a match and exposes `nodeKeyRole` and a source-mapped `indexForNodeKey()` to QML;
+the nav panel shows it and never binds a session's `TreeModel` directly. Sessions and
+backends know nothing about filtering. QML reaches the current tab through
+`AppController.currentTab`, a property; a tab is never the result of an invokable,
+which would hand it to the JavaScript engine.
 
 The controller tracks the current tab by identity, and `currentTabIndex` is that tab's
 row, or -1 for none. `currentTabIndexChanged` announces a new row or a new tab at the
@@ -169,7 +173,9 @@ the navigation of the tab it shows once the new rows are laid out; it saves only
 tab whose navigation it has applied, never a newly bound view awaiting its restore.
 Applying makes the saved row current by its model index, even when a collapsed parent
 hides it, and a saved key 0 leaves no row current; expansion and scroll position are
-applied as saved. Each scheduled restore carries a generation. A tab or filter change starts a new
+applied as saved. Restoring moves only the tree's current row: it selects nothing in
+the detail or center panel, which keep their session's last selection. Each scheduled
+restore carries a generation. A tab or filter change starts a new
 one, so an older restore, or one whose tab was destroyed meanwhile, does nothing.
 Run late, an older restore would reach the view: `TreeView` matches another model's
 index by its row and parent, so another tab's saved expansion would open the shown
@@ -184,6 +190,11 @@ replace only the navigation; clearing the filter makes the snapshot the navigati
 again, and the panel applies it. A filter entered while a restore is pending starts
 from the tab's saved navigation. Showing a tab sets the filter field's text without
 starting a filter change.
+
+A tab keeps tree navigation only. Center models keep the view state they own (A2L
+segment and bytes per row, DBC/LDF message and multiplexer group, MDF4 plot range);
+state a painted item holds resets when the center view is rebuilt for a shown tab
+([BL-E5](../backlog.md#bl-e5-center-grid-view-state-is-not-kept-per-tab)).
 
 ## DocumentSession Contract
 
@@ -216,14 +227,24 @@ through a `std::shared_ptr<const mdf4::File>` aliasing the reader, and a scan fu
 and an axis function bound to it. Any of them keeps the reader alive; there is no
 second metadata copy and no path-based read. A file that cannot be opened, or whose
 opening a reader limit refused, still opens as a session showing its diagnostics (a
-refusal is one DROPPED diagnostic), and its scans fail.
+refusal is one DROPPED diagnostic), and its scans fail. The reader's own limits,
+outcomes, traversal and cancellation checkpoints are the
+[reader contract](../../../mdf4-parser/docs/arch/reader.md).
+
+Both session allowances below are per session: every open MDF4 tab adds its own, and
+nothing bounds the process as a whole. They implement the per-file budgets of the
+[resource envelope](../../../docs/plans/i2_read_envelope.md) (a 16 GB laptop, one
+admitted recording up to 64 GB).
 
 **Tree.** Before any group or channel row exists, `Mdf4DocumentSession::treeBytes()`
 estimates the tree from the metadata: 352 B per row (its item, its slot in the
 parent's children, its key and path table entries) plus 9/4 B per UTF-8 byte of title
 and subtitle text. Past `Mdf4SessionLimits::treeBytes` (384 MiB) the file row stands
 alone, with its details, and one error diagnostic, "Channel tree not shown", gives the
-counts, the estimate and the allowance; no row stands for part of the tree.
+counts, the estimate and the allowance; no row stands for part of the tree. 384 MiB
+covers the tree of any file the reader's 1 GiB opening allowance admits with realistic
+channel text: about 873 k channels at 1,230 B of opening charge each, a tree of about
+367 MiB.
 
 **Result sets.** Selecting a plottable channel scans its whole metadata range once
 into an overview; the overview decides the domain of its result set. The plot then
@@ -273,7 +294,11 @@ close the session from them. Each flow therefore settles the scans, the cache an
 selection before notifying, notifies last, the busy state last of all, and touches
 nothing after a notification that destroyed the session. The busy state is read
 again after the progress notification, whose observer may have started other work.
-The plot model survives its own destruction from any of its notifications.
+The plot model survives its own destruction from any of its notifications. The detail
+model's notification in `selectNode()` comes before the plot flow and outside this
+rule: the flow after it assumes the session and the selection still stand, and no
+observer closes or reselects from it
+([BL-V3](../backlog.md#bl-v3-an-mdf4-selection-notifies-the-detail-panel-before-its-plot-flow)).
 
 **Storage.** One allowance per session, `Mdf4SessionLimits::resultBytes` (256 MiB),
 covers the retained results, cached or shown, and the reservation of the scan in
@@ -286,16 +311,19 @@ results nobody else holds. A result is held while the plot shows it, a window pe
 or in flight holds the overview of its result set, and a cached window holds that
 overview too, so a window goes before its overview. When held results leave no room,
 the scan is refused and the plot says how much it needed and how much is held; no
-result is exempt from the allowance. Results are keyed by kind, channel, result set
-(and with it the domain) and, for a window, its sample range.
+result is exempt from the allowance. An overview is found by its channel; a window by
+its channel, its result set (and with it the domain) and whether it covers the view.
+256 MiB holds about a thousand 4,096-bin overviews of 256 KiB each; an evicted one is
+scanned again when wanted.
 
 **Outcomes.** A scan that returns Ok with samples shows the overview, then the view's
 window; Short coverage shows "N of M samples" and bounds the view by the last sample
-read. Ok with no samples shows "No samples recorded" and is kept like any result. A
-cancelled scan shows and keeps nothing. ResourceLimit shows the refusal with the
-reader's numbers, or the window's sample limit; SourceChanged asks to reopen the file;
-Error gives the reader's reason and location. Refused and failed scans are not kept:
-selecting the channel again scans again.
+read. Ok with no samples shows "No samples recorded" (or that the recording ends
+before its first sample) and is kept like any result. A cancelled scan shows and keeps
+nothing. ResourceLimit shows the refusal with the reader's numbers, or the window's
+sample limit; SourceChanged, and a window whose samples contradict their overview, ask
+to reopen the file; Error gives the reader's reason and location. Refused and failed
+scans are not kept: selecting the channel again scans again.
 
 **Teardown.** Destroying the session disconnects delivery, drops the pending scan,
 cancels the one in flight and waits on this thread until it returns; its result is
@@ -304,15 +332,13 @@ afterwards; nothing else touches it. The reader checks cancellation at its
 checkpoints, so closing a tab waits for the next one, and for a blocking file call in
 progress.
 
-The nav panel never binds a session's `TreeModel` directly: it shows the current tab's `TreeFilterModel` (`src/models/treefiltermodel.h`) — a `QSortFilterProxyModel` with recursive filtering and auto-accepted child rows that also exposes `nodeKeyRole` and a source-mapped `indexForNodeKey()` to QML. The tab owns the proxy, so the filter text is per tab, and the proxy goes with its tab. Sessions and backends know nothing about filtering.
-
 ## Node keys
 
 Every tree row gets a nonzero session-local key, `nodeKey`, as the session appends it: `AdapterSessionBase::appendNode()` numbers rows 1, 2, … in creation order, categories included, and only the invisible root keeps 0. `TreeModel::setRoot()` records each row's position under its parent and files the row by key once, so `indexForNodeKey()` and `parent()` walk nothing. A format session keeps its own table from the key of each entity row to that format's typed entity path (`A2lPath`, `DbcPath`, `LdfPath` or `Mdf4Path`, declared with the format's presenter); shared code names no format. A category row has a key but no entity. The key is the universal cross-reference token used by:
 
 - The format session, to find the selected row's entity and build its details.
 - The center panel models (memory grid, signal grid), to render highlights at the right offset / bit and to emit `nodeKeyClicked` when the user clicks a region.
-- `AppController::selectCurrentNode(int nodeKey)` and `NavPanel::selectAndScrollTo(int nodeKey)`, which together implement bidirectional selection.
+- `AppController::selectCurrentNode(qulonglong nodeKey)` and `NavPanel.selectAndScrollTo(nodeKey)`, which together implement bidirectional selection.
 
 Keys are scoped per session — a key from one document is never valid in another.
 
@@ -333,7 +359,7 @@ Center panel (memory grid / signal grid click)
 
 `AppController` is the single mediator. The tree, detail, and center panels never call each other directly — they all go through the controller and identify entities by `nodeKey`.
 
-Selecting a row builds its cards at once; its raw JSON is produced only when read. The session hands `DetailModel::setSelection()` the cards and a producer of the entity's raw JSON, or none when the entity has no raw form (LDF's overview). `rawJsonAvailable` answers from the producer without serializing. The first read of `rawJsonText` after a selection runs the producer synchronously on the GUI thread and keeps its text, an empty one included, until the next selection; the raw view reads it only while shown. An aggregate row (an A2L module, the MDF4 file) still serializes its whole entity when the raw view is opened on it.
+Selecting a row builds its cards at once; its raw JSON is produced only when read. The session hands `DetailModel::setSelection()` the cards and a producer of the entity's raw JSON, or none when the entity has no raw form (LDF's overview). `rawJsonAvailable` answers from the producer without serializing; the raw toggle is one preference of the detail panel, not per tab. The first read of `rawJsonText` after a selection runs the producer synchronously on the GUI thread and keeps its text, an empty one included, until the next selection; the raw view reads it only while shown. An aggregate row (an A2L module, the MDF4 file) still serializes its whole entity when the raw view is opened on it.
 
 ## Rendering
 
@@ -352,7 +378,7 @@ The two grid renderers use these rules:
 - Mouse hover, wheel, and click are handled in `mouseMoveEvent` / `wheelEvent` / `mousePressEvent` — no QML `MouseArea` overlay.
 - `FBO` render target for stable scroll performance.
 
-The grid items emit `hoveredTooltip` (string) and `nodeKeyClicked(int)` signals; the QML layer is responsible only for placement and signal routing.
+The grid items expose a `hoveredTooltip` string and emit `nodeKeyClicked(qulonglong)`; the QML layer is responsible only for placement and signal routing.
 
 Each painted item holds its model through a `QPointer`. A replaced center view lives until a later event-loop turn, so it can outlive its model; the model's destruction then counts as being given no model. The item drops the hover, selections, highlight flash and drag that name the model's rows, notifies `modelChanged`, paints its empty state and ignores input.
 
@@ -384,14 +410,16 @@ src/
   builtinformats  application format list (the only concrete-adapter construction)
   core/         appcontroller, documenttab, formatlist, detailsection, treeitem,
                 formatid, diagnostics
-  models/       treemodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel,
-                plotdata (overview, window and their builders), signalplotmodel
+  models/       treemodel, treefiltermodel, detailmodel, tabmodel, memorymapmodel,
+                signalmapmodel, plotdata (overview, window and their builders),
+                signalplotmodel
   sessions/     documentsession (interface), adaptersessionbase, presentertext
                 (shared text/detail helpers), a2l/dbc/ldf/mdf4 sessions and
                 detail presenters (a2l splits ifdata helpers into
                 a2ldetailpresenter_ifdata.cpp)
   adapters/     formatadapter (load interface) and the a2l/dbc/ldf/mdf4 adapters
-  ui/           memorygriditem, signalgriditem, signalplotitem (painted renderers)
+  ui/           memorygriditem, signalgriditem, signalplotitem (painted renderers),
+                gridpalette (shared palette, shade and highlight-flash helpers)
 qml/
   Main.qml      root layout with SplitView, tabs, Loader
   components/   NavPanel, MemoryView, SignalMapView, SignalPlotView,

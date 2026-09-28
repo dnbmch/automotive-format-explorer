@@ -22,12 +22,11 @@ its semantics ever need to change together.
 The sibling `mdf4-parser` proto gained `DataType` `UINT_BE`/`SINT_BE`/`FLOAT_BE`
 and `ConversionKind` `ALGEBRAIC`/`TAB_RANGE` (plus `Conversion.formula`). The
 `mdf4detailpresenter.cpp` switches don't name them and fall through to their
-`"Unknown (%1)"` default — correct but unlabeled. The cases cannot be added while
-the explorer compiles against the published v0.1.0 `-lib` artifacts, which
-predate the enum values; add the labels (and optionally show the formula text)
-in the same batch as the next parser `-lib` release pickup.
+`"Unknown (%1)"` default — correct but unlabeled. The reader with the bounded
+interface the explorer requires carries these values, so nothing gates the labels.
+Add them, and optionally show the formula text.
 
-**Size:** XS, gated on a fresh `mdf4-parser-lib` release.
+**Size:** XS.
 
 ### BL-E4: DBC adapter declares the extraction entry point by hand
 

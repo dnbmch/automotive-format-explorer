@@ -17,9 +17,8 @@ built-in format list is how a format arrives, not a change to the shell.
 
 - MDF4 structure browsing, metadata details, and single-channel plotting of whole
   recordings (a bounded overview plus exact windows of the view) are implemented.
-  They need the bounded reader interface, which no published `mdf4-parser-lib`
-  carries yet; packaging MDF4 into a shipped release remains in the release phase
-  of [the locked plan](docs/plans/mdf4_viewer.md).
+  A release carrying them, real-recording acceptance and further viewer increments
+  are the [remaining MDF4 viewer scope](docs/plans/mdf4_viewer.md).
 - New-format backends follow the workspace parser-research priority once their
   parsers exist: ARXML → ODX → FIBEX. Each plugs in as a `FormatAdapter` +
   `DocumentSession` with its own tree/detail/center wiring.
@@ -42,6 +41,8 @@ built — [docs/ref/memory_view.md](docs/ref/memory_view.md)):
 ## Packaging
 
 CI (Windows MinGW + Ubuntu) and `release.yml` (Windows zip + Linux AppImage)
-already exist. Release builds fetch the parser `-lib` artifacts from GitHub
-releases by their `*parser-*` asset names, so a release can only be cut once the
-pinned parser tags are published.
+already exist. Release builds acquire the complete installed parser packages pinned
+in the `PARSER_PACKAGE_LOCK` repository variable
+([build reference](docs/ref/cmake_build_system.md#acquire-complete-installed-packages)),
+so a release can only be cut once complete packages of all four parsers are
+published and pinned.

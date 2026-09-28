@@ -87,10 +87,19 @@ repair, MDF4 excluded). Its tag preserves the shipped commit and the temporary
 release branch is retired. The real Windows download launches self-contained with
 no unresolved imports, and its packaged backends open the bundled A2L, DBC, and LDF.
 
-MDF4 ships in no explorer release. Its parser artifacts are published as
-`mdf4-parser-lib` v0.1.0, and `master` fetches the headers archive under a sha256
-pin like the other three parsers. Putting the MDF4 backend in a user's hands is an
-explorer release, which is on-demand.
+Tab and session ownership and the bounded recording viewer are committed on local
+`master` and not pushed; their platform and operator checks are open in
+[docs/handoff.md](docs/handoff.md).
+
+MDF4 ships in no explorer release. The backend needs the reader's bounded interface
+(`scan`, `axis`, typed outcomes), which the published `mdf4-parser-lib` v0.1.0 lacks.
+Package CI and release jobs build against the complete installed packages pinned in
+the `PARSER_PACKAGE_LOCK` repository variable
+([build reference](docs/ref/cmake_build_system.md#acquire-complete-installed-packages)),
+so they need a complete MDF4 package carrying that interface; source builds and a
+local package prefix need no publication. Putting the MDF4 backend in a user's hands
+is an explorer release, which is on-demand
+([remaining scope](docs/plans/mdf4_viewer.md)).
 
 The bundled screenshots (`docs/screenshot_*.png`) predate the per-tab filter and
 sample links; regenerate them when the next release is cut.

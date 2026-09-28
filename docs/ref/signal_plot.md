@@ -2,7 +2,12 @@
 
 The signal plot is the format-neutral center view for sampled numeric data.
 MDF4 is its first producer; producer-specific parsing, metadata, and sample
-types stop in the document session.
+types stop in the document session. `SignalPlotItem` is a `QQuickPaintedItem` like
+the grids, so the plot adds no Qt module and no deploy surface.
+
+The plot stack (`plotdata`, `SignalPlotModel`, `SignalPlotItem`, `SignalPlotView.qml`)
+takes operator-authored changes only, so it can be relicensed for a live view in the
+proprietary product apps.
 
 ## Data seam
 
@@ -18,8 +23,10 @@ cache and the plot hold one copy.
   extrema (NaN when no value is finite). Bins cover exactly the delivered samples,
   so none is empty. The builder allocates `clamp(stated count, 2, 4096)` bins at
   construction and never again: when the scan outgrows them, neighbors merge
-  pairwise into bins twice as wide. An overstated or unknown count therefore costs
-  no resolution, and the index arithmetic holds up to 2^64 − 1.
+  pairwise into bins twice as wide. A count the source overstates, a short scan
+  among them, therefore costs no resolution, and the index arithmetic holds for
+  every index a 64-bit sample count reaches. A fixed bin count keeps an overview's
+  size independent of the recording's length.
 - **Domain** (`PlotDomain`): one per result set, decided over the whole overview
   scan, chunk seams included. The producer's coordinates are used only when every
   one is finite and nondecreasing; otherwise the overview and every window of its
@@ -28,7 +35,8 @@ cache and the plot hold one copy.
   reports `incomplete()`; nothing stands for the missing tail.
 - **Exact window** (`PlotWindow`, `PlotWindowBuilder`): consecutive samples with
   their coordinates and values and per-256-sample extrema, at most 4 Mi samples
-  (64 MiB of doubles) including one neighbor each side. `PlotOverview::windowRequest()`
+  (64 MiB of doubles) including one neighbor each side: the reader's own `read()`
+  cap, and over a thousand samples per pixel column of a 4K-wide plot. `PlotOverview::windowRequest()`
   turns a domain range into the conservative index cover of the bins that may hold
   it, widened by one sample each side; the builder scans that cover, keeps the
   samples in range and the two neighbors by their actual coordinates, and refuses
@@ -81,9 +89,9 @@ Every paint is sized by the viewport or the overview's bins:
 - axes and tick labels are painted in the same item, avoiding a QML object per
   sample or tick.
 
-The zoom floor is the smallest positive spacing the overview found, plus
-floating-point precision, so irregular recordings can still zoom into dense bursts
-separated by large gaps.
+The zoom floor is the smallest positive spacing the overview found, never below what
+doubles resolve at the axis' magnitude, so irregular recordings can still zoom into
+dense bursts separated by large gaps.
 
 ## Interaction
 
@@ -93,8 +101,8 @@ separated by large gaps.
   actual value and absolute sample index. Hover over the overview reports the bins
   under the pointer's pixel column: their coordinate range, index range, sample
   count, nonfinite count and extrema, and marks their band, never a single point.
-- Reset view restores the full domain range and recomputes the visible value
-  range.
+- Reset view (the header button or a double-click) restores the full domain range
+  and recomputes the visible value range.
 
 The value axis follows the finite extrema in view, with padding for readability:
 of the exact samples in Detail, of the bins the view touches in Overview.
@@ -109,23 +117,16 @@ the state's message.
 
 Opening an MDF4 file indexes only its metadata graph, once, into the session's
 `mdf4::Reader`. Selecting a plottable channel scans its whole range into an
-overview on a worker, then the plot's detail requests scan windows. One scan runs
-at a time: a newer selection or view cancels the scan in flight that it makes
-obsolete and waits as the single pending scan, and a scan in flight that still
-serves the selection or view is kept. Results of cancelled scans are discarded
-before the next scan is admitted.
-
-Completed results are cached by kind, channel, result set and window range within
-the session's 256 MiB allowance, which also holds the scan in flight's reservation.
-Past it the least recently used results nobody else holds are evicted, windows before
-the overview of their result set; when the results in use leave no room, the scan is
-refused and the plot shows the numbers. Refused and failed scans are not cached.
-Ownership, outcomes and teardown: [architecture](../arch/architecture.md#mdf4-reads).
+overview on a worker, then the plot's detail requests scan windows. Scheduling,
+cancellation, the 256 MiB result allowance, outcomes and teardown:
+[architecture](../arch/architecture.md#mdf4-reads).
 
 A group's master channel carries the domain rather than a signal against it —
 decoding a master returns its own samples in both time and value — so the tree
 lists it as the group's axis channel, with its detail view intact, and never
-scans it.
+scans it. A channel the reader cannot decode stays in the tree marked "Not
+plottable", with its reason in the detail cards; selecting it scans nothing and the
+plot says it is not plottable.
 
 ## Measured scale
 
@@ -136,7 +137,9 @@ the reader's generated 14-hour 10 kS/s recordings of 504,000,000 samples per cha
 an unsorted file of 50,000,000 samples per channel and a sparse 64 GiB file. Each figure
 is min / median / max of five runs of the production adapter and session, taken from the
 pass with less background load (other projects compiled on the same host at times).
-Evidence: `build-i2i3/b/measure/` at the workspace root.
+Evidence: `build-i2i3/b/measure/` at the workspace root. The builds measured did not
+yet verify each compressed fragment's stream trailer, which the landed reader does in
+one more finalization phase per fragment; the figures are not repeated on it.
 
 | Channel | Overview | Window, 1 s view | Window, 4.15 M samples | Peak working set / commit with that window |
 |---|---|---|---|---|
@@ -162,5 +165,5 @@ Evidence: `build-i2i3/b/measure/` at the workspace root.
   17.6 MiB working set and 8.4 MiB commit, and a window at sample 8,050,966,324 reads
   in 34 ms. That file proves 64-bit offsets and indices, not throughput.
 
-UNVERIFIED — the 16 GB reference laptop: none of these figures is measured there, and a
-10 GB recording does not stay in its page cache between scans.
+None of these figures is measured on the 16 GB reference laptop, whose page cache
+does not hold a 10 GB recording between scans.

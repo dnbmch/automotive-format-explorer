@@ -180,7 +180,7 @@ are used directly through the same public targets as installed packages.
 
 ## Documentation
 
-- [docs/arch/architecture.md](docs/arch/architecture.md) — process layout, format composition and load shutdown, DocumentSession contract, node keys, startup splash + DWM cloak.
+- [docs/arch/architecture.md](docs/arch/architecture.md) — process layout, format composition and load shutdown, tabs and tree navigation, DocumentSession contract, MDF4 reads, node keys, startup splash + DWM cloak.
 - [docs/arch/adapter_contract.md](docs/arch/adapter_contract.md) — how to add a new format adapter.
 - [docs/ref/memory_view.md](docs/ref/memory_view.md) — A2L memory grid visual + interaction reference.
 - [docs/ref/signal_map.md](docs/ref/signal_map.md) — DBC/LDF signal grid visual + interaction reference.
