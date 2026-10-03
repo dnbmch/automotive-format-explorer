@@ -294,11 +294,13 @@ close the session from them. Each flow therefore settles the scans, the cache an
 selection before notifying, notifies last, the busy state last of all, and touches
 nothing after a notification that destroyed the session. The busy state is read
 again after the progress notification, whose observer may have started other work.
-The plot model survives its own destruction from any of its notifications. The detail
-model's notification in `selectNode()` comes before the plot flow and outside this
-rule: the flow after it assumes the session and the selection still stand, and no
-observer closes or reselects from it
-([BL-V3](../backlog.md#bl-v3-an-mdf4-selection-notifies-the-detail-panel-before-its-plot-flow)).
+The plot model and the detail model each survive their own destruction from any of
+their notifications. `selectNode()` shows the row in the detail model first, then runs
+the plot flow, and counts selections: after each notification, the detail model's
+included, the flow continues only while the session lives and no newer selection ran
+inside that notification. An observer that selects another row or closes the session
+from any of them therefore leaves the newest selection in both the detail panel and
+the plot, and nothing reaches a destroyed session.
 
 **Storage.** One allowance per session, `Mdf4SessionLimits::resultBytes` (256 MiB),
 covers the retained results, cached or shown, and the reservation of the scan in

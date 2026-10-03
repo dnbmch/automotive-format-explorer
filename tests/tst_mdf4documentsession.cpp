@@ -1,4 +1,5 @@
 #include "core/appcontroller.h"
+#include "models/detailmodel.h"
 #include "models/signalplotmodel.h"
 #include "models/treemodel.h"
 #include "plotscan.h"
@@ -418,6 +419,25 @@ quint64 groupKey(Mdf4DocumentSession& session) {
     return tree->data(tree->index(0, 0, tree->index(0, 0)), TreeModel::NodeKeyRole).toULongLong();
 }
 
+// A row of the first group: one of its channels, or kGroupRow for the group.
+constexpr int kGroupRow = -1;
+
+quint64 rowKey(Mdf4DocumentSession& session, int row) {
+    return row == kGroupRow ? groupKey(session) : channelKey(session, row);
+}
+
+// The Name field of the detail panel's first card.
+QString detailName(DetailModel* detail) {
+    const QVariantList fields = detail->data(detail->index(0), DetailModel::FieldsRole).toList();
+    for (const QVariant& field : fields) {
+        const QVariantMap entry = field.toMap();
+        if (entry.value(QStringLiteral("key")) == QStringLiteral("Name")) {
+            return entry.value(QStringLiteral("value")).toString();
+        }
+    }
+    return {};
+}
+
 // No scan in flight and none waiting for the event loop: runs the pool dry and
 // delivers what it posted, again while completions start further scans. Only
 // call it when no scan is blocked.
@@ -469,8 +489,8 @@ private:
 
 // Runs action once, from inside the first emission of signal for which when()
 // holds: an ordinary same-thread observer calling back into the session.
-template <typename Signal, typename When, typename Action>
-void callOnce(SignalPlotModel* model, Signal signal, When when, Action action) {
+template <typename Model, typename Signal, typename When, typename Action>
+void callOnce(Model* model, Signal signal, When when, Action action) {
     auto done = std::make_shared<bool>(false);
     QObject::connect(model, signal, model, [done, when, action]() {
         if (*done || !when()) {
@@ -479,6 +499,36 @@ void callOnce(SignalPlotModel* model, Signal signal, When when, Action action) {
         *done = true;
         action();
     });
+}
+
+// A selection's notifications, in the order it makes them: the detail panel's
+// reset and raw form, then the plot's content.
+enum Hook : int { DetailReset, DetailRawForm, PlotContent };
+
+const char* hookName(int hook) {
+    switch (hook) {
+    case DetailReset: return "detail reset";
+    case DetailRawForm: return "detail raw form";
+    default: return "plot content";
+    }
+}
+
+// Runs action once, from inside the first `hook` notification after this call.
+template <typename Action>
+void callOnSelection(Mdf4DocumentSession& session, int hook, Action action) {
+    const auto always = [] { return true; };
+    DetailModel* detail = session.detailModel();
+    switch (hook) {
+    case DetailReset:
+        callOnce(detail, &DetailModel::modelReset, always, action);
+        break;
+    case DetailRawForm:
+        callOnce(detail, &DetailModel::rawJsonChanged, always, action);
+        break;
+    default:
+        callOnce(plotOf(session), &SignalPlotModel::contentChanged, always, action);
+        break;
+    }
 }
 
 // A channel too dense for one window at full view: 4.3 M samples.
@@ -521,6 +571,10 @@ private slots:
     void selectionFromCompletionNotification();
     void selectionFromBusyNotificationStaysBusy();
     void closeFromCompletionNotification();
+    void selectionFromSelectionNotification_data();
+    void selectionFromSelectionNotification();
+    void closeFromSelectionNotification_data();
+    void closeFromSelectionNotification();
     void closingTabWithScanInFlight();
     void treeAdmittedUpToItsAllowance();
     void treeOverAllowanceShowsOnlyTheFileRow();
@@ -1367,6 +1421,81 @@ void TestMdf4DocumentSession::closeFromCompletionNotification() {
                           QStringLiteral("scan 2 returned"), QStringLiteral("source released")}));
     QCOMPARE(scans->maxConcurrent(), 1);
     QVERIFY(!scans->timedOut());
+}
+
+void TestMdf4DocumentSession::selectionFromSelectionNotification_data() {
+    QTest::addColumn<int>("first");
+    QTest::addColumn<int>("then");
+    QTest::addColumn<int>("hook");
+    for (const int hook : {DetailReset, DetailRawForm, PlotContent}) {
+        const char* name = hookName(hook);
+        QTest::addRow("channel then channel, %s", name) << int(Engine) << int(Coolant) << hook;
+        QTest::addRow("channel then group, %s", name) << int(Engine) << kGroupRow << hook;
+        QTest::addRow("group then channel, %s", name) << kGroupRow << int(Coolant) << hook;
+        QTest::addRow("master then channel, %s", name) << int(Master) << int(Coolant) << hook;
+    }
+}
+
+// An observer selects another row from inside one of a selection's
+// notifications: the detail panel and the plot both end on that newer row, and
+// the superseded selection scans nothing.
+void TestMdf4DocumentSession::selectionFromSelectionNotification() {
+    QFETCH(int, first);
+    QFETCH(int, then);
+    QFETCH(int, hook);
+    auto scans = std::make_shared<Scans>(false);
+    auto session = openSession(scans);
+    SignalPlotModel* model = plotOf(*session);
+    DetailModel* detail = session->detailModel();
+    Mdf4DocumentSession* raw = session.get();
+    const quint64 newer = rowKey(*session, then);
+    callOnSelection(*session, hook, [raw, newer] { raw->selectNode(newer); });
+
+    session->selectNode(rowKey(*session, first));
+    QVERIFY(settle(*session));
+    if (then == kGroupRow) {
+        QCOMPARE(detailName(detail), QStringLiteral("Powertrain"));
+        QVERIFY(model->name().isEmpty());
+        QVERIFY(!model->busy());
+        QVERIFY(scans->channels().empty());
+    } else {
+        QCOMPARE(detailName(detail), QStringLiteral("CoolantTemp"));
+        QVERIFY(showsExact(model, "CoolantTemp", 300.0));
+        QCOMPARE(scans->channels(), (std::vector<std::uint32_t>{Coolant, Coolant}));
+    }
+    QVERIFY(!scans->timedOut());
+}
+
+void TestMdf4DocumentSession::closeFromSelectionNotification_data() {
+    QTest::addColumn<int>("row");
+    QTest::addColumn<int>("hook");
+    for (const int hook : {DetailReset, DetailRawForm, PlotContent}) {
+        const char* name = hookName(hook);
+        QTest::addRow("channel, %s", name) << int(Engine) << hook;
+        QTest::addRow("group, %s", name) << kGroupRow << hook;
+    }
+}
+
+// An observer closes the session from inside one of a selection's
+// notifications: the selection stops there, scans nothing and touches neither
+// the destroyed session nor its models.
+void TestMdf4DocumentSession::closeFromSelectionNotification() {
+    QFETCH(int, row);
+    QFETCH(int, hook);
+    auto scans = std::make_shared<Scans>(false);
+    auto session = openSession(scans);
+    bool closed = false;
+    callOnSelection(*session, hook, [&] {
+        session.reset();
+        closed = true;
+    });
+
+    session->selectNode(rowKey(*session, row));
+    QVERIFY(closed);
+    QVERIFY(QThreadPool::globalInstance()->waitForDone(10000));
+    QCoreApplication::processEvents();
+    QVERIFY(scans->channels().empty());
+    QCOMPARE(scans->events(), QStringList{QStringLiteral("source released")});
 }
 
 // A tab closed while its channel scans: the close notifies while the session

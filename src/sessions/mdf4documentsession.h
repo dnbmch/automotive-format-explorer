@@ -127,7 +127,8 @@ private:
     PlotHeader header(ChannelKey key) const;
     std::uint64_t statedCount(ChannelKey key) const;
 
-    void selectChannel(const Mdf4Path& path);
+    // Continues the selection flow `selection` after its detail notification.
+    void selectChannel(const Mdf4Path& path, std::uint64_t selection);
     void onDetailWanted();
     void onScanFinished();
     void onProgress(int permille);
@@ -158,6 +159,9 @@ private:
     const ScanFunction _scan;
     const AxisFunction _axis;
     std::unique_ptr<SignalPlotModel> _plot_model;
+    // Counts selectNode() calls; a selection flow that finds it moved after a
+    // notification was superseded by a selection made from inside it.
+    std::uint64_t _selections = 0;
     std::optional<ChannelKey> _selected;
     std::optional<Active> _active;
     std::optional<Request> _pending;

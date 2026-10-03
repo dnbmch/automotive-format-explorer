@@ -6,6 +6,11 @@
 #include <QSignalSpy>
 #include <QTest>
 
+#include <algorithm>
+#include <cstring>
+#include <iterator>
+#include <new>
+
 namespace {
 
 // A raw JSON producer that counts its runs.
@@ -31,6 +36,7 @@ private slots:
     void selectionWithoutRawFormIsUnavailable();
     void replacedSelectionShowsOnlyItsOwnText();
     void resetObserversSeeTheNewSelection();
+    void observerMayDestroyModel();
 };
 
 // Selections build their cards; the raw form waits until it is read, and is then
@@ -120,6 +126,21 @@ void TestDetailModel::resetObserversSeeTheNewSelection() {
     QVERIFY(!available);
     QVERIFY(text.isEmpty());
     QCOMPARE(title, QStringLiteral("New"));
+}
+
+// Observers run synchronously and may destroy the model, as closing a tab
+// does. The model lives in storage the test poisons once the reset's observer
+// has destroyed it: the selection touches nothing after that.
+void TestDetailModel::observerMayDestroyModel() {
+    alignas(DetailModel) unsigned char storage[sizeof(DetailModel)];
+    auto* model = new (storage) DetailModel;
+    QObject::connect(model, &QAbstractItemModel::modelReset, [&storage, model] {
+        model->~DetailModel();
+        std::memset(storage, 0xA5, sizeof storage);
+    });
+    model->setSelection(cards(QStringLiteral("A")), {});
+    QVERIFY(std::all_of(std::begin(storage), std::end(storage),
+                        [](unsigned char byte) { return byte == 0xA5; }));
 }
 
 QTEST_GUILESS_MAIN(TestDetailModel)

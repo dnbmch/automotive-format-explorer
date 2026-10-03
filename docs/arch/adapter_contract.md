@@ -62,7 +62,7 @@ public:
 
 `AdapterSessionBase` ([src/sessions/adaptersessionbase.h](../../src/sessions/adaptersessionbase.h)) provides identity, diagnostics, the tree and detail models, and row keys: `appendNode()` gives every row the session's next key. Use it as the base class unless your format genuinely needs to bypass it.
 
-Declare the format's entity kinds and a typed path (`<Fmt>Path`) next to its presenter. The session owns the presenter by value and a table from the key of each entity row to its path, filled by an `appendEntity()` that calls `appendNode()`. `selectNode(key)` looks the key up and hands `DetailModel::setSelection()` the presenter's details and a producer of the entity's raw JSON, or no producer when the entity has no raw form.
+Declare the format's entity kinds and a typed path (`<Fmt>Path`) next to its presenter. The session owns the presenter by value and a table from the key of each entity row to its path, filled by an `appendEntity()` that calls `appendNode()`. `selectNode(key)` looks the key up and hands `DetailModel::setSelection()` the presenter's details and a producer of the entity's raw JSON, or no producer when the entity has no raw form. Its observers may select another row or close the session, so make it the last step, or recheck the session's lifetime and selection after it as the MDF4 session does ([MDF4 reads](architecture.md#mdf4-reads)).
 
 ## CMake wiring
 

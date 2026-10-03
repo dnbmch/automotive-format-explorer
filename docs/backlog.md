@@ -74,17 +74,6 @@ domain rules, not a second decode path.
 
 **Size:** S.
 
-### BL-V3: an MDF4 selection notifies the detail panel before its plot flow
-
-`Mdf4DocumentSession::selectNode()` sets the detail model's selection, which
-notifies, and then runs the plot flow with its local path and no lifetime check. An
-observer of the detail model that selects another row or closes the tab would leave
-that flow on a superseded selection or a destroyed session. No such observer exists.
-The fix is the session's own rule: check the session's lifetime after the detail
-notification (or settle the plot state first), and cover it with a reentry test.
-
-**Size:** S.
-
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant

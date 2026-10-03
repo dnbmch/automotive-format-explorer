@@ -1,5 +1,6 @@
 #include "models/detailmodel.h"
 
+#include <QPointer>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -48,14 +49,18 @@ QHash<int, QByteArray> DetailModel::roleNames() const {
 }
 
 // The cards, the producer and the cleared text change together inside the
-// reset, so an observer of the reset already reads the new selection.
+// reset, so an observer of the reset already reads the new selection. That
+// observer may destroy the model; nothing is announced after that.
 void DetailModel::setSelection(QList<DetailSection> sections, std::function<QString()> rawJson) {
     beginResetModel();
     _sections = std::move(sections);
     _raw_json = std::move(rawJson);
     _raw_json_text.reset();
+    QPointer<DetailModel> self(this);
     endResetModel();
-    emit rawJsonChanged();
+    if (self) {
+        emit rawJsonChanged();
+    }
 }
 
 bool DetailModel::rawJsonAvailable() const {

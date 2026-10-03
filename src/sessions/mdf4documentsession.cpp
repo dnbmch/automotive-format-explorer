@@ -153,7 +153,13 @@ QAbstractListModel* Mdf4DocumentSession::centerPanelModel() {
     return _plot_model.get();
 }
 
+// The detail panel shows the row first, then the plot follows. Observers of
+// either may select anew or close this session from inside a notification;
+// after each one the flow continues only while the session lives and no newer
+// selection has run.
 void Mdf4DocumentSession::selectNode(quint64 key) {
+    const std::uint64_t selection = ++_selections;
+    QPointer<SignalPlotModel> model(_plot_model.get());
     const auto it = _paths.find(key);
     const Mdf4Path path = it == _paths.end() ? Mdf4Path{} : it->second;
     if (it == _paths.end()) {
@@ -162,17 +168,19 @@ void Mdf4DocumentSession::selectNode(quint64 key) {
         _detail_model.setSelection(_presenter.buildDetails(path),
                                    [this, path] { return _presenter.buildRawJson(path); });
     }
+    if (!model || selection != _selections) {
+        return;
+    }
     if (it != _paths.end() && path.kind == Mdf4EntityKind::Channel) {
-        selectChannel(path);
+        selectChannel(path, selection);
         return;
     }
     // A row that is no channel: nothing to plot, no scan wanted.
     _selected.reset();
     _pending.reset();
     cancelActive();
-    QPointer<SignalPlotModel> model(_plot_model.get());
     model->clear();
-    if (model) {
+    if (model && selection == _selections) {
         updateBusy();
     }
 }
@@ -231,8 +239,9 @@ std::uint64_t Mdf4DocumentSession::statedCount(ChannelKey key) const {
 // Plot model observers run synchronously and may select another node or close
 // this session. Every flow therefore settles the scans, the cache and the
 // selection first and notifies last, the busy state last of all, and touches
-// nothing after a notification that destroyed the session.
-void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
+// nothing after a notification that destroyed the session. A selection flow
+// also stops after a notification inside which a newer selection ran.
+void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t selection) {
     const ChannelKey key{static_cast<std::uint32_t>(path.groupIndex),
                          static_cast<std::uint32_t>(path.channelIndex)};
     const mdf4::Channel& channel =
@@ -248,7 +257,7 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
                          channel.is_master()
                              ? QStringLiteral("Master channel — this group's time axis")
                              : QStringLiteral("This channel type is not plottable"));
-        if (model) {
+        if (model && selection == _selections) {
             updateBusy();
         }
         return;
@@ -262,7 +271,7 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
         cancelActive();
         // Showing it asks for the detail of the whole view.
         model->setSignal(header(key), overview);
-        if (model) {
+        if (model && selection == _selections) {
             updateBusy();
         }
         return;
@@ -277,11 +286,11 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path) {
         _pending = Request{key, nullptr, {}};
     }
     model->setSignal(header(key));
-    if (!model) {
+    if (!model || selection != _selections) {
         return;
     }
     startPending();
-    if (model) {
+    if (model && selection == _selections) {
         updateBusy();
     }
 }
