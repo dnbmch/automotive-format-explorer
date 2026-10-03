@@ -39,10 +39,13 @@ Landmines:
 UNVERIFIED — CI and platforms: no Linux build or test run of the static composition,
 the sparse memory view, tab ownership (the offscreen QML modules of `tst_navpanel`
 and `tst_signalplotview` among them) or the bounded viewer; no Linux AppImage
-packaging and launch gate (BL-K2); no headless Windows package launch (BL-K6: the
-gate can pass on a fatal-error dialog). Package CI first needs a complete MDF4 package
-with the bounded interface in `PARSER_PACKAGE_LOCK`. Pass = app build and ctest green
-on both CI jobs; fail = any configure, build or test failure.
+packaging and launch gate (BL-K2); no runner run of the Windows launch gate
+(`scripts/smoke_windows.ps1`, proven locally; on a runner it needs an interactive
+desktop and Windows PowerShell under the step's `pwsh` shell). Package CI first needs
+a complete MDF4 package with the bounded interface in `PARSER_PACKAGE_LOCK`. Pass =
+app build and ctest green on both CI jobs and the Windows smoke step reporting
+"main window rendered"; fail = any configure, build or test failure, or a smoke
+report of an early exit, an unexpected window or a timeout.
 
 UNVERIFIED — the 16 GB reference laptop: build `build-i2i3/b/measure/` (its
 `CMakeLists.txt`) against the landed reader and Explorer and run its scenarios

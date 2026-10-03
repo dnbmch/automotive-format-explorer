@@ -76,17 +76,39 @@ import that resolves nowhere exits non-zero and fails the job.
 
 ## Launch gates
 
-[scripts/smoke_windows.sh](../../scripts/smoke_windows.sh) runs the packaged
-executable and [scripts/smoke_linux.sh](../../scripts/smoke_linux.sh) runs the
-packaged AppImage, both with `QT_QPA_PLATFORM=offscreen` and
-`QSG_RHI_BACKEND=software`. Surviving `SMOKE_SECONDS` is the pass condition; the
-Linux gate additionally requires exactly one packaged AppImage in the directory
-it is pointed at.
+[scripts/smoke_windows.ps1](../../scripts/smoke_windows.ps1) launches the
+packaged executable on the deployed Windows platform plugin and passes only when
+the launched process shows its main window rendered: a visible Qt window titled
+"Automotive Format Explorer" that is no longer cloaked.
+[src/main.cpp](../../src/main.cpp) cloaks the window QML creates and uncloaks it
+on the first swapped frame, so the state proves that the platform plugin loaded,
+the QML engine built the window and the scene graph drew it. No application
+change serves the gate.
 
-A missing DLL fails the loader before `main()`. A root object that will not
-instantiate reaches `objectCreationFailed` and exits `-1`
-([src/main.cpp](../../src/main.cpp)). Either fault kills the process before the
-timeout, so no application change is needed to observe it.
+The gate fails when the process exits first, when any other visible window of
+the process appears, or after its timeout (60 s by default); it stops only the
+process it launched, on every path. Each fault has its own report:
+
+| Fault | Report |
+|---|---|
+| A DLL missing from `dist/` | exit `0xC0000135` before the window |
+| No platform plugin in `dist/` | Qt's fatal-error box, with its text |
+| A root object that will not instantiate | exit `-1` (`objectCreationFailed`) |
+
+The app runs with `PATH` reduced to the system directories and no `QT_*` or
+`QML*` variables, so nothing outside `dist/` can stand in for a missing file —
+CI's Qt installation puts its `bin` on `PATH` and its plugin directory in
+`QT_PLUGIN_PATH`. Critical-error boxes are suppressed, so a loader failure exits
+instead of waiting on the desktop. The gate needs an interactive desktop.
+
+To check the gate, copy `dist/`, delete `platforms/qwindows.dll` or
+`Qt6Quick.dll` from the copy and run the gate on it: it must fail with the
+report above and leave no process behind.
+
+[scripts/smoke_linux.sh](../../scripts/smoke_linux.sh) runs the packaged
+AppImage with `QT_QPA_PLATFORM=offscreen` and `QSG_RHI_BACKEND=software`.
+Surviving `SMOKE_SECONDS` is its pass condition, and it requires exactly one
+packaged AppImage in the directory it is pointed at.
 
 The closure check and the launch gate catch disjoint faults: the first covers
 import tables, the second covers whether the deployed Qt can actually start a
@@ -119,7 +141,7 @@ a tag is cut.
 
 - `scripts/package_windows.sh` produces a `dist/` with an empty unresolved set,
   run locally before a tag is pushed.
-- `scripts/smoke_windows.sh` passes against that `dist/`.
+- `scripts/smoke_windows.ps1` passes against that `dist/`.
 - `dist/` holds no Explorer library: the executable imports only Qt, toolchain,
   protobuf/Abseil/zlib and system DLLs.
 - `dist/libstdc++-6.dll` and `dist/libgcc_s_seh-1.dll` are msys2's, not Qt's.

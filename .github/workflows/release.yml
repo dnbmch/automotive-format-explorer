@@ -66,7 +66,8 @@ jobs:
         run: QT_PREFIX="$QT_ROOT_DIR" bash scripts/package_windows.sh build dist
 
       - name: Smoke test
-        run: bash scripts/smoke_windows.sh dist
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke_windows.ps1 dist
 
       - name: Create archive
         run: |

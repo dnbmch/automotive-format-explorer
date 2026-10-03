@@ -73,11 +73,13 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - CI (Windows MinGW + Ubuntu, also on `release/**`) + `release.yml` (Windows zip
   + Linux AppImage). Windows CI and release build against the same standalone Qt
   as local development.
-- Windows packaging by dependency closure (`scripts/package_windows.sh`) plus headless
-  Windows and Linux AppImage launch gates (`scripts/smoke_windows.sh`,
-  `scripts/smoke_linux.sh`). Release jobs run ctest before packaging and publish only
-  after both platforms pass. The Linux gate is locally syntax-checked and awaits its
-  first runner proof. See
+- Windows packaging by dependency closure (`scripts/package_windows.sh`) plus launch
+  gates: on Windows the packaged app must render its main window from `dist/` alone
+  (`scripts/smoke_windows.ps1`), on Linux the AppImage must stay up headless
+  (`scripts/smoke_linux.sh`). Release jobs run ctest before packaging and publish only
+  after both platforms pass. The Windows gate is proven locally on a working and two
+  broken packages; the Linux gate is locally syntax-checked. Neither has a runner
+  proof yet. See
   [docs/ref/release_packaging.md](docs/ref/release_packaging.md).
 
 ## In flight

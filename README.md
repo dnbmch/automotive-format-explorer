@@ -187,7 +187,7 @@ are used directly through the same public targets as installed packages.
 - [docs/ref/signal_plot.md](docs/ref/signal_plot.md) — format-neutral time-series plot reference.
 - [docs/ref/keyboard.md](docs/ref/keyboard.md) — application + grid keyboard shortcuts.
 - [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — canonical parser dependencies, runtime dependency closure, static backend composition.
-- [docs/ref/release_packaging.md](docs/ref/release_packaging.md) — Windows package path, headless launch gates, release publish gating.
+- [docs/ref/release_packaging.md](docs/ref/release_packaging.md) — Windows package path, launch gates, release publish gating.
 - [roadmap.md](roadmap.md) — direction and planned work.
 - [project_status.md](project_status.md) — current state of play.
 - [docs/backlog.md](docs/backlog.md) — known issues / planned changes.

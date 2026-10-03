@@ -111,19 +111,3 @@ rebuilt from scratch every time. Workaround on a downgrade: delete the
 deployed DLLs next to the build-tree executable and rebuild.
 
 **Size:** XS if msys2 ever ships `cmp` in base; otherwise accept.
-
-### BL-K6: the Windows launch gate can pass on a fatal-error dialog
-
-`scripts/smoke_windows.sh` forces `QT_QPA_PLATFORM=offscreen`, but `windeployqt`
-deploys only `platforms/qwindows.dll`. Unless the environment points Qt at its own
-plugin directory — CI runs after `install-qt-action`, whose default environment
-setup is expected to, though no runner log was checked — the packaged app cannot
-create its platform and hits Qt's fatal error. Depending on
-how it is launched, that either fails fast (`0xC0000602`) or leaves a
-"automotive-format-explorer" error box up, which survives `SMOKE_SECONDS` and
-passes. Reproduced locally; the release_packaging.md claim that
-every startup fault exits before the timeout does not hold for this case. Decide
-between deploying the offscreen plugin and running the gate without CI's Qt
-environment, or asserting the real window instead of survival.
-
-**Size:** S.
