@@ -502,11 +502,12 @@ void callOnce(Model* model, Signal signal, When when, Action action) {
 }
 
 // A selection's notifications, in the order it makes them: the detail panel's
-// reset and raw form, then the plot's content.
-enum Hook : int { DetailReset, DetailRawForm, PlotContent };
+// pre-reset, reset and raw form, then the plot's content.
+enum Hook : int { DetailAboutToReset, DetailReset, DetailRawForm, PlotContent };
 
 const char* hookName(int hook) {
     switch (hook) {
+    case DetailAboutToReset: return "detail pre-reset";
     case DetailReset: return "detail reset";
     case DetailRawForm: return "detail raw form";
     default: return "plot content";
@@ -519,6 +520,9 @@ void callOnSelection(Mdf4DocumentSession& session, int hook, Action action) {
     const auto always = [] { return true; };
     DetailModel* detail = session.detailModel();
     switch (hook) {
+    case DetailAboutToReset:
+        callOnce(detail, &DetailModel::modelAboutToBeReset, always, action);
+        break;
     case DetailReset:
         callOnce(detail, &DetailModel::modelReset, always, action);
         break;
@@ -1427,7 +1431,7 @@ void TestMdf4DocumentSession::selectionFromSelectionNotification_data() {
     QTest::addColumn<int>("first");
     QTest::addColumn<int>("then");
     QTest::addColumn<int>("hook");
-    for (const int hook : {DetailReset, DetailRawForm, PlotContent}) {
+    for (const int hook : {DetailAboutToReset, DetailReset, DetailRawForm, PlotContent}) {
         const char* name = hookName(hook);
         QTest::addRow("channel then channel, %s", name) << int(Engine) << int(Coolant) << hook;
         QTest::addRow("channel then group, %s", name) << int(Engine) << kGroupRow << hook;
@@ -1469,7 +1473,7 @@ void TestMdf4DocumentSession::selectionFromSelectionNotification() {
 void TestMdf4DocumentSession::closeFromSelectionNotification_data() {
     QTest::addColumn<int>("row");
     QTest::addColumn<int>("hook");
-    for (const int hook : {DetailReset, DetailRawForm, PlotContent}) {
+    for (const int hook : {DetailAboutToReset, DetailReset, DetailRawForm, PlotContent}) {
         const char* name = hookName(hook);
         QTest::addRow("channel, %s", name) << int(Engine) << hook;
         QTest::addRow("group, %s", name) << kGroupRow << hook;

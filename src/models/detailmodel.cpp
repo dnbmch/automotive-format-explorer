@@ -49,14 +49,28 @@ QHash<int, QByteArray> DetailModel::roleNames() const {
 }
 
 // The cards, the producer and the cleared text change together inside the
-// reset, so an observer of the reset already reads the new selection. That
-// observer may destroy the model; nothing is announced after that.
+// reset, so an observer of the reset already reads the new selection.
+//
+// Observers run synchronously and may select again or destroy the model. The
+// selection waits in the model while the pre-reset observers run: one that
+// selects again replaces it, and the one reset under way installs the newest,
+// so no reset nests in another. Nothing is touched or announced after an
+// observer destroyed the model.
 void DetailModel::setSelection(QList<DetailSection> sections, std::function<QString()> rawJson) {
-    beginResetModel();
-    _sections = std::move(sections);
-    _raw_json = std::move(rawJson);
-    _raw_json_text.reset();
+    const bool resetUnderWay = _arriving.has_value();
+    _arriving = Selection{std::move(sections), std::move(rawJson)};
+    if (resetUnderWay) {
+        return;
+    }
     QPointer<DetailModel> self(this);
+    beginResetModel();
+    if (!self) {
+        return;
+    }
+    _sections = std::move(_arriving->sections);
+    _raw_json = std::move(_arriving->rawJson);
+    _arriving.reset();
+    _raw_json_text.reset();
     endResetModel();
     if (self) {
         emit rawJsonChanged();

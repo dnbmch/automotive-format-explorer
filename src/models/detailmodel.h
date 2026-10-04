@@ -27,7 +27,8 @@ public:
     // Shows one selection: its cards and, when the entity has a raw form, a
     // producer of its raw JSON. The producer runs on this thread at the first
     // read of rawJsonText after the selection; its text, even an empty one, is
-    // kept until the next selection.
+    // kept until the next selection. An observer of any notification this makes
+    // may call it again or destroy the model; the newest selection is shown.
     void setSelection(QList<DetailSection> sections, std::function<QString()> rawJson);
 
     // Whether the selection has a raw form; answering serializes nothing.
@@ -38,7 +39,14 @@ signals:
     void rawJsonChanged();
 
 private:
+    struct Selection {
+        QList<DetailSection> sections;
+        std::function<QString()> rawJson;
+    };
+
     QList<DetailSection> _sections;
     std::function<QString()> _raw_json;
     mutable std::optional<QString> _raw_json_text;
+    // The selection a reset is about to install, while its pre-reset observers run.
+    std::optional<Selection> _arriving;
 };
