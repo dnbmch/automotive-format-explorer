@@ -1,15 +1,11 @@
 # automotive-format-explorer — handoff
 
-## 2026-09-28 — tab ownership and bounded recording viewer landed locally, not pushed — OPEN
+## 2026-09-28 — tab ownership and bounded recording viewer — OPEN
 
-On local `master`, not pushed: `bf45f87` (canonical CLAUDE.md block sync), `e1024f8`
-(document tabs own their sessions, row keys and views) and `cdf3895` (bounded overview
-and exact windows from the reader's scan). Their sibling commits are local and unpushed
-too: mdf4-parser `c98c298` with its public lib `933439f` (the bounded reader: scan,
-typed outcomes, limits), mdf4-writer `401b17d`, meas-convert `bcc1064`, workspace
-`d3df33c` and `e5167b3`. `origin/master` is `9622fa3` (sparse memory view). The
-Explorer commits need the reader commits; push them together. Contracts:
-[tabs](arch/architecture.md#tabs), [tree navigation](arch/architecture.md#tree-navigation),
+`master` needs mdf4-parser `c98c298` and its public lib `933439f` (the bounded
+reader: scan, typed outcomes, limits). All three are pushed; no release carries them.
+
+Contracts: [tabs](arch/architecture.md#tabs), [tree navigation](arch/architecture.md#tree-navigation),
 [node keys](arch/architecture.md#node-keys), [MDF4 reads](arch/architecture.md#mdf4-reads),
 [adapter contract](arch/adapter_contract.md), [signal plot](ref/signal_plot.md),
 [memory view](ref/memory_view.md). Remaining MDF4 scope, including real-recording

@@ -129,80 +129,19 @@ No external consumers: every contract we own — proto, API, schema, file format
 
 **Release is on-demand; there are no active users.** The app ships as a GPL-3.0 GitHub release, but we release only to exercise the current build against fresh parser artifacts — not on every change. With no users there is no cross-release backward-compat obligation; keep the backend seam (FormatAdapter / DocumentSession) internally coherent and change it when the design improves. See workspace [CLAUDE.md](../CLAUDE.md) "Release cadence".
 
+**The plot stack takes operator-authored changes only** (`plotdata`, `SignalPlotModel`, `SignalPlotItem`, `SignalPlotView.qml`), so it can be relicensed for a live view in the proprietary product apps ([signal plot](docs/ref/signal_plot.md)).
+
 ### Architecture
 
-```
-                    ┌─────────────────────────────────┐
-                    │       Main.qml (layout)         │
-                    │  NavPanel │ CenterPanel │ Detail │
-                    └─────┬─────────┬──────────┬──────┘
-                          │         │          │
-          ┌───────────────┘         │          └──────────────┐
-          ▼                         ▼                         ▼
-   TreeModel            Loader (per-session)           DetailModel
-   (QAbstractItemModel)    MemoryView.qml (A2L)       (QAbstractListModel)
-                           SignalMapView.qml (DBC/LDF)
-                           SignalPlotView.qml (MDF4)
-                                    │
-                    ┌───────────────┤
-                    ▼               ▼
-            MemoryGridItem   SignalGridItem
-            (QQuickPaintedItem, C++ rendering)
-```
+- `qml/` — `Main.qml` lays out the tabs, the nav tree, a center-panel `Loader` and the detail panel; `components/` holds the views
+- `src/core/` — `AppController` (QML singleton owning the format list, the one pending load and the tabs), `DocumentTab`, format ids, tree items, diagnostics
+- `src/builtinformats.cpp` — the one list of format id, suffixes and adapter; the only place a concrete adapter is built
+- `src/adapters/` — one `FormatAdapter` per format: loads a file on a worker thread, returns a `DocumentSession`
+- `src/sessions/` — per format a session over `AdapterSessionBase` and a detail presenter; the session holds its document (MDF4: shared with its retained reader) and owns its tree, detail and center-panel models
+- `src/models/` — tree, filter, detail and tab models, the memory map, signal map and signal plot models, the format-neutral plot data
+- `src/ui/` — `QQuickPaintedItem` renderers: memory grid, signal grid, signal plot
 
-### Format backends
-
-Every format backend is a static library linked into the executable on all platforms. `builtInFormats()` (`src/builtinformats.cpp`) is the one list of format id, suffixes and adapter; `main.cpp` hands it to `AppController`, and suffix lookup, dialog filters and sample classification derive from it. `AppController::shutdown()` (also run by its destructor) joins a pending load before the adapters go. Details: [docs/arch/architecture.md](docs/arch/architecture.md) "Format composition". Each backend provides:
-
-- `FormatAdapter` — loads a file, returns a `DocumentSession`
-- `DocumentSession` — owns the protobuf document (MDF4: shares it with the session's retained reader), tree model, detail presenter, and optional center panel model
-- a presenter — builds `QList<DetailSection>` and raw JSON from the format's own typed entity path
-
-### Center panel slot
-
-Each `DocumentSession` exposes:
-- `centerPanelSource()` — QML component URL (empty = no center panel)
-- `centerPanelModel()` — data model for the center panel
-
-Main.qml uses a `Loader` that loads the component and passes the model. When no center panel is available, the layout falls back to two columns.
-
-### Bidirectional selection
-
-- Tree → Detail: `AppController::selectCurrentNode(nodeKey)` → the session's `selectNode()` → its presenter
-- Tree → Center: `scrollToNodeKey(nodeKey)` on the loaded center panel component
-- Center → Tree: `nodeKeyClicked` signal → `AppController::selectCurrentNode()` + `NavPanel::selectAndScrollTo()`
-
-Every tree row, categories included, gets a session-local node key as the session appends it; each format session maps the keys of its entity rows to its own typed paths. Memory/signal map models store the same keys for cross-referencing.
-
-### Rendering
-
-Both `MemoryGridItem` and `SignalGridItem` extend `QQuickPaintedItem`:
-
-- Signal grid: pre-computed per-bit arrays. Memory grid: no per-byte state; each paint and hit-test resolves bytes through `MemoryMapModel::queryBytes` over sorted object intervals
-- Paint only visible region (viewport-sized item, scroll offset in C++)
-- Mouse hover, wheel, click handled in C++ — no QML MouseArea overlay
-- FBO render target for best scroll performance
-
-### Project structure
-
-```
-src/
-  builtinformats  the application format list (only place concrete adapters are built)
-  core/           appcontroller, documenttab, formatlist, formatid, detailsection, treeitem
-  models/         treemodel, treefiltermodel, detailmodel, tabmodel, memorymapmodel, signalmapmodel
-  sessions/       documentsession (interface), adaptersessionbase, presentertext
-                  (shared text/detail helpers), a2l/dbc/ldf/mdf4 sessions
-  adapters/       formatadapter (load interface), a2l/dbc/ldf/mdf4 adapters
-  ui/             memorygriditem, signalgriditem, signalplotitem (painted renderers),
-                  gridpalette (shared palette/shade/highlight-flash helpers)
-qml/
-  Main.qml        root layout with SplitView, tabs, Loader
-  components/     NavPanel, MemoryView, SignalMapView, SignalPlotView, Theme,
-                  Toast, SplashOverlay, DiagnosticsPopup
-docs/             design docs, screenshots
-samples/          bundled sample files (one per format) + SAMPLES.md provenance
-cmake/            DeployRuntimeDeps
-```
+Contracts, ownership and selection flow: [docs/arch/architecture.md](docs/arch/architecture.md). Adding a format: [docs/arch/adapter_contract.md](docs/arch/adapter_contract.md).
 
 ### Build
 
@@ -221,7 +160,7 @@ See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-works
 
 ### CI / Release
 
-- `ci.yml` runs on push to master: Windows MinGW + Ubuntu 24.04. The Windows job also packages and smoke-tests, so a broken package surfaces before a tag is cut
+- `ci.yml` runs on push to `master` and `release/**` and on pull requests to `master`. The parser-package acquisition tests always run; the Windows MinGW and Ubuntu 24.04 app jobs run only when the repository variable `PARSER_PACKAGE_LOCK` is set. The Windows job also packages and smoke-tests, so a broken package surfaces before a tag is cut
 - `release.yml` triggers on `v*` tags: builds the Windows zip + Linux AppImage, then a `publish` job gated on both creates the GitHub release. A platform failure means no release object exists
 - Windows CI and release build against the same standalone Qt as local development (`install-qt-action`); msys2 supplies gcc, ninja, cmake, and protobuf
 - Do NOT re-tag unless the workflow is verified. Each release build takes ~3 min

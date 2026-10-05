@@ -34,10 +34,6 @@ built — [docs/ref/memory_view.md](docs/ref/memory_view.md)):
 - Overlap disambiguation popup when multiple objects claim the same address.
 - Detail-panel listing of every object in a selected byte range.
 
-## Quality & lifecycle
-
-- Render documentation: per-pattern rules for the signal/memory grid stripes.
-
 ## Packaging
 
 CI (Windows MinGW + Ubuntu) and `release.yml` (Windows zip + Linux AppImage)

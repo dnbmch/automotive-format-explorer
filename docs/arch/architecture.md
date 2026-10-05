@@ -20,10 +20,11 @@ QGuiApplication
         TreeFilterModel   — the tab's filter proxy over the session's TreeModel
   QQmlApplicationEngine
     Main.qml
-      NavPanel          — the current tab's tree (TreeFilterModel over TreeModel)
+      NavPanel          — the current tab's tree (TreeFilterModel over TreeModel,
+                          a QAbstractItemModel)
       Loader            — MemoryView.qml (A2L) | SignalMapView.qml (DBC/LDF)
                           | SignalPlotView.qml (MDF4) | empty
-      Detail            — DetailModel (sections, fields, references)
+      Detail            — DetailModel (QAbstractListModel: sections, fields, references)
 ```
 
 `src/main.cpp` constructs `AppController` from `builtInFormats()` before the QML engine and registers it as a singleton (`qmlRegisterSingletonInstance`). `QCoreApplication::aboutToQuit` calls `AppController::shutdown()`; the QML engine is destroyed next, then the controller.
@@ -233,7 +234,7 @@ outcomes, traversal and cancellation checkpoints are the
 
 Both session allowances below are per session: every open MDF4 tab adds its own, and
 nothing bounds the process as a whole. They implement the per-file budgets of the
-[resource envelope](../../../docs/plans/i2_read_envelope.md) (a 16 GB laptop, one
+[resource envelope](../../../docs/ref/resource_envelope.md) (a 16 GB laptop, one
 admitted recording up to 64 GB).
 
 **Tree.** Before any group or channel row exists, `Mdf4DocumentSession::treeBytes()`
@@ -430,6 +431,7 @@ qml/
   Main.qml      root layout with SplitView, tabs, Loader
   components/   NavPanel, MemoryView, SignalMapView, SignalPlotView,
                 SplashOverlay, Theme, Toast, DiagnosticsPopup
+samples/        bundled sample files (one per format) + SAMPLES.md provenance
 cmake/          DeployRuntimeDeps
 ```
 

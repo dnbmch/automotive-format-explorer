@@ -17,9 +17,23 @@ its semantics ever need to change together.
 
 **Size:** S for the diagnostic helper; the explicit load flows are a deliberate keep.
 
-### BL-E3: mdf4 presenter labels for the new proto enum values
+### BL-E5: center-grid view state is not kept per tab
 
-The sibling `mdf4-parser` proto gained `DataType` `UINT_BE`/`SINT_BE`/`FLOAT_BE`
+A tab keeps its tree navigation, and each center model keeps its own state (A2L
+segment and bytes per row, DBC/LDF message and multiplexer group, MDF4 plot range).
+The memory grid's scroll position and object and byte-range selection, and the
+signal grid's selected signal, live in the painted items, which the center Loader
+builds anew whenever a tab is shown, so they reset on an actual tab switch. Closing
+another tab does not rebuild the current view. Keeping them would need the items'
+state saved into the tab and restored around the rebuild, for each of the views.
+
+**Size:** S per view; wanted only if the reset proves a real annoyance.
+
+## Adapters and presenters
+
+### BL-E3: mdf4 presenter labels for unnamed proto enum values
+
+The sibling `mdf4-parser` proto has `DataType` `UINT_BE`/`SINT_BE`/`FLOAT_BE`
 and `ConversionKind` `ALGEBRAIC`/`TAB_RANGE` (plus `Conversion.formula`). The
 `mdf4detailpresenter.cpp` switches don't name them and fall through to their
 `"Unknown (%1)"` default — correct but unlabeled. The reader with the bounded
@@ -37,18 +51,6 @@ rather than a compile error. The A2L adapter already includes its extraction
 header directly; do the same here, inside the existing `signals` macro guard.
 
 **Size:** XS.
-
-### BL-E5: center-grid view state is not kept per tab
-
-A tab keeps its tree navigation, and each center model keeps its own state (A2L
-segment and bytes per row, DBC/LDF message and multiplexer group, MDF4 plot range).
-The memory grid's scroll position and object and byte-range selection, and the
-signal grid's selected signal, live in the painted items, which the center Loader
-builds anew whenever a tab is shown, so they reset on an actual tab switch. Closing
-another tab does not rebuild the current view. Keeping them would need the items'
-state saved into the tab and restored around the rebuild, for each of the views.
-
-**Size:** S per view; wanted only if the reset proves a real annoyance.
 
 ## Viewer data
 
@@ -74,6 +76,36 @@ domain rules, not a second decode path.
 
 **Size:** S.
 
+### BL-V3: ISO 17987 big-endian LIN signals are drawn little-endian
+
+An ISO 17987 LDF may declare big-endian signals (`LIN_sig_byte_order_big_endian`,
+parsed as `LdfFile.big_endian_signals`), but `LdfDocumentSession` sets
+`bigEndian = false` for every signal it maps, so the signal map lays such signals
+out little-endian. Map the flag onto `SignalEntry::bigEndian` after confirming the
+standard's big-endian bit numbering against the DBC Motorola layout that
+`SignalMapModel::bitPositions()` resolves.
+
+**Size:** S.
+
+### BL-V4: signal-map export and print view
+
+Export the current message layout as PNG or SVG (for documentation), and a
+print-friendly view of it (`SignalMapView.qml`, `SignalGridItem`). Neither exists.
+
+**Size:** S.
+
+### BL-V5: an LDF signal-map tooltip shows raw bounds as a physical range
+
+`LdfDocumentSession::buildSignalMap` sets `SignalEntry::minimum` / `maximum` from
+the first physical range's `min_raw` / `max_raw`, and `SignalMapModel::signalTooltip`
+prints them on the `Physical:` line, where a DBC signal shows its physical bounds.
+A signal with factor 0.1 over raw 0..255 shows `[0 .. 255]`. Fix: convert both
+bounds as raw × factor + offset; drop the "LIN is always LE" comment with BL-V3.
+Reword the LDF sentence of [signal_map.md](ref/signal_map.md) "Hover tooltip" when
+this lands.
+
+**Size:** XS.
+
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant
@@ -91,9 +123,9 @@ dialog opened before the flag is dropped.
 
 **Size:** S to change, M to verify honestly.
 
-### BL-K2: prove the new Linux AppImage launch gate on a runner
+### BL-K2: prove the Linux AppImage launch gate on a runner
 
-`scripts/smoke_linux.sh` now runs the AppImage offscreen with
+`scripts/smoke_linux.sh` runs the AppImage offscreen with
 `APPIMAGE_EXTRACT_AND_RUN=1`, and `release.yml` places it before artifact upload.
 The script is syntax-checked locally; close this item after its first successful
 Ubuntu release-workflow run.

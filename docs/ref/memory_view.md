@@ -32,22 +32,7 @@ Three-column split. Tree and detail panel are always visible. The memory view oc
 
 All three panels coexist. The vertical split handles between tree|memory and memory|detail are draggable, so the user can allocate space to taste.
 
-### Generic center panel slot
-
-The center panel is **not** A2L-specific infrastructure — it's a generic session-provided slot. Each `DocumentSession` subclass overrides `QUrl centerPanelSource()` (`src/sessions/documentsession.h:29`). `AppController` exposes it to QML as `Q_PROPERTY(QUrl centerPanelSource READ centerPanelSource NOTIFY currentSessionChanged)` (`src/core/appcontroller.h:20`), re-reading from the active session.
-
-- `A2lDocumentSession` returns `MemoryView.qml`
-- `DbcDocumentSession` returns `SignalMapView.qml`
-- `LdfDocumentSession` returns `SignalMapView.qml`
-
-Main.qml uses a `Loader` in the center SplitView pane, bound to the active session's `centerPanelSource`. When empty, the center pane collapses and the layout falls back to the current two-column tree + detail.
-
-The MemoryView component itself is fully A2L-specific. The generic part is just the slot plumbing (~20 lines in Main.qml + one property per session).
-
-### Format-specific center content
-- **A2L**: Memory view (hex grid) — see this document
-- **DBC**: Signal map (bit-level CAN message layout) — see `signal_map.md`
-- **LDF**: Signal map (bit-level LIN frame layout) — see `signal_map.md`
+The memory view fills the generic, session-provided center-panel slot; which view each format puts there is in the [adapter contract](../arch/adapter_contract.md#center-panel).
 
 ## Data Sources (from A2L protobuf)
 
@@ -72,7 +57,7 @@ The status bar shows a count of excluded objects: `"12 measurements without ECU 
 
 ### Hex grid
 
-Each row = 16 bytes (configurable: 8, 16, 32). Left gutter shows absolute address in hex. Each byte cell is a small rectangle.
+Each row = 16 bytes (configurable: 8, 16, 32). Left gutter shows absolute address in hex. Each byte cell is a small rectangle. The status bar shows the segment's address range and its object count.
 
 ### Coloring scheme
 
@@ -88,6 +73,8 @@ Each row = 16 bytes (configurable: 8, 16, 32). Left gutter shows absolute addres
 | AxisPts | Gold | Standalone axis distribution |
 | Unoccupied (in segment) | Dark gray | Allocated but not assigned |
 | Outside segment | Background | No data |
+
+A legend below the grid names the eight object-type colors. Adjacent same-color objects alternate between the base color and a darker shade, assigned once per segment in address order, so scrolling never changes a color.
 
 ### Overlap hatching
 
@@ -177,34 +164,7 @@ This avoids the cascading visual error problem: an incorrect size for one object
 
 For Measurements with `bit_mask`, the footprint is the byte(s) containing the masked bits. The current grid colors the whole containing byte(s); subdivided/partially-filled cells for sub-byte footprints are a [planned enhancement](../plans/memory_view_planned.md).
 
-## Implementation Status
-
-### Implemented
-
-- QQuickPaintedItem renderer (MemoryGridItem) with virtualized scrolling (only visible rows painted)
-- Generic center panel slot: `centerPanelSource` / `centerPanelModel` on DocumentSession, Loader in Main.qml
-- MemorySegment list with segment selector (dropdown when multiple segments), synthetic segment fallback
-- Object filtering: Characteristics + AxisPts always included, Measurements only with `ecu_address`
-- Sorted object intervals with one byte query (`MemoryMapModel::queryBytes`) for painting,
-  overlap and hit-testing; retained storage follows object count, with per-byte data
-  only for the visible tile. No 16 MiB cap; multi-GiB spans are covered by grid tests
-- Tier 1 + Tier 2 size computation (VALUE, MEASUREMENT, CURVE, MAP, AXIS_PTS)
-- Colored cells, address gutter, hover tooltips (name, type, address, size,
-  record layout, conversion)
-- Overlap detection (`MemoryMapModel::isOverlap`) + diagonal red hatching on
-  bytes claimed by more than one object
-- Click-drag byte-range selection with status-bar readout (range, byte count,
-  objects in range)
-- Jump-to-address text field (scrolls + flash-highlights the object at the
-  address)
-- Click cell → select in tree + update detail
-- Click tree node → scroll memory view + highlight flash
-- Bytes-per-row toggle (8, 16, 32)
-- Color legend with 8 object type categories
-- Status bar: address range, object count, excluded measurement count
-- Shade alternation for adjacent same-color objects, assigned once per segment in address order so scrolling never changes a color
-
-### Planned
+## Planned
 
 Tier 3 sizing, gap detection, sub-byte subdivided cells, dashed
 approximate-size borders, the range-selection detail listing, the

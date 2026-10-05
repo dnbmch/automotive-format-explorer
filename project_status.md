@@ -65,12 +65,13 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   controller load/shutdown lifetimes and the tab contract through a fake adapter,
   tab navigation and pre-filter snapshots, lazy raw JSON, the painted items'
   model lifetimes, and the production nav panel offscreen, registered with
-  ctest and run in CI. The end-to-end
+  ctest; the CI app jobs run them once `PARSER_PACKAGE_LOCK` is set. The end-to-end
   writer-file smoke opens and plots the bundled `samples/demo_recording.mf4`
   through the production adapter, and a truncated copy asks for a reload;
   `MDF4_WRITER_SAMPLE` points it at a different recording, and it reports as a
   ctest skip when that resolves to nothing.
-- CI (Windows MinGW + Ubuntu, also on `release/**`) + `release.yml` (Windows zip
+- CI (Windows MinGW + Ubuntu, also on `release/**`; the app jobs run only when the
+  repository variable `PARSER_PACKAGE_LOCK` is set) + `release.yml` (Windows zip
   + Linux AppImage). Windows CI and release build against the same standalone Qt
   as local development.
 - Windows packaging by dependency closure (`scripts/package_windows.sh`) plus launch
@@ -89,8 +90,8 @@ repair, MDF4 excluded). Its tag preserves the shipped commit and the temporary
 release branch is retired. The real Windows download launches self-contained with
 no unresolved imports, and its packaged backends open the bundled A2L, DBC, and LDF.
 
-Tab and session ownership and the bounded recording viewer are committed on local
-`master` and not pushed; their platform and operator checks are open in
+Tab and session ownership and the bounded recording viewer are on `master`; their
+platform and operator checks are open in
 [docs/handoff.md](docs/handoff.md).
 
 MDF4 ships in no explorer release. The backend needs the reader's bounded interface

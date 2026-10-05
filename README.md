@@ -77,7 +77,7 @@ Visual hex grid of ECU memory segments. Each byte is color-coded by the object t
 
 ### Signal Map (DBC / LDF)
 
-Bit-level visualization of CAN and LIN message payloads. Each signal is rendered at its exact bit position with correct big-endian or little-endian layout.
+Bit-level visualization of CAN and LIN message payloads. Each signal is rendered at its exact bit position with correct big-endian or little-endian layout, except that ISO 17987 big-endian LIN signals are drawn little-endian ([BL-V3](docs/backlog.md#bl-v3-iso-17987-big-endian-lin-signals-are-drawn-little-endian)).
 
 - Color-coded signals with alternating shades
 - Multiplexor group filtering
@@ -115,7 +115,7 @@ Open multiple files side by side. Async file loading keeps the UI responsive for
 
 ### Bundled Samples
 
-One sample file per text-description format ships with the app ([samples/](samples/)); when no file is open, the sidebar offers them as one-click "open a sample" links. Provenance and licenses: [samples/SAMPLES.md](samples/SAMPLES.md). The DBC sample deliberately demonstrates the diagnostics badge — it carries one dangling `VAL_` entry the parser reports as DROPPED.
+One sample file per format, the `mdf4-writer`-authored `.mf4` recording included, ships with the app ([samples/](samples/)); when no file is open, the sidebar offers them as one-click "open a sample" links. Provenance and licenses: [samples/SAMPLES.md](samples/SAMPLES.md). The DBC sample deliberately demonstrates the diagnostics badge — it carries one dangling `VAL_` entry the parser reports as DROPPED.
 
 ---
 

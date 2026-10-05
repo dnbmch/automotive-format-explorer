@@ -1,10 +1,6 @@
 # Signal Map View — DBC & LDF
 
-Bit-level visualization of CAN/LIN message payloads. Signals are rendered at their exact bit positions with colored cells, byte boundaries, and endianness-correct layout. Reuses the generic center panel slot.
-
-## Why this matters
-
-Signal bit-packing in DBC files is notoriously hard to get right — especially with mixed big/little endian signals in the same message. Existing tools charge real money for this visualization. LIN (LDF) frames have the same structure but are simpler (no multiplexing, no extended frames, always <= 8 bytes).
+Bit-level visualization of CAN/LIN message payloads. Signals are rendered at their exact bit positions with colored cells, byte boundaries, and endianness-correct layout (except ISO 17987 big-endian LIN signals, see [LDF simplification](#ldf-simplification)). Reuses the generic center panel slot.
 
 ## Layout
 
@@ -76,7 +72,7 @@ Same three-column split as A2L. The signal map replaces the memory view in the c
 | Aspect | DBC | LDF |
 |---|---|---|
 | Max payload | 8 bytes (CAN) / 64 bytes (CAN FD) | 8 bytes |
-| Byte order | Per-signal (LE or BE) | Always LE (LIN spec) |
+| Byte order | Per-signal (LE or BE) | LE in LIN 1.3–2.2; ISO 17987 may declare BE (`LdfFile.big_endian_signals`), which the signal map ignores |
 | Multiplexing | Yes (`M`, `m<N>`) | No |
 | Extended ID | Yes (29-bit) | No (6-bit, 0-63) |
 | Complexity | Higher | Lower |
@@ -108,18 +104,16 @@ But for signals that don't align to byte boundaries, the bit positions wrap in n
 
 ### Visual approach
 
-Each bit cell shows:
-- **Color**: which signal owns it
-- **Label**: signal name (spanning the signal's bit range)
-- **Bit number**: small superscript DBC bit number in each cell
-- **Byte boundary**: thicker vertical line every 8 bits
-- **Endianness indicator**: small arrow (→ for LE, ← for BE) in the signal label
-
-For big-endian signals that wrap across bytes non-contiguously, the colored cells are still connected but with a visual "fold" indicator showing the byte crossing.
+One row per byte, eight bit cells per row:
+- **Color**: each cell takes the color of the signal that owns it; unoccupied bits are dark gray
+- **Label**: the signal name, drawn across the signal's cells in its first byte row
+- **Bit number**: column headers 7 to 0 above the grid; the byte index (`B0`, `B1`, …) in the left gutter
+- **Byte boundary**: a thin line between byte rows
+- **Endianness indicator**: a `←` after the name of a big-endian signal; little-endian signals carry no arrow
 
 ### LDF simplification
 
-LDF is always little-endian, no multiplexing. The bit numbering is straightforward sequential. No endianness arrows needed.
+LIN 1.3–2.2 signals are little-endian, and LDF has no multiplexing. The signal map draws every LDF signal little-endian, ISO 17987 big-endian signals included ([BL-V3](../backlog.md#bl-v3-iso-17987-big-endian-lin-signals-are-drawn-little-endian)). The bit numbering is straightforward sequential. No endianness arrows appear.
 
 ## Rendering
 
@@ -129,23 +123,23 @@ The grid is bit-oriented (not byte-oriented like A2L's memory view). Each cell r
 
 ```
 Standard CAN (8 bytes = 64 bits):
-     Bit7 Bit6 Bit5 Bit4 Bit3 Bit2 Bit1 Bit0
+       7    6    5    4    3    2    1    0
     ┌────┬────┬────┬────┬────┬────┬────┬────┐
-B0  │         EngineRPM (LE, 16-bit)        │
+B0  │               EngineRPM               │
     ├────┼────┼────┼────┼────┼────┼────┼────┤
-B1  │              EngineRPM                 │
+B1  │                                       │  (EngineRPM color, no label)
     ├────┼────┼────┼────┼────┼────┼────┼────┤
-B2  │    Throttle (LE, 8-bit)               │
+B2  │                Throttle               │
     ├────┼────┼────┼────┼────┼────┼────┼────┤
 B3  │ F4 │ F3 │ F2 │ F1 │    Temperature    │
     ├────┼────┼────┼────┼────┼────┼────┼────┤
-B4  │              Temperature               │
+B4  │                                       │  (Temperature color, no label)
     ├────┼────┼────┼────┼────┼────┼────┼────┤
 B5  │    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │  (unoccupied)
     ├────┼────┼────┼────┼────┼────┼────┼────┤
 B6  │    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
     ├────┼────┼────┼────┼────┼────┼────┼────┤
-B7  │ Checksum (LE, 8-bit)                  │
+B7  │                Checksum               │
     └────┴────┴────┴────┴────┴────┴────┴────┘
 ```
 
@@ -153,7 +147,7 @@ B7  │ Checksum (LE, 8-bit)                  │
 - Column headers: bit 7 (MSB) on left, bit 0 (LSB) on right (matches the standard CAN bit layout diagrams engineers expect)
 - Byte index label on the left gutter
 - 8 rows for CAN, up to 64 rows for CAN FD (scrollable)
-- Each cell: ~24x24px for comfortable reading
+- Each cell: 28x28px (`SignalGridItem::kCellSize`)
 
 ### Coloring scheme
 
@@ -168,40 +162,28 @@ Palette (8 colors, matching Theme):
 | 3 | Orange | Signal 3 |
 | 4 | Green | Signal 4 |
 | 5 | Cyan | Signal 5 |
-| 6 | Yellow | Signal 6 |
+| 6 | Gold | Signal 6 |
 | 7 | Indigo | Signal 7 |
 | - | Dark gray | Unoccupied bits |
 
-For messages with >8 signals, colors wrap with shade alternation (same as A2L). Multiplexed signals (DBC only) use a hatched/striped pattern over their base color.
+For messages with >8 signals, colors wrap with shade alternation (same as A2L). Multiplexed signals (DBC only) have no pattern of their own; under "All", bits that several mux groups claim carry the red overlap stripes.
 
 ### Signal labels
 
-Signal names are rendered inside the colored region:
-- If the signal spans >= 16 bits wide on screen: full name + bit info
-- If 8-15 bits: abbreviated name
-- If < 8 bits (single-bit flags): just the first letter or a symbol
-- Tooltip on hover always shows full detail regardless of cell size
+Each signal's name is drawn once, centered over its cells in the first byte row it occupies and elided at the right to that span's width. The tooltip on hover always shows full detail regardless of cell size.
 
 ### Hover tooltip
 
+`SignalMapModel::signalTooltip()` builds it:
+
 ```
-Signal: EngineRPM
-Bits: [0..15] (16 bits, little-endian)
-Physical: raw × 0.1 + 0  →  [0.0 .. 8000.0] rpm
-Sender: ECU1
+EngineRPM
+Bits: [0..15] (16-bit, little-endian)
+Physical: raw x 0.1  [0 .. 8000] rpm
 Receivers: BCM, Dashboard
 ```
 
-For LDF signals with encoding:
-```
-Signal: GearPosition
-Bits: [0..2] (3 bits)
-Init value: 0
-Publisher: TCU
-Encoding:
-  0 = Park, 1 = Reverse, 2 = Neutral
-  3 = Drive, 4 = Sport
-```
+A multiplexed DBC signal adds `Multiplexor (M)`, `Multiplexed: m<N>` or `Mux: m<N> + multiplexor`. An LDF signal shows `Publisher: <node>` (the signal's own publisher) and no receivers line; its scaling comes from the first physical range of its encoding, and the bracketed range shows that range's raw bounds; logical encoding values are not shown.
 
 ### Multiplexing (DBC only)
 
@@ -211,13 +193,13 @@ Messages with multiplexed signals need special handling:
 - **Static signals**: Always visible, rendered normally
 - **Multiplexed signals** (m0, m1, ...): shown in layers
 
-UI approach: a secondary dropdown or toggle appears below the message selector when the selected message has multiplexing. Options:
-- "All (overlay)" — shows all mux groups with hatched overlapping regions
-- "m0: <mux_value_0>" — shows only signals for mux value 0
-- "m1: <mux_value_1>" — shows only signals for mux value 1
-- etc.
+UI approach: a mux-group ComboBox appears next to the message selector when the selected message has multiplexing. Options:
+- "All" — shows every mux group; bits that several groups claim carry the overlap stripes
+- "m0" — shows only signals for mux value 0
+- "m1" — shows only signals for mux value 1
+- etc. (one `m<N>` entry per mux value)
 
-Default: "All (overlay)" so the user sees the full picture, then can filter.
+Default: "All" so the user sees the full picture, then can filter.
 
 ## Architecture
 
@@ -277,7 +259,7 @@ It exposes a `mapModel` property (the `SignalMapModel`) and a `nodeKeyClicked(va
 
 ### Session wiring
 
-`DbcDocumentSession` and `LdfDocumentSession` each own a `std::unique_ptr<SignalMapModel>`, override `centerPanelSource()` (returns `SignalMapView.qml`) and `centerPanelModel()` (returns the model), and populate it via a private `buildSignalMap()` that calls `finalize()` when done. DBC iterates `_document.messages()`; LDF iterates `_document.frames()`, mapping LDF fields onto the same `SignalEntry`/`MessageEntry` shapes with `bigEndian`/`multiplexType`/`isExtendedId` fixed to false/0/false, `sender` from the frame publisher, and the signal's `init_value` carried through.
+`DbcDocumentSession` and `LdfDocumentSession` each own a `std::unique_ptr<SignalMapModel>`, override `centerPanelSource()` (returns `SignalMapView.qml`) and `centerPanelModel()` (returns the model), and populate it via a private `buildSignalMap()` that calls `finalize()` when done. DBC iterates `_document.messages()`; LDF iterates `_document.frames()`, mapping LDF fields onto the same `SignalEntry`/`MessageEntry` shapes with `bigEndian`/`multiplexType`/`isExtendedId` fixed to false/0/false, the message's `sender` from the frame publisher and each signal's from the signal's own publisher.
 
 The generic center-panel Loader in Main.qml needs no format-specific wiring: it reads `centerPanelSource()`, passes `centerPanelModel()` as `mapModel`, and routes `nodeKeyClicked` the same way it does for the memory view.
 
@@ -304,30 +286,9 @@ Click a colored bit cell:
 
 ### Message selector → Tree
 
-When the user changes the message dropdown, optionally select the message node in the tree (debatable — may be annoying). Probably don't auto-select on dropdown change, only on explicit grid click.
+Changing the message dropdown sets the current message and selects nothing in the tree.
 
 The center-panel slot, `DocumentSession` interface, node-key bidirectional selection, and the Theme palette are shared with the A2L memory view. The model (`SignalMapModel`) and renderer (`SignalGridItem`) are signal-specific because the data is bit-level signal packing rather than a byte-level address space; the tooltip and legend reuse the memory view's patterns with signal-specific content (the legend is dynamic, showing the current message's signal names).
-
-## Implementation Status
-
-Fully implemented. Export/print is backlog.
-
-- SignalMapModel with message list, signal entries, bit map, mux filtering
-- LE + BE (Motorola) bit position resolution with visual endianness arrows
-- SignalGridItem renderer: bit cells, byte rows, color fills, signal labels, overlap stripes
-- SignalMapView.qml: message selector, mux group dropdown, grid with scrollbar, wrapping legend, status bar
-- DBC + LDF session wiring with DLC derivation from signals when DLC=0
-- Rich tooltips: bit range, byte order, scaling, mux info, sender/receivers
-- Bidirectional tree/grid navigation
-- Mux group selector: "All" + per-mux-value filter, legend/grid update on filter change
-- CAN FD scrolling via Flickable + ScrollBar for messages > 8 bytes
-- Overlap detection with red diagonal stripe pattern
-- Keyboard navigation: arrows/Tab cycle signals, PgUp/PgDn switch messages, Home/End, Enter/Space select
-
-### Backlog
-
-- Export: message layout as PNG or SVG (for documentation)
-- Print-friendly view
 
 ## Technical Notes
 
