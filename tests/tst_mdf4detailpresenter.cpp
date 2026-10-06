@@ -68,6 +68,7 @@ private slots:
     void fileCardSummarizesDocument();
     void groupCardDescribesStorage();
     void channelCardExplainsPlotSupport();
+    void channelCardNamesBigEndianTypesAndFormulaConversions();
     void selectedEntityYieldsRawJson();
 };
 
@@ -114,6 +115,45 @@ void TestMdf4DetailPresenter::channelCardExplainsPlotSupport() {
              QStringLiteral("No"));
     QCOMPARE(fieldValue(details, QStringLiteral("Plot"), QStringLiteral("Unsupported Reason")),
              QStringLiteral("invalidation bits are not supported"));
+}
+
+void TestMdf4DetailPresenter::channelCardNamesBigEndianTypesAndFormulaConversions() {
+    mdf4::File document = makeDocument();
+    mdf4::ChannelGroup* group = document.mutable_groups(0);
+
+    mdf4::Channel* algebraic = group->add_channels();
+    algebraic->set_name("OilTemperature");
+    algebraic->set_data_type(mdf4::FLOAT_BE);
+    mdf4::Conversion* formula = algebraic->mutable_conversion();
+    formula->set_kind(mdf4::ALGEBRAIC);
+    formula->set_cc_type(3);
+    formula->set_formula("X * 0.5 - 40");
+
+    mdf4::Channel* ranged = group->add_channels();
+    ranged->set_name("GearState");
+    ranged->set_data_type(mdf4::SINT_BE);
+    mdf4::Conversion* ranges = ranged->mutable_conversion();
+    ranges->set_kind(mdf4::TAB_RANGE);
+    ranges->set_cc_type(6);
+
+    const Mdf4DetailPresenter presenter(document);
+
+    const QList<DetailSection> algebraicDetails = presenter.buildDetails(
+        pathFor(Mdf4EntityKind::Channel, 0, 1));
+    QCOMPARE(fieldValue(algebraicDetails, QStringLiteral("Bit Geometry"), QStringLiteral("Data Type")),
+             QStringLiteral("IEEE floating point (big-endian)"));
+    QCOMPARE(fieldValue(algebraicDetails, QStringLiteral("Conversion"), QStringLiteral("Kind")),
+             QStringLiteral("Algebraic formula"));
+    QCOMPARE(fieldValue(algebraicDetails, QStringLiteral("Conversion"), QStringLiteral("Formula")),
+             QStringLiteral("X * 0.5 - 40"));
+
+    const QList<DetailSection> rangedDetails = presenter.buildDetails(
+        pathFor(Mdf4EntityKind::Channel, 0, 2));
+    QCOMPARE(fieldValue(rangedDetails, QStringLiteral("Bit Geometry"), QStringLiteral("Data Type")),
+             QStringLiteral("Signed integer (big-endian)"));
+    QCOMPARE(fieldValue(rangedDetails, QStringLiteral("Conversion"), QStringLiteral("Kind")),
+             QStringLiteral("Value range table"));
+    QVERIFY(fieldValue(rangedDetails, QStringLiteral("Conversion"), QStringLiteral("Formula")).isEmpty());
 }
 
 void TestMdf4DetailPresenter::selectedEntityYieldsRawJson() {

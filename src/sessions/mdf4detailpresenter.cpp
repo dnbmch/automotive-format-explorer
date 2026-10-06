@@ -20,6 +20,12 @@ QString dataTypeText(mdf4::DataType type) {
         return QStringLiteral("Signed integer (little-endian)");
     case mdf4::FLOAT_LE:
         return QStringLiteral("IEEE floating point (little-endian)");
+    case mdf4::UINT_BE:
+        return QStringLiteral("Unsigned integer (big-endian)");
+    case mdf4::SINT_BE:
+        return QStringLiteral("Signed integer (big-endian)");
+    case mdf4::FLOAT_BE:
+        return QStringLiteral("IEEE floating point (big-endian)");
     case mdf4::DATA_TYPE_OTHER:
         return QStringLiteral("Other / unsupported");
     case mdf4::DATA_TYPE_UNSPECIFIED:
@@ -42,6 +48,10 @@ QString conversionKindText(mdf4::ConversionKind kind) {
         return QStringLiteral("Value table (nearest)");
     case mdf4::VALUE_TO_TEXT:
         return QStringLiteral("Value to text");
+    case mdf4::ALGEBRAIC:
+        return QStringLiteral("Algebraic formula");
+    case mdf4::TAB_RANGE:
+        return QStringLiteral("Value range table");
     case mdf4::CONVERSION_OTHER:
         return QStringLiteral("Other / unsupported");
     case mdf4::CONVERSION_KIND_UNSPECIFIED:
@@ -269,6 +279,7 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
     conversionFields.push_back({QStringLiteral("Kind"), conversionKindText(conversion.kind())});
     conversionFields.push_back({QStringLiteral("CC Type"), integerText(conversion.cc_type())});
     addField(conversionFields, QStringLiteral("Coefficients"), parametersText(conversion));
+    addField(conversionFields, QStringLiteral("Formula"), text(conversion.formula()));
     addField(conversionFields, QStringLiteral("Unit"), text(conversion.unit()));
     addField(conversionFields, QStringLiteral("Default Text"), text(conversion.default_text()));
     for (const mdf4::TextEntry& entry : conversion.entries()) {
