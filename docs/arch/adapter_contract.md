@@ -23,7 +23,7 @@ MDF4 is the reference for metadata-only open followed by lazy bulk-data work.
 class FormatAdapter {
 public:
     virtual ~FormatAdapter() = default;
-    virtual LoadResult load(const QString& path) const = 0;
+    virtual LoadResult load(const QString& path, const std::atomic<bool>& cancel) const = 0;
 };
 
 struct LoadResult {
@@ -32,7 +32,7 @@ struct LoadResult {
 };
 ```
 
-`load()` runs on a worker thread — `AppController::openFile()` dispatches it via `QtConcurrent::run()`, and the worker moves the session's models to the controller's thread before the result is published. The controller wraps the session in a `DocumentTab`, which owns it and the filter over its tree. Expect to be called with an absolute path; let parser-layer errors flow into `diagnostics` instead of throwing. Do not depend on the GUI event loop inside `load()` or a session constructor: application shutdown waits for a pending load on the GUI thread. The adapter is owned by the controller's `FormatList` and outlives every load it runs.
+`load()` runs on a worker thread — `AppController::openFile()` dispatches it via `QtConcurrent::run()`, and the worker moves the session's models to the controller's thread before the result is published. The controller wraps the session in a `DocumentTab`, which owns it and the filter over its tree. Expect to be called with an absolute path; let parser-layer errors flow into `diagnostics` instead of throwing. Do not depend on the GUI event loop inside `load()` or a session constructor: application shutdown sets `cancel` and waits for the pending load on the GUI thread. Hand `cancel` to a parser that can stop early (the MDF4 reader observes it while opening); an adapter whose parser cannot stop takes the parameter unnamed, and shutdown waits for its parse to end. The adapter is owned by the controller's `FormatList` and outlives every load it runs.
 
 Format identity for the file dialog and suffix lookup comes from the `FormatEntry`; `formatDisplayName(FormatId)` labels the dialog filter. The session reports its own identity (`formatId()`, `formatName()`) for tabs.
 

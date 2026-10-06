@@ -23,7 +23,7 @@ DiagnosticMessage toDiagnostic(const a2l::Diagnostic& d) {
 }
 } // namespace
 
-LoadResult A2lAdapter::load(const QString& path) const {
+LoadResult A2lAdapter::load(const QString& path, const std::atomic<bool>&) const {
     QList<DiagnosticMessage> diagnostics;
 
     auto raw = a2lfile::Loader::readA2lFile(path.toStdString());

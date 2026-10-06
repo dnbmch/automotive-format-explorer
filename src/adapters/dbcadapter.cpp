@@ -26,7 +26,7 @@ DiagnosticMessage toDiagnostic(const dbc::Diagnostic& d) {
 }
 } // namespace
 
-LoadResult DbcAdapter::load(const QString& path) const {
+LoadResult DbcAdapter::load(const QString& path, const std::atomic<bool>&) const {
     QList<DiagnosticMessage> diagnostics;
 
     auto raw = dbcfile::Loader::readDbcFile(path.toStdString());

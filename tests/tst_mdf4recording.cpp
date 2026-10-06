@@ -13,6 +13,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -66,7 +67,8 @@ void TestMdf4Recording::initTestCase() {
     const QString path = _dir.filePath(QStringLiteral("irregular.mf4"));
     QVERIFY(mf4recording::write(path.toStdString(), kCount, {{"Pressure", "bar"}}, timeAt,
                                 [](std::size_t, std::uint64_t index) { return valueAt(index); }));
-    _loaded = Mdf4Adapter().load(path);
+    const std::atomic<bool> cancel{false};
+    _loaded = Mdf4Adapter().load(path, cancel);
     QVERIFY(_loaded.session);
     QVERIFY2(_loaded.diagnostics.isEmpty(),
              qPrintable(_loaded.diagnostics.isEmpty() ? QString()

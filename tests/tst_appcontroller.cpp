@@ -9,6 +9,7 @@
 #include <QThread>
 #include <QThreadPool>
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
@@ -43,6 +44,7 @@ class Probe {
 public:
     bool gateOpen = true;    // load() blocks until the gate opens
     bool failLoad = false;
+    bool honorsCancel = false;   // a blocked load also returns once cancelled
 
     void openGate() { update([this] { gateOpen = true; }); }
     void startTeardown() { update([this] { _teardown = true; }); }
@@ -57,14 +59,23 @@ public:
     QThread* sessionDestroyedOn() { return read([this] { return _sessionThread; }); }
     QThread* modelsOnAtDestruction() { return read([this] { return _modelThread; }); }
 
-    // Fake adapter side.
-    bool enterLoad() {
+    // Fake adapter side. The controller sets its cancellation flag without
+    // notifying the probe, so the blocked load re-checks it every millisecond.
+    bool enterLoad(const std::atomic<bool>& cancel) {
         std::unique_lock<std::mutex> lock(_mutex);
         _loads++;
         _loadActive = true;
         _changed.notify_all();
-        if (!_changed.wait_for(lock, 10s, [this] { return gateOpen; })) {
-            _timedOut = true;
+        const auto cancelled = [this, &cancel] { return honorsCancel && cancel.load(); };
+        const auto deadline = std::chrono::steady_clock::now() + 10s;
+        while (!_changed.wait_for(lock, 1ms, [this, &cancelled] { return gateOpen || cancelled(); })) {
+            if (std::chrono::steady_clock::now() >= deadline) {
+                _timedOut = true;
+                break;
+            }
+        }
+        if (!gateOpen && cancelled()) {
+            _events.push_back(QStringLiteral("load cancelled"));
         }
         return failLoad;
     }
@@ -123,9 +134,9 @@ public:
     explicit FakeAdapter(Probe& probe) : _probe(probe) {}
     ~FakeAdapter() override { _probe.adapterDestroyed(); }
 
-    LoadResult load(const QString& path) const override {
+    LoadResult load(const QString& path, const std::atomic<bool>& cancel) const override {
         LoadResult result;
-        if (_probe.enterLoad()) {
+        if (_probe.enterLoad(cancel)) {
             result.diagnostics.push_back(
                 {DiagnosticSeverity::Error, QStringLiteral("Failed"), QStringLiteral("fake failure")});
         } else {
@@ -257,6 +268,7 @@ private slots:
     void destructionWaitsForRunningLoad();
     void destructionDisposesUndeliveredResult();
     void destructionAfterFailedLoad();
+    void shutdownCancelsRunningLoad();
     void shutdownStopsDeliveryAndOpens();
     void shutdownFromBusyNotification();
     void shutdownFromIdleNotification();
@@ -426,6 +438,31 @@ void TestAppController::destructionAfterFailedLoad() {
                                           QStringLiteral("adapter destroyed")}));
     QCOMPARE(errors.count(), 0);
     QVERIFY(!probe.timedOut());
+}
+
+// The gate never opens: only shutdown's cancellation request ends the blocked
+// load, whose session is then destroyed undelivered on this thread.
+void TestAppController::shutdownCancelsRunningLoad() {
+    Probe probe;
+    probe.gateOpen = false;
+    probe.honorsCancel = true;
+    AppController controller(fakeFormats(probe));
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+    QSignalSpy inserted(controller.tabModel(), &QAbstractItemModel::rowsInserted);
+
+    controller.openFile(fakeFile());
+    QVERIFY(probe.waitUntilLoading());
+    controller.shutdown();
+
+    QVERIFY(!probe.timedOut());
+    QCOMPARE(probe.events(), QStringList({QStringLiteral("load cancelled"),
+                                          QStringLiteral("load returned"),
+                                          QStringLiteral("session destroyed")}));
+    QCOMPARE(probe.sessionDestroyedOn(), QThread::currentThread());
+    QVERIFY(!controller.fileLoading());
+    QCoreApplication::processEvents();
+    QCOMPARE(loaded.count(), 0);
+    QCOMPARE(inserted.count(), 0);
 }
 
 // An explicit shutdown with the controller alive: the finished result is

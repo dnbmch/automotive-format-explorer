@@ -31,17 +31,6 @@ state saved into the tab and restored around the rebuild, for each of the views.
 
 ## Adapters and presenters
 
-### BL-E3: mdf4 presenter labels for unnamed proto enum values
-
-The sibling `mdf4-parser` proto has `DataType` `UINT_BE`/`SINT_BE`/`FLOAT_BE`
-and `ConversionKind` `ALGEBRAIC`/`TAB_RANGE` (plus `Conversion.formula`). The
-`mdf4detailpresenter.cpp` switches don't name them and fall through to their
-`"Unknown (%1)"` default — correct but unlabeled. The reader with the bounded
-interface the explorer requires carries these values, so nothing gates the labels.
-Add them, and optionally show the formula text.
-
-**Size:** XS.
-
 ### BL-E4: DBC adapter declares the extraction entry point by hand
 
 `src/adapters/dbcadapter.cpp` includes `dbc/dbcfile.h` and re-declares
@@ -53,17 +42,6 @@ header directly; do the same here, inside the existing `signals` macro guard.
 **Size:** XS.
 
 ## Viewer data
-
-### BL-V1: MDF4 opening cannot be cancelled
-
-`Mdf4Adapter::load()` constructs its `mdf4::Reader` without a cancellation flag,
-although the reader stops an opening when one is set. The load contract has none:
-`AppController::shutdown()` waits for a pending load, so closing the application
-while a large MDF4 file opens waits for its opening (bounded by the reader's
-`openingBytes`). Threading a flag from the controller through `FormatAdapter::load()`
-would make shutdown prompt for MDF4; the text formats would ignore it.
-
-**Size:** S.
 
 ### BL-V2: a channel that fits one window is scanned twice
 

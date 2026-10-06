@@ -26,11 +26,12 @@ DiagnosticMessage toDiagnostic(const mdf4::Diagnostic& diagnostic) {
 
 } // namespace
 
-// The file is opened and indexed once, with the reader's default limits and no
-// cancellation. The session's tree, details, time axes and every scan use that
-// one reader, which lives as long as any of its handles.
-LoadResult Mdf4Adapter::load(const QString& path) const {
-    auto reader = std::make_shared<mdf4::Reader>(path.toStdString());
+// The file is opened and indexed once, with the reader's default limits; the
+// reader observes `cancel` while it opens, and a cancelled opening yields a
+// session whose one diagnostic says so. The session's tree, details, time axes
+// and every scan use that one reader, which lives as long as any of its handles.
+LoadResult Mdf4Adapter::load(const QString& path, const std::atomic<bool>& cancel) const {
+    auto reader = std::make_shared<mdf4::Reader>(path.toStdString(), mdf4::Limits{}, &cancel);
     std::shared_ptr<const mdf4::File> metadata(reader, &reader->metadata());
 
     QList<DiagnosticMessage> diagnostics;

@@ -19,6 +19,8 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <atomic>
+
 namespace {
 
 quint64 firstPlottableKey(DocumentSession& session) {
@@ -46,11 +48,13 @@ private slots:
     void writerFileOpensAndPlots();
     void changedSourceAsksForReload();
     void missingFileOpensForInspection();
+    void cancelledOpeningYieldsDroppedDiagnostic();
 };
 
 void TestMdf4WriterFile::writerFileOpensAndPlots() {
+    const std::atomic<bool> cancel{false};
     Mdf4Adapter adapter;
-    LoadResult result = adapter.load(qEnvironmentVariable("MDF4_WRITER_SAMPLE"));
+    LoadResult result = adapter.load(qEnvironmentVariable("MDF4_WRITER_SAMPLE"), cancel);
     QVERIFY2(result.session != nullptr, qPrintable(
         result.diagnostics.isEmpty() ? QStringLiteral("MDF4 session was not created")
                                      : result.diagnostics.front().detail));
@@ -80,8 +84,9 @@ void TestMdf4WriterFile::changedSourceAsksForReload() {
     const QString copy = dir.filePath(QStringLiteral("recording.mf4"));
     QVERIFY(QFile::copy(qEnvironmentVariable("MDF4_WRITER_SAMPLE"), copy));
 
+    const std::atomic<bool> cancel{false};
     Mdf4Adapter adapter;
-    LoadResult result = adapter.load(copy);
+    LoadResult result = adapter.load(copy, cancel);
     QVERIFY(result.session != nullptr);
     const quint64 plottableKey = firstPlottableKey(*result.session);
     QVERIFY(plottableKey != 0);
@@ -102,12 +107,28 @@ void TestMdf4WriterFile::changedSourceAsksForReload() {
 void TestMdf4WriterFile::missingFileOpensForInspection() {
     QTemporaryDir dir;
     QVERIFY(dir.isValid());
+    const std::atomic<bool> cancel{false};
     Mdf4Adapter adapter;
-    LoadResult result = adapter.load(dir.filePath(QStringLiteral("missing.mf4")));
+    LoadResult result = adapter.load(dir.filePath(QStringLiteral("missing.mf4")), cancel);
     QVERIFY(result.session != nullptr);
     QCOMPARE(result.diagnostics.size(), 1);
     QCOMPARE(result.diagnostics.front().severity, DiagnosticSeverity::Error);
     QCOMPARE(result.diagnostics.front().title, QStringLiteral("file cannot be opened"));
+    QCOMPARE(result.session->treeModel()->rowCount(result.session->treeModel()->index(0, 0)), 0);
+}
+
+// A cancellation already requested reaches the reader: the opening stops before
+// any structure is read, and the session shows the reader's one DROPPED
+// diagnostic naming it.
+void TestMdf4WriterFile::cancelledOpeningYieldsDroppedDiagnostic() {
+    const std::atomic<bool> cancel{true};
+    Mdf4Adapter adapter;
+    LoadResult result = adapter.load(qEnvironmentVariable("MDF4_WRITER_SAMPLE"), cancel);
+    QVERIFY(result.session != nullptr);
+    QCOMPARE(result.diagnostics.size(), 1);
+    QCOMPARE(result.diagnostics.front().severity, DiagnosticSeverity::Error);
+    QVERIFY2(result.diagnostics.front().title.contains(QStringLiteral("opening cancelled")),
+             qPrintable(result.diagnostics.front().title));
     QCOMPARE(result.session->treeModel()->rowCount(result.session->treeModel()->index(0, 0)), 0);
 }
 

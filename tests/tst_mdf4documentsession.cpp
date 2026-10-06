@@ -394,7 +394,7 @@ class SessionAdapter final : public FormatAdapter {
 public:
     explicit SessionAdapter(std::shared_ptr<Scans> scans) : _scans(std::move(scans)) {}
 
-    LoadResult load(const QString&) const override {
+    LoadResult load(const QString&, const std::atomic<bool>&) const override {
         LoadResult result;
         result.session = openSession(_scans);
         return result;

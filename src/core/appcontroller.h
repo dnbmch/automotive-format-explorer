@@ -10,6 +10,7 @@
 #include <QObject>
 #include <QStringList>
 #include <QVariantList>
+#include <atomic>
 #include <memory>
 #include <QUrl>
 
@@ -56,11 +57,12 @@ public:
     QVariantList sampleFiles() const;
     QStringList fileDialogFilters() const;
 
-    // Stops accepting opens and suppresses delivery of a pending load, then
-    // waits for that load on this thread and destroys any result it produced.
-    // The parse itself is not interruptible. Emits nothing; afterwards
-    // fileLoading() is false and every public action does nothing. Idempotent,
-    // including from inside a notification; the destructor calls it.
+    // Stops accepting opens and suppresses delivery of a pending load, asks
+    // that load to stop, then waits for it on this thread and destroys any
+    // result it produced. An MDF4 opening observes the request; a text parse
+    // returns on its own. Emits nothing; afterwards fileLoading() is false and
+    // every public action does nothing. Idempotent, including from inside a
+    // notification; the destructor calls it.
     void shutdown();
 
     Q_INVOKABLE void openFile(const QUrl& fileUrl);
@@ -105,6 +107,7 @@ private:
     QString _last_error;
     bool _file_loading = false;   // _load_watcher holds an owned, untaken result
     QFutureWatcher<LoadResult> _load_watcher;
+    std::atomic<bool> _load_cancel{false};   // read by the pending load's worker
     bool _shut_down = false;
     bool _startup_loading = true;
     QString _startup_status_text = QStringLiteral("Loading…");

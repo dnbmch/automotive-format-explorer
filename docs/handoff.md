@@ -1,5 +1,19 @@
 # automotive-format-explorer — handoff
 
+## 2026-10-06 — MDF4 detail labels and opening cancellation — OPEN
+
+Landed: the MDF4 detail panel labels the big-endian data types, the algebraic and
+value-range conversion kinds and the formula text; the load contract carries a
+cancellation flag that `AppController::shutdown()` sets, and the MDF4 reader observes
+it while opening ([adapter contract](arch/adapter_contract.md),
+[opening and shutdown](arch/architecture.md#opening-files-and-shutdown)). The text
+parsers cannot stop, so shutdown still waits for an A2L, DBC or LDF parse. Every
+suite is green locally. OPEN only for the check below.
+
+UNVERIFIED — closing during a large MDF4 opening: open a large `.mf4` and close the
+window while the loading indicator shows. Pass: the window closes almost at once.
+Fail: it closes only after the opening finishes.
+
 ## 2026-09-28 — tab ownership and bounded recording viewer — OPEN
 
 `master` needs mdf4-parser `c98c298` and its public lib `933439f` (the bounded

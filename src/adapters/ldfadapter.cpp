@@ -22,7 +22,7 @@ DiagnosticMessage toDiagnostic(const ldf::Diagnostic& d) {
 }
 } // namespace
 
-LoadResult LdfAdapter::load(const QString& path) const {
+LoadResult LdfAdapter::load(const QString& path, const std::atomic<bool>&) const {
     QList<DiagnosticMessage> diagnostics;
 
     auto raw = ldffile::Loader::readLdfFile(path.toStdString());

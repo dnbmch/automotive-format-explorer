@@ -13,7 +13,7 @@ integrated in a single binary.
 QGuiApplication
   AppController (C++, QML singleton)
     FormatList            — owned format entries: id, suffixes, adapter
-    pending load          — at most one, joined on shutdown
+    pending load          — at most one, cancelled and joined on shutdown
     TabModel              — open documents, one DocumentTab each
       DocumentTab         — owns its session and the filter over the session's tree
         DocumentSession   — binds its rows to its own entities
@@ -72,18 +72,20 @@ a tab is the session's own (`DocumentSession::formatName()`).
 
 ### FormatAdapter contract
 
-A backend's adapter has one job: `LoadResult load(const QString& path) const`
-returns an owning `DocumentSession` plus diagnostics (`session` is null on hard
-failure). Its format identity and suffixes live in the application's `FormatEntry`.
+A backend's adapter has one job: `LoadResult load(const QString& path, const
+std::atomic<bool>& cancel) const` returns an owning `DocumentSession` plus
+diagnostics (`session` is null on hard failure). `cancel`, set from another thread,
+asks the load to stop early; an adapter whose parser cannot stop ignores it. Its
+format identity and suffixes live in the application's `FormatEntry`.
 
 ## Opening files and shutdown
 
 `AppController` runs one open at a time: `openFile()` resolves the entry, then runs
-`adapter->load()` through `QtConcurrent::run` and watches it with a
-`QFutureWatcher<LoadResult>`. The worker moves the new session's models to the
-controller's thread before publishing the result; the watcher's `finished`
-delivery adds the tab on that thread. A second open while one is pending is refused
-with `Another file is already loading.`
+`adapter->load()` with the controller's cancellation flag through
+`QtConcurrent::run` and watches it with a `QFutureWatcher<LoadResult>`. The worker
+moves the new session's models to the controller's thread before publishing the
+result; the watcher's `finished` delivery adds the tab on that thread. A second
+open while one is pending is refused with `Another file is already loading.`
 
 Notifications (`lastErrorChanged`, `fileLoadingChanged`, the tab model's row
 signals, `currentSessionChanged`, `fileLoaded`) call observers synchronously, and
@@ -99,21 +101,23 @@ selects the tab it inserted by identity, never by its row: see [Tabs](#tabs).
 
 `AppController::shutdown()` is the one teardown path, called from `aboutToQuit`, from
 the destructor or from an observer; a repeated call does nothing. It stops accepting
-opens, disconnects the watcher's delivery, then waits on the controller's own future
-for a load it still owns and takes its result on the controller's thread, where the
-session and its models are destroyed — whether the worker was still parsing, had
-finished with its completion still queued, or had failed. A result already taken by
-an interrupted completion is destroyed there instead, on the same thread. Shutdown
-emits nothing; afterwards `fileLoading` is false. The worker never needs the controller's
-event loop, and a parse is not interruptible, so shutdown waits for the current
-parse to return: this is a lifetime guarantee, not a latency bound. On destruction
-the adapter list and every other member are destroyed only afterwards. Once shutdown
-has started, no completion adds a tab, changes the current tab, emits `fileLoaded`
-or reports an error, and every public action does nothing: `openFile()`,
-`closeTab()`, `setCurrentTabIndex()`, `selectCurrentNode()`, `clearLastError()`,
-`setStartupLoading()` and `setStartupStatusText()`. A tab model row change already
-under way when an observer shuts down still completes; nothing follows it. The
-remaining tabs are destroyed with the controller.
+opens, disconnects the watcher's delivery, then, for a load it still owns, sets the
+cancellation flag, waits on the controller's own future and takes its result on the
+controller's thread, where the session and its models are destroyed — whether the
+worker was still parsing, had finished with its completion still queued, or had
+failed. A result already taken by an interrupted completion is destroyed there
+instead, on the same thread. Shutdown emits nothing; afterwards `fileLoading` is
+false. The worker never needs the controller's event loop. An MDF4 opening observes
+the flag at the reader's next cancellation checkpoint and returns a session holding
+one DROPPED diagnostic; the A2L, DBC and LDF parsers cannot stop, so shutdown waits
+for such a parse to return: this is a lifetime guarantee, not a latency bound. On
+destruction the adapter list and every other member are destroyed only afterwards.
+Once shutdown has started, no completion adds a tab, changes the current tab, emits
+`fileLoaded` or reports an error, and every public action does nothing:
+`openFile()`, `closeTab()`, `setCurrentTabIndex()`, `selectCurrentNode()`,
+`clearLastError()`, `setStartupLoading()` and `setStartupStatusText()`. A tab model
+row change already under way when an observer shuts down still completes; nothing
+follows it. The remaining tabs are destroyed with the controller.
 
 ## Tabs
 
@@ -221,15 +225,16 @@ A `DocumentSession` (interface in `src/sessions/documentsession.h`) is the per-d
 ## MDF4 reads
 
 `Mdf4Adapter::load()` opens one `mdf4::Reader` per file, with the reader's default
-limits and no cancellation: opening runs to its end, like every format's load, so
-shutdown during a large MDF4 opening waits for it. The session's tree, detail
-presenter, time axes and every scan use that reader: the session holds its metadata
-through a `std::shared_ptr<const mdf4::File>` aliasing the reader, and a scan function
-and an axis function bound to it. Any of them keeps the reader alive; there is no
-second metadata copy and no path-based read. A file that cannot be opened, or whose
-opening a reader limit refused, still opens as a session showing its diagnostics (a
-refusal is one DROPPED diagnostic), and its scans fail. The reader's own limits,
-outcomes, traversal and cancellation checkpoints are the
+limits and the load's cancellation flag, so shutdown during a large MDF4 opening
+stops it (see [Opening files and shutdown](#opening-files-and-shutdown)). The
+session's tree, detail presenter, time axes and every scan use that reader: the
+session holds its metadata through a `std::shared_ptr<const mdf4::File>` aliasing
+the reader, and a scan function and an axis function bound to it. Any of them keeps
+the reader alive; there is no second metadata copy and no path-based read. A file
+that cannot be opened, or whose opening a reader limit refused or the flag
+cancelled, still opens as a session showing its diagnostics (a refusal or a
+cancellation is one DROPPED diagnostic), and its scans fail. The reader's own
+limits, outcomes, traversal and cancellation checkpoints are the
 [reader contract](../../../mdf4-parser/docs/arch/reader.md).
 
 Both session allowances below are per session: every open MDF4 tab adds its own, and

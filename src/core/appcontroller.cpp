@@ -156,13 +156,15 @@ void AppController::openFile(const QUrl& fileUrl) {
         return;
     }
 
-    // The adapter stays owned by _formats; shutdown() joins this task before
-    // the controller's members are destroyed. The session's models are handed
-    // to this thread before the result is published.
+    // The adapter stays owned by _formats and the cancellation flag by this
+    // controller; shutdown() joins this task before the controller's members
+    // are destroyed. The session's models are handed to this thread before the
+    // result is published.
     const FormatAdapter* adapter = format->adapter.get();
+    const std::atomic<bool>* cancel = &_load_cancel;
     QThread* owner = thread();
-    _load_watcher.setFuture(QtConcurrent::run([adapter, path, owner]() {
-        LoadResult result = adapter->load(path);
+    _load_watcher.setFuture(QtConcurrent::run([adapter, path, cancel, owner]() {
+        LoadResult result = adapter->load(path, *cancel);
         if (result.session) {
             result.session->moveModelsToThread(owner);
         }
@@ -203,14 +205,16 @@ void AppController::shutdown() {
     _shut_down = true;
 
     // No completion reaches the UI after this point. A load the controller
-    // still owns is waited for here; its worker never needs this thread's event
-    // loop. The result, finished or still queued for delivery, is destroyed on
-    // this thread, which owns its models. Shutdown notifies no one.
+    // still owns is asked to stop and waited for here; its worker never needs
+    // this thread's event loop. The result, finished or still queued for
+    // delivery, is destroyed on this thread, which owns its models. Shutdown
+    // notifies no one.
     disconnect(&_load_watcher, nullptr, this, nullptr);
     if (!_file_loading) {
         return;
     }
     QFuture<LoadResult> pending = _load_watcher.future();
+    _load_cancel.store(true);
     pending.waitForFinished();
     const LoadResult undelivered = pending.takeResult();
     _file_loading = false;

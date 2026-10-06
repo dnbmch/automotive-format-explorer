@@ -11,7 +11,8 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   (id, suffixes, adapter) that also derives the dialog filters and sample list;
   each backend provides a `FormatAdapter`, a `DocumentSession` and its presenter.
 - `AppController` owns its format list and its one pending load: shutdown stops
-  opens, suppresses late completions and joins the load before adapters go,
+  opens, suppresses late completions, asks the load to stop (an MDF4 opening
+  stops; an A2L, DBC or LDF parse runs to its end) and joins it before adapters go,
   disposing any undelivered session on the GUI thread; afterwards every public
   action does nothing.
 - Each open file is a `DocumentTab` owning its session, tree filter and tree
