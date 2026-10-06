@@ -23,8 +23,8 @@ The explorer release is on-demand; do not create or retag an explorer v0.2.1 rel
   reason.
 - If a real recording that matters comes back mostly non-plottable, dump it with the
   parser's `mdf4_json` example, map each non-decodable channel class to the reader
-  increment that unlocks it (the deferred increments in `mdf4-parser/roadmap.md`) and
-  spec those increments as a locked plan. Reader breadth is bought, not assumed.
+  increment that unlocks it (the increments in `mdf4-parser/roadmap.md`) and
+  spec those increments as a locked plan.
 
 ## Viewer increments
 
