@@ -194,7 +194,7 @@ void AppController::onLoadFinished() {
         makeCurrent(tab);
     }
     if (!_shut_down) {
-        emit fileLoaded(name);
+        emit fileLoaded(name, result.openingError);
     }
 }
 
@@ -294,28 +294,42 @@ void AppController::setStartupStatusText(const QString& text) {
     emit startupStatusTextChanged();
 }
 
-QVariantList AppController::sampleFiles() const {
+QDir AppController::sampleDirectory() const {
     // Bundled sample files live next to the executable (release zip), one level
-    // up (dev build tree), or under share/ (AppImage). First hit wins.
+    // up (dev build tree), or under share/ (AppImage). The first existing
+    // directory owns the bundle, even when its payload is missing.
     const QDir appDir(QCoreApplication::applicationDirPath());
     for (const QString& rel : {QStringLiteral("samples"),
                                QStringLiteral("../samples"),
                                QStringLiteral("../share/automotive-format-explorer/samples")}) {
-        const QFileInfoList entries = supportedFiles(_formats, QDir(appDir.filePath(rel)));
-        if (entries.isEmpty()) {
-            continue;
+        const QDir dir(appDir.filePath(rel));
+        if (dir.exists()) {
+            return dir;
         }
-
-        QVariantList list;
-        for (const auto& entry : entries) {
-            list.push_back(QVariantMap{
-                {QStringLiteral("title"), entry.fileName()},
-                {QStringLiteral("url"), QUrl::fromLocalFile(entry.absoluteFilePath())},
-            });
-        }
-        return list;
     }
-    return QVariantList{};
+    return QDir(appDir.filePath(QStringLiteral("samples")));
+}
+
+QVariantList AppController::sampleFiles() const {
+    QVariantList list;
+    for (const QFileInfo& entry : supportedFiles(_formats, sampleDirectory())) {
+        list.push_back(QVariantMap{
+            {QStringLiteral("title"), entry.fileName()},
+            {QStringLiteral("url"), QUrl::fromLocalFile(entry.absoluteFilePath())},
+        });
+    }
+    return list;
+}
+
+QList<QUrl> AppController::bundledSamples() const {
+    const QDir dir = sampleDirectory();
+    QList<QUrl> files;
+    for (const FormatEntry& format : _formats) {
+        if (!format.sampleFile.isEmpty()) {
+            files.push_back(QUrl::fromLocalFile(dir.absoluteFilePath(format.sampleFile)));
+        }
+    }
+    return files;
 }
 
 QStringList AppController::fileDialogFilters() const {

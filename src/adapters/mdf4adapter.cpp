@@ -38,6 +38,9 @@ LoadResult Mdf4Adapter::load(const QString& path, const std::atomic<bool>& cance
     for (const mdf4::Diagnostic& diagnostic : metadata->diagnostics()) {
         diagnostics.push_back(toDiagnostic(diagnostic));
     }
+    // A failed reader retains one diagnostic. Keep its tab for inspection, but
+    // carry the failed opening separately from recoverable file diagnostics.
+    const QString openingError = reader->ready() ? QString() : diagnostics.first().title;
 
     auto session = std::make_unique<Mdf4DocumentSession>(
         QFileInfo(path).fileName(),
@@ -50,5 +53,5 @@ LoadResult Mdf4Adapter::load(const QString& path, const std::atomic<bool>& cance
         },
         [reader](std::uint32_t group) { return reader->axis(group); },
         diagnostics);
-    return LoadResult{std::move(session), diagnostics};
+    return LoadResult{std::move(session), diagnostics, openingError};
 }

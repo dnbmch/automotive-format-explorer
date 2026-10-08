@@ -1,5 +1,6 @@
 #include "builtinformats.h"
 #include "core/appcontroller.h"
+#include "core/opensequence.h"
 #include "models/detailmodel.h"
 #include "models/treemodel.h"
 
@@ -27,6 +28,7 @@ private slots:
     void opensBundledSamples();
     void opensUppercaseSuffix();
     void reportsUnsupportedFile();
+    void failedMdf4KeepsDiagnosticTabAndFailsSequence();
     void everyRowHasSessionKey_data();
     void everyRowHasSessionKey();
     void rawJsonFollowsAvailability_data();
@@ -185,6 +187,41 @@ void TestBuiltInFormats::reportsUnsupportedFile() {
     QCOMPARE(controller.lastError(), QStringLiteral("Unsupported file type: SAMPLES.md"));
     QVERIFY(!controller.fileLoading());
     QCOMPARE(controller.tabModel()->rowCount(), 0);
+}
+
+void TestBuiltInFormats::failedMdf4KeepsDiagnosticTabAndFailsSequence() {
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString corruptPath = dir.filePath(QStringLiteral("corrupt.mf4"));
+    QFile corrupt(corruptPath);
+    QVERIFY(corrupt.open(QIODevice::WriteOnly));
+    QCOMPARE(corrupt.write("not an MDF4 file\n"), qint64(17));
+    corrupt.close();
+    const QDir samples(QStringLiteral(EXPLORER_SAMPLES_DIR));
+    AppController controller(builtInFormats());
+    OpenSequence sequence(controller, {
+        QUrl::fromLocalFile(dir.filePath(QStringLiteral("missing.mf4"))),
+        QUrl::fromLocalFile(corruptPath),
+        QUrl::fromLocalFile(samples.filePath(QStringLiteral("demo_recording.mf4"))),
+        QUrl::fromLocalFile(samples.filePath(QStringLiteral("tesla_can.dbc"))),
+    });
+    QSignalSpy outcomes(&sequence, &OpenSequence::outcome);
+    QSignalSpy finished(&sequence, &OpenSequence::finished);
+    sequence.start();
+    QVERIFY(finished.wait(30000));
+
+    QCOMPARE(outcomes.size(), 4);
+    QCOMPARE(sequence.failures(), 2);
+    QVERIFY(!outcomes[0][1].toString().isEmpty());
+    QVERIFY(!outcomes[1][1].toString().isEmpty());
+    QVERIFY(outcomes[2][1].toString().isEmpty());
+    QVERIFY(outcomes[3][1].toString().isEmpty());
+    QCOMPARE(controller.tabModel()->rowCount(), 4);
+    QVERIFY(controller.tabModel()->tabAt(0)->session()->hasDiagnostics());
+    QVERIFY(controller.tabModel()->tabAt(1)->session()->hasDiagnostics());
+    // The bundled DBC's dangling VAL_ remains a recoverable diagnostic.
+    QVERIFY(controller.tabModel()->tabAt(3)->session()->hasDiagnostics());
+    QVERIFY(controller.lastError().isEmpty());
 }
 
 void TestBuiltInFormats::everyRowHasSessionKey_data() {

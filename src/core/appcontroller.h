@@ -55,6 +55,8 @@ public:
     void setStartupStatusText(const QString& text);
 
     QVariantList sampleFiles() const;
+    // The declared bundle, including missing files, for the launch check.
+    QList<QUrl> bundledSamples() const;
     QStringList fileDialogFilters() const;
 
     // Stops accepting opens and suppresses delivery of a pending load, asks
@@ -79,9 +81,10 @@ signals:
     void fileLoadingChanged();
     void startupLoadingChanged();
     void startupStatusTextChanged();
-    void fileLoaded(const QString& displayName);
+    void fileLoaded(const QString& displayName, const QString& openingError);
 
 private:
+    QDir sampleDirectory() const;
     void setLastError(const QString& errorText);
     void onLoadFinished();
     void setFileLoading(bool loading);

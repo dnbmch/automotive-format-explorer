@@ -13,6 +13,9 @@ class DocumentSession;
 struct LoadResult {
     std::unique_ptr<DocumentSession> session;
     QList<DiagnosticMessage> diagnostics;
+    // A retained diagnostic session can describe a failed opening. Ordinary
+    // recoverable diagnostics leave this empty; they do not make an open fail.
+    QString openingError = {};
 };
 
 // Loads one file into an owning session. Format identity and the suffixes an

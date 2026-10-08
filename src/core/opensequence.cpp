@@ -6,7 +6,8 @@ OpenSequence::OpenSequence(AppController& controller, QList<QUrl> files, QObject
     : QObject(parent),
       _controller(controller),
       _files(std::move(files)) {
-    connect(&_controller, &AppController::fileLoaded, this, [this] { settle(QString()); });
+    connect(&_controller, &AppController::fileLoaded, this,
+            [this](const QString&, const QString& openingError) { settle(openingError); });
     // A failure is an error the controller raises while no load runs: its refusal
     // of the open itself, or a load that ended without a session. An error raised
     // while a load runs refused another open.

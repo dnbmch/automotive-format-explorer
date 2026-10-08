@@ -11,7 +11,7 @@ Each format ships an adapter (loads a file → returns a session) and a session 
 | `src/adapters/<fmt>adapter.h` + `.cpp` | `class <Fmt>Adapter final : public FormatAdapter` implementing `load()` |
 | `src/sessions/<fmt>documentsession.h` + `.cpp` | `class <Fmt>DocumentSession : public AdapterSessionBase` (or directly `DocumentSession`) — owns the parsed proto document, builds the `TreeModel`, populates the `DetailModel` per node click, optionally exposes a center-panel model |
 | Canonical parser target in `CMakeLists.txt` | Supplies matched headers and static library from source composition or an installed package |
-| Entry in `src/builtinformats.cpp` | `{FormatId::<FMT>, {"<ext>"}, std::make_unique<<Fmt>Adapter>()}` — the format's identity, suffixes and adapter in one place |
+| Entry in `src/builtinformats.cpp` | `{FormatId::<FMT>, {"<ext>"}, std::make_unique<<Fmt>Adapter>(), "sample.<ext>"}` — the format's identity, suffixes, adapter and bundled sample in one place |
 
 The four existing implementations under `src/adapters/` and `src/sessions/`
 are the working references. DBC is the smallest metadata-at-open template;
@@ -29,12 +29,20 @@ public:
 struct LoadResult {
     std::unique_ptr<DocumentSession> session;         // null on hard failure
     QList<DiagnosticMessage> diagnostics;             // warnings + errors surfaced to the tab indicator
+    QString openingError = {};                       // failed opening retained as a diagnostic session
 };
 ```
 
 `load()` runs on a worker thread — `AppController::openFile()` dispatches it via `QtConcurrent::run()`, and the worker moves the session's models to the controller's thread before the result is published. The controller wraps the session in a `DocumentTab`, which owns it and the filter over its tree. Expect to be called with an absolute path; let parser-layer errors flow into `diagnostics` instead of throwing. Do not depend on the GUI event loop inside `load()` or a session constructor: application shutdown sets `cancel` and waits for the pending load on the GUI thread. Hand `cancel` to a parser that can stop early (the MDF4 reader observes it while opening); an adapter whose parser cannot stop takes the parameter unnamed, and shutdown waits for its parse to end. The adapter is owned by the controller's `FormatList` and outlives every load it runs.
 
-Format identity for the file dialog and suffix lookup comes from the `FormatEntry`; `formatDisplayName(FormatId)` labels the dialog filter. The session reports its own identity (`formatId()`, `formatName()`) for tabs.
+A session can be retained for inspection after its file could not be opened or
+indexed. Set `openingError` from that opening failure; do not infer it from the
+presence or severity of recoverable diagnostics. The controller retains the tab
+and carries this error in `fileLoaded(displayName, openingError)`, so `OpenSequence`
+and `--check` report the failed opening. The MDF4 adapter uses the retained reader's
+readiness and diagnostic for this distinction.
+
+Format identity for the file dialog and suffix lookup comes from the `FormatEntry`; `formatDisplayName(FormatId)` labels the dialog filter. Each entry names its bundled sample for the default launch check, which attempts missing paths too. The session reports its own identity (`formatId()`, `formatName()`) for tabs.
 
 ## DocumentSession interface
 
@@ -138,7 +146,7 @@ plot QML component. This keeps the plot reusable by future recording backends.
 3. Write the session: `src/sessions/<fmt>documentsession.{h,cpp}` extending `AdapterSessionBase`. Implement `treeModel()`, `selectNode()`, and either a center-panel pair or leave the defaults.
 4. Resolve the canonical parser target in `CMakeLists.txt` (the `AFF_PARSER_MODE` loop).
 5. Add a static `explorer-<fmt>-backend` library carrying the adapter/session sources, link the parser plus `explorer-core` into it, and add it to `explorer-formats`.
-6. Add the format's entry to `builtInFormats()` in `src/builtinformats.cpp`; the dialog filters and sample list follow from it. Extend `tests/tst_builtinformats.cpp` with its suffixes and a bundled sample.
+6. Add the format's entry, including its bundled sample filename, to `builtInFormats()` in `src/builtinformats.cpp`; the dialog filters and required sample list follow from it. Extend `tests/tst_builtinformats.cpp` and `tests/tst_check.cpp` with the format's suffixes, sample and a missing-sample negative control.
 7. Run the app, open a sample file (Ctrl+O or the NavPanel Open button), verify the tab opens and the tree populates.
 
 Workspace source builds need no parser release; package builds consume the parser's complete install archive, as described in [the build reference](../ref/cmake_build_system.md#complete-installed-packages).

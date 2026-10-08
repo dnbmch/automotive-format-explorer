@@ -106,6 +106,14 @@ QML engine reported no warning and the main window drew the last one
 runs every format backend and builds every center view, so a QML module or plugin
 missing from the package fails the gate, not only one the main window needs.
 
+The expected filenames come from the built-in format list, not directory contents:
+removing any sample fails the check. An unopenable or invalid MDF4 still produces
+an interactive diagnostic tab, but the check reports its opening error and fails.
+Recoverable file diagnostics, including the bundled DBC's dangling `VAL_`, remain
+successful opens. `tst_check` exercises the actual executable with complete, missing
+and corrupt sample payloads; `tst_builtinformats` checks that failure diagnostics
+remain available in their tabs.
+
 [scripts/smoke_windows.ps1](../../scripts/smoke_windows.ps1) runs the check on the
 deployed Windows platform plugin and passes on its exit code 0. On Windows the
 check also requires the main window uncloaked: [src/main.cpp](../../src/main.cpp)

@@ -111,8 +111,7 @@ int main(int argc, char* argv[]) {
     for (const QString& argument : parser.positionalArguments())
         files.push_back(QUrl::fromUserInput(argument, QDir::currentPath(), QUrl::AssumeLocalFile));
     if (check && files.isEmpty()) {
-        for (const QVariant& sample : controller.sampleFiles())
-            files.push_back(sample.toMap().value(QStringLiteral("url")).toUrl());
+        files = controller.bundledSamples();
     }
     OpenSequence opening(controller, files);
 

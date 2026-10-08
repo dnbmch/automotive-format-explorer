@@ -83,6 +83,12 @@ explorer_add_test(tst_appcontroller explorer-core)
 
 explorer_add_test(tst_opensequence explorer-core)
 
+explorer_add_test(tst_check)
+add_dependencies(tst_check automotive-format-explorer)
+target_compile_definitions(tst_check PRIVATE
+    EXPLORER_EXECUTABLE="$<TARGET_FILE:automotive-format-explorer>"
+    EXPLORER_SAMPLES_DIR="${PROJECT_SOURCE_DIR}/samples")
+
 # The production format list, opening each bundled sample through the controller.
 explorer_add_test(tst_builtinformats explorer-formats)
 target_compile_definitions(tst_builtinformats PRIVATE

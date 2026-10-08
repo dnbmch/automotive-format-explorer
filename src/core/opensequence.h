@@ -20,7 +20,7 @@ public:
     int failures() const;
 
 signals:
-    // An empty error: the file opened as a tab.
+    // An empty error means a usable document, not just a diagnostic tab.
     void outcome(const QUrl& file, const QString& error);
     void finished();
 

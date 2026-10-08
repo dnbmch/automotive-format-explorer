@@ -11,11 +11,12 @@
 #include <vector>
 
 // One supported format: its identity, the file suffixes it claims (lower case,
-// without the dot) and the adapter that loads them.
+// without the dot), its adapter and the sample shipped to exercise that backend.
 struct FormatEntry {
     FormatId id;
     QStringList extensions;
     std::unique_ptr<FormatAdapter> adapter;
+    QString sampleFile = {};
 };
 
 // The formats an application supports, in file-dialog order. The application

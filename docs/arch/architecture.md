@@ -46,7 +46,7 @@ Non-Windows builds skip the DWMWA dance and call `window->show()` directly.
 The application composes its formats once, at the composition boundary:
 `builtInFormats()` (`src/builtinformats.cpp`, target `explorer-formats`) returns a
 `FormatList` — one `FormatEntry { FormatId id; QStringList extensions;
-std::unique_ptr<FormatAdapter> adapter; }` per format, in dialog order: A2L `a2l`,
+std::unique_ptr<FormatAdapter> adapter; QString sampleFile; }` per format, in dialog order: A2L `a2l`,
 DBC `dbc`, LDF `ldf`, MDF4 `mf4`. It is the only code that names a concrete adapter.
 `main.cpp` moves the list into `AppController`'s constructor, which owns it for its
 whole lifetime. Tests compose the same constructor with the production list or with
@@ -61,9 +61,11 @@ Everything format-specific the shell needs derives from that list
   then one filter per format labelled with `formatDisplayName(id)`, then all files —
   exposed to QML as `AppController.fileDialogFilters`.
 - `supportedFiles()` lists the supported files of a directory by name.
-  `AppController::sampleFiles()` searches `samples/`, `../samples/` and
-  `../share/automotive-format-explorer/samples/` next to the executable and offers
-  the first non-empty result.
+  The sample directory is the first existing `samples/`, `../samples/` or
+  `../share/automotive-format-explorer/samples/` next to the executable; an empty
+  directory does not fall through to another bundle. `sampleFiles()` offers its
+  available supported files to the sidebar. `bundledSamples()` supplies every
+  `FormatEntry::sampleFile` path for the launch check, including missing files.
 
 `explorer-core` and the four `explorer-<fmt>-backend` targets are static libraries
 on every platform, linked into the one executable; each backend links its parser.
@@ -77,6 +79,11 @@ std::atomic<bool>& cancel) const` returns an owning `DocumentSession` plus
 diagnostics (`session` is null on hard failure). `cancel`, set from another thread,
 asks the load to stop early; an adapter whose parser cannot stop ignores it. Its
 format identity and suffixes live in the application's `FormatEntry`.
+
+A retained diagnostic session may describe an unsuccessful opening. Its
+`LoadResult::openingError` carries that failure; recoverable file diagnostics leave
+it empty. The MDF4 adapter derives this from the existing reader's `ready()` and
+failure diagnostic without opening the file again.
 
 ## Opening files and shutdown
 
@@ -123,14 +130,17 @@ follows it. The remaining tabs are destroyed with the controller.
 
 `OpenSequence` (`src/core/opensequence.h`) opens a list of files one after another
 through `openFile()`, opening the next from the event loop once the previous one's
-outcome has arrived: `fileLoaded`, or an error the controller raises while no load
+outcome has arrived: `fileLoaded(displayName, openingError)`, or an error the controller raises while no load
 runs. An error raised while a load runs refused another open and is not the
 sequence's. Each outcome is reported, a failed one counted; `finished()` follows the
 last, and every step runs from the event loop, `start()` included. `main.cpp` hands
 it the files named on the command line: `automotive-format-explorer [files...]`.
 
-With `--check`, `main.cpp` opens the named files, or every bundled sample when none
-is named. It counts the QML engine's warnings from before the window loads and,
+With `--check`, `main.cpp` opens the named files, or all declared bundled samples
+when none is named. Missing samples fail instead of shrinking the check's input.
+An MDF4 diagnostic tab remains inspectable but its failed opening counts as a
+failure; recoverable diagnostics such as the bundled DBC's dangling `VAL_` do not.
+It counts the QML engine's warnings from before the window loads and,
 after the last outcome, waits for the main window's next frame: the exit code is 0
 when every file opened, no warning arrived and the window is visible — on Windows
 also uncloaked — and 1 otherwise. One line per file, every warning and the verdict
