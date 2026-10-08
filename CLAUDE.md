@@ -161,7 +161,7 @@ See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-works
 ### CI / Release
 
 - `ci.yml` runs on push to `master` and `release/**` and on pull requests to `master`. The parser-package acquisition tests always run; the Windows MinGW and Ubuntu 24.04 app jobs run only when the repository variable `PARSER_PACKAGE_LOCK` is set. Both app jobs also package and run the launch gate, so a broken package surfaces before a tag is cut
-- `release.yml` triggers on `v*` tags: builds the Windows zip + Linux AppImage, then a `publish` job gated on both creates the GitHub release. A platform failure means no release object exists
+- `release.yml` triggers on `v*` tags: builds the Windows zip + Linux AppImage, then a `publish` job gated on both creates the GitHub release. A platform failure means no release object exists. Its jobs skip while `PARSER_PACKAGE_LOCK` is unset; a release is then cut from the workspace sources ([release packaging](docs/ref/release_packaging.md#release-from-sources))
 - Every CI and release job builds against Qt 6.10.1 from Qt's own binaries (`install-qt-action`), as local development does; on Windows msys2 supplies gcc, ninja, cmake, and protobuf
 - The launch gates run the packaged app's `--check`, which opens every bundled sample and exits non-zero on a failed open or a QML warning
 - Linux builds, tests and the AppImage run on srv-one before a push needs CI: workspace [local toolchain](../docs/ref/local_toolchain.md#linux-on-srv-one)

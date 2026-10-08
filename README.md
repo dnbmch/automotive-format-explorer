@@ -11,9 +11,7 @@ A desktop tool for inspecting **A2L**, **DBC**, **LDF**, and **MDF4** automotive
 > **Linux**: `chmod +x *.AppImage && ./automotive-format-explorer-*.AppImage` on Ubuntu 24.04 or newer,
 > or another distribution with glibc 2.38 or newer. Older distributions on request.
 >
-> The current v0.2.1 release includes A2L, DBC, and LDF; its AppImage needs the `libopengl0` package
-> (`sudo apt install libopengl0`). MDF4 support is on `master` and ships with the next release, whose
-> AppImage needs no extra package.
+> Release v0.3.0 opens A2L, DBC, LDF and MDF4 files.
 
 ---
 

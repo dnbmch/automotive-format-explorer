@@ -6,16 +6,6 @@ cards and single-channel plotting of whole recordings are built. Contracts:
 the reader is [mdf4-parser](../../../mdf4-parser/docs/arch/reader.md). This plan holds
 what is not built.
 
-## Release carrying MDF4
-
-No explorer release carries the MDF4 backend. One needs complete installed packages of
-all four parsers in `PARSER_PACKAGE_LOCK`, MDF4's with the bounded reader interface
-(`scan`, `axis`, typed outcomes)
-([build reference](../ref/cmake_build_system.md#acquire-complete-installed-packages)).
-It ships the reader as landed; the reader increments
-([mdf4-parser roadmap](../../../mdf4-parser/roadmap.md)) follow on demand.
-The explorer release is on-demand; do not create or retag an explorer v0.2.1 release.
-
 ## Real-recording acceptance
 
 - Open an `mdf4-writer` output file, plot a channel and compare its values with

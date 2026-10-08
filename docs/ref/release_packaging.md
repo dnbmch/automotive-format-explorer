@@ -1,9 +1,10 @@
 # Release packaging
 
-The explorer ships as a Windows zip and a Linux AppImage, both produced by
+The explorer ships as a Windows zip and a Linux AppImage, produced either by
 [.github/workflows/release.yml](../../.github/workflows/release.yml) on a `v*`
-tag. Every package resolves its own dependency closure and opens every bundled
-sample in its launch gate before a release object exists.
+tag from pinned parser packages or [from the workspace sources](#release-from-sources).
+Every package resolves its own dependency closure and opens every bundled sample in
+its launch gate before a release object exists.
 
 ## Parser package inputs
 
@@ -181,6 +182,28 @@ means no release object is ever created, so there is nothing to download.
 [ci.yml](../../.github/workflows/ci.yml) runs the same package and smoke steps
 on both platforms on every push to `master` and `release/**`, once
 `PARSER_PACKAGE_LOCK` is set, so a packaging fault surfaces before a tag is cut.
+While it is unset, `release.yml`'s jobs skip and a release is cut from sources.
+
+## Release from sources
+
+A release needs no published parser packages: both packages come from the
+workspace's source graph, which links the parsers' current sources, and are
+published with `gh`. Every repository is committed and pushed first, the release
+commit's README naming the version.
+
+1. Windows, on the workstation: `BUILD_TYPE=Release bash build-all.sh` from the
+   workspace root builds and tests everything; then
+   `QT_PREFIX=… bash scripts/package_windows.sh <build>/automotive-format-explorer <dist>`
+   and `scripts/smoke_windows.ps1 <dist>`. The zip holds `dist/`'s contents at its
+   root: `automotive-format-explorer-<tag>-windows-x64.zip`.
+2. Linux, on srv-one: `linux/check.sh` builds and tests the pushed heads and packages
+   and gates `/opt/aff/out/automotive-format-explorer-dev-linux-x86_64.AppImage`,
+   published as `automotive-format-explorer-<tag>-linux-x86_64.AppImage`
+   ([Linux on srv-one](../../../docs/ref/local_toolchain.md#linux-on-srv-one)).
+3. `gh release create <tag> --target <commit> --notes-file <notes> <zip> <AppImage>`
+   creates the tag and the release.
+4. Both assets are downloaded from the release and gated again; the
+   `aff-release-manifest` entry records every repository's commit.
 
 ## What a package must satisfy
 

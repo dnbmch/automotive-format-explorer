@@ -93,27 +93,21 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 
 ## In flight
 
-`v0.2.1` is the live release: A2L, DBC, and LDF (v0.2.0 plus the packaging
-repair, MDF4 excluded). Its tag preserves the shipped commit and the temporary
-release branch is retired. The real Windows download launches self-contained with
-no unresolved imports, and its packaged backends open the bundled A2L, DBC, and LDF.
-Its Linux AppImage starts only where the `libopengl0` package is installed: its
-executable names `libOpenGL.so.0`. `master` links `libGL.so.1`, so the next release
-needs no extra package; the README names the workaround meanwhile.
+`v0.3.0` is the live release: A2L, DBC, LDF and MDF4, built from the workspace
+sources on the workstation (Windows) and srv-one (Linux), each package passing its
+launch gate before publication
+([release from sources](docs/ref/release_packaging.md#release-from-sources)).
 
-Tab and session ownership and the bounded recording viewer are on `master`; their
-platform and operator checks are open in
-[docs/handoff.md](docs/handoff.md).
+Tab and session ownership and the bounded recording viewer are released; their
+remaining platform and operator checks are open in [docs/handoff.md](docs/handoff.md).
 
-MDF4 ships in no explorer release. The backend needs the reader's bounded interface
-(`scan`, `axis`, typed outcomes), which the published `mdf4-parser-lib` v0.1.0 lacks.
-Package CI and release jobs build against the complete installed packages pinned in
+Package CI and `release.yml` build against the complete installed packages pinned in
 the `PARSER_PACKAGE_LOCK` repository variable
-([build reference](docs/ref/cmake_build_system.md#acquire-complete-installed-packages)),
-so they need a complete MDF4 package carrying that interface; source builds and a
-local package prefix need no publication. Putting the MDF4 backend in a user's hands
-is an explorer release, which is on-demand
-([remaining scope](docs/plans/mdf4_viewer.md)).
+([build reference](docs/ref/cmake_build_system.md#acquire-complete-installed-packages))
+and skip while it is unset. A pin needs a complete MDF4 package with the reader's
+bounded interface (`scan`, `axis`, typed outcomes), which the published
+`mdf4-parser-lib` v0.1.0 lacks. Remaining MDF4 viewer scope:
+[plan](docs/plans/mdf4_viewer.md).
 
 The README screenshots (`docs/screenshot_*.png`) show the current build: the A2L
 memory map, the DBC and LDF signal maps and the MDF4 plot of a long recording.

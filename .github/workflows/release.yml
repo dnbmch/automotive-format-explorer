@@ -7,8 +7,12 @@ on:
 permissions:
   contents: write
 
+# The jobs build against the parser packages pinned in PARSER_PACKAGE_LOCK and skip
+# while it is unset; a release is then cut from the workspace sources instead
+# (docs/ref/release_packaging.md, "Release from sources").
 jobs:
   windows-mingw:
+    if: vars.PARSER_PACKAGE_LOCK != ''
     name: Windows MinGW
     runs-on: windows-latest
     defaults:
@@ -81,6 +85,7 @@ jobs:
           if-no-files-found: error
 
   linux:
+    if: vars.PARSER_PACKAGE_LOCK != ''
     name: Linux x86_64
     runs-on: ubuntu-24.04
 
