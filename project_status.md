@@ -115,8 +115,8 @@ local package prefix need no publication. Putting the MDF4 backend in a user's h
 is an explorer release, which is on-demand
 ([remaining scope](docs/plans/mdf4_viewer.md)).
 
-The bundled screenshots (`docs/screenshot_*.png`) predate the per-tab filter and
-sample links; regenerate them when the next release is cut.
+The README screenshots (`docs/screenshot_*.png`) show the current build: the A2L
+memory map, the DBC and LDF signal maps and the MDF4 plot of a long recording.
 
 ## Deferred
 

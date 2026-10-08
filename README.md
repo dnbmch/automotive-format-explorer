@@ -28,6 +28,9 @@ A desktop tool for inspecting **A2L**, **DBC**, **LDF**, and **MDF4** automotive
 ### LDF -- LIN Signal Map
 ![LDF Signal Map](docs/screenshot_lin.png)
 
+### MDF4 -- Signal Plot
+![MDF4 Signal Plot](docs/screenshot_mdf4.png)
+
 ---
 
 ## Features

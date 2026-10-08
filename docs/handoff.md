@@ -1,26 +1,5 @@
 # automotive-format-explorer — handoff
 
-## 2026-10-08 — command-line files, `--check`, both launch gates, the Linux package — OPEN
-
-Landed: files named on the command line open as tabs (`OpenSequence`); `--check` opens
-them or every bundled sample and exits on its verdict
-([opening several files](arch/architecture.md#opening-several-files)); both launch
-gates run it; `scripts/package_linux.sh` is the one Linux packaging path, on Qt 6.10.1
-like Windows, and the executable links `libGL.so.1`
-([release packaging](ref/release_packaging.md)). The check found a live QML warning:
-the filter shortcut bound one of `StandardKey.Find`'s keys; it is `Ctrl+F`, as
-documented. Proof: Windows suites green, the gate passes on `dist/` and fails without
-`platforms/qwindows.dll`; on srv-one every workspace suite passes on Ubuntu 24.04,
-the AppImage's gate passes on a virtual X server, and its check passes through FUSE on
-the box's Ubuntu 26.04 desktop, which has neither `libopengl0` nor `libfuse2`.
-
-UNVERIFIED — the AppImage by eye: over remote desktop (`mstsc` to
-`dnbm-srv-one.tail4bd2e4.ts.net`), start "Automotive Format Explorer (dev)" from the
-application grid, open the four samples from the sidebar and click through the A2L
-memory map, the DBC and LDF signal maps and the MDF4 `speed` plot with zoom and pan.
-Pass: readable text and every view draws. Fail: no window, garbled rendering, a view
-that stays empty, a crash.
-
 ## 2026-10-06 — MDF4 detail labels and opening cancellation — OPEN
 
 Landed: the MDF4 detail panel labels the big-endian data types, the algebraic and
