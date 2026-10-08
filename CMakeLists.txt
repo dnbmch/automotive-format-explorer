@@ -5,6 +5,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Qt's OpenGL link resolves to libGL.so.1 on Linux, as Qt's own libraries link.
+# CMake's GLVND default would name libOpenGL.so.0 instead, which a desktop
+# without the libopengl0 package lacks, and the executable would not start there.
+set(OpenGL_GL_PREFERENCE LEGACY)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Gui Qml Quick QuickControls2 QuickDialogs2)
 # Explorer uses protobuf reflection and JSON utilities directly.
 find_package(Protobuf CONFIG QUIET)
@@ -37,6 +41,7 @@ qt_add_library(explorer-core STATIC
     src/core/appcontroller.cpp
     src/core/documenttab.cpp
     src/core/formatlist.cpp
+    src/core/opensequence.cpp
     src/models/detailmodel.cpp
     src/models/memorymapmodel.cpp
     src/models/plotdata.cpp

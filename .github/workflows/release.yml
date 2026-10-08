@@ -87,17 +87,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The same Qt as the Windows job.
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.*'
+          version: '6.10.1'
           modules: 'qtshadertools'
+          cache: true
 
+      # Build dependencies, the xcb runtime that linuxdeploy bundles, then the
+      # virtual X server and software OpenGL the launch gate runs on.
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build protobuf-compiler libprotobuf-dev libabsl-dev \
-            libgl1-mesa-dev libxkbcommon-dev libfuse2
+            libgl1-mesa-dev libxkbcommon-dev \
+            libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 \
+            libfontconfig1 libdbus-1-3 libegl1 libglib2.0-0t64 \
+            xvfb xauth libgl1-mesa-dri
 
       - uses: actions/setup-python@v5
         with:
@@ -112,7 +120,7 @@ jobs:
           python scripts/acquire_parser_packages.py parser-package-lock.json x86_64-linux-gnu parser-prefix
 
       - name: Configure
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DAFF_PARSER_MODE=PACKAGE -DCMAKE_PREFIX_PATH="$PWD/parser-prefix;$QT_ROOT_DIR"
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAFF_PARSER_MODE=PACKAGE -DCMAKE_PREFIX_PATH="$PWD/parser-prefix;$QT_ROOT_DIR"
 
       - name: Build
         run: cmake --build build
@@ -120,47 +128,8 @@ jobs:
       - name: Test
         run: ctest --test-dir build --output-on-failure
 
-      - name: Package AppDir
-        run: |
-          mkdir -p AppDir/usr/bin AppDir/usr/share/icons/hicolor/256x256/apps \
-                   AppDir/usr/share/applications
-
-          cp build/automotive-format-explorer AppDir/usr/bin/
-
-          # Bundled sample files (resolved via bin/../share/ at runtime).
-          mkdir -p AppDir/usr/share/automotive-format-explorer
-          cp -r samples AppDir/usr/share/automotive-format-explorer/samples
-
-          cp resources/icons/explorer_256.png \
-            AppDir/usr/share/icons/hicolor/256x256/apps/automotive-format-explorer.png
-
-          cat > AppDir/usr/share/applications/automotive-format-explorer.desktop << 'DESKTOP'
-          [Desktop Entry]
-          Type=Application
-          Name=Automotive Format Explorer
-          Exec=automotive-format-explorer
-          Icon=automotive-format-explorer
-          Categories=Development;Engineering;
-          Comment=Inspect A2L, DBC, and LDF automotive files
-          DESKTOP
-
-          # Symlinks for AppImage convention.
-          ln -sf usr/share/applications/automotive-format-explorer.desktop AppDir/
-          ln -sf usr/share/icons/hicolor/256x256/apps/automotive-format-explorer.png AppDir/
-
-      - name: Download linuxdeploy
-        run: |
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
-          chmod +x linuxdeploy-*.AppImage
-
-      - name: Create AppImage
-        run: |
-          export QMAKE="${QT_ROOT_DIR}/bin/qmake"
-          export QML_SOURCES_PATHS="qml"
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage
-          mv Automotive_Format_Explorer-*.AppImage \
-            automotive-format-explorer-${GITHUB_REF_NAME}-linux-x86_64.AppImage
+      - name: Package
+        run: QT_PREFIX="$QT_ROOT_DIR" VERSION="$GITHUB_REF_NAME" bash scripts/package_linux.sh build .
 
       - name: Smoke test
         run: bash scripts/smoke_linux.sh .

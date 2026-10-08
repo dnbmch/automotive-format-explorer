@@ -2,8 +2,8 @@
 
 The explorer ships as a Windows zip and a Linux AppImage, both produced by
 [.github/workflows/release.yml](../../.github/workflows/release.yml) on a `v*`
-tag. Every package resolves its own dependency closure and is launched headless
-before a release object exists.
+tag. Every package resolves its own dependency closure and opens every bundled
+sample in its launch gate before a release object exists.
 
 ## Parser package inputs
 
@@ -17,13 +17,15 @@ successful package build. Source workspace builds need no release artifacts.
 
 ## One Qt everywhere
 
-Windows CI, the Windows release job, and local development all build against the
-same standalone Qt, installed in CI by `install-qt-action`
+Every CI and release job and local development build against Qt 6.10.1 from Qt's
+own binaries, installed in CI by `install-qt-action`
 ([.github/workflows/ci.yml](../../.github/workflows/ci.yml),
-[.github/workflows/release.yml](../../.github/workflows/release.yml)); msys2
-supplies gcc, ninja, cmake, and protobuf. `build.sh` does the same locally.
+[.github/workflows/release.yml](../../.github/workflows/release.yml)) and on srv-one
+by aqtinstall in the workspace's Linux image. On Windows msys2 supplies gcc,
+ninja, cmake, and protobuf, and `build.sh` does the same locally; on Linux Ubuntu
+24.04 supplies them.
 
-Two consequences carry the packaging design:
+Two consequences carry the Windows packaging design:
 
 - Official Qt mingw builds ship no ICU, so no ICU library is deployed and no
   version-pinned ICU file name can go stale under an msys2 roll.
@@ -74,26 +76,64 @@ libraries between releases — while a closure derived from import tables cannot
 disagree with the binaries. An
 import that resolves nowhere exits non-zero and fails the job.
 
+The package is unsigned, so Windows SmartScreen shows "Windows protected your PC"
+when a downloaded copy first starts; "More info → Run anyway" starts it.
+
+## The Linux package
+
+[scripts/package_linux.sh](../../scripts/package_linux.sh) is the single Linux
+packaging path — CI, the release job and the srv-one check all invoke it:
+
+```bash
+QT_PREFIX="$QT_ROOT_DIR" VERSION="$GITHUB_REF_NAME" bash scripts/package_linux.sh build .
+```
+
+It puts the samples under `usr/share/automotive-format-explorer/samples`, where
+the executable finds them, writes a desktop entry naming the four formats and
+taking files (`%F`), and hands the executable to linuxdeploy and its Qt plugin,
+pinned to tagged builds and run extracted, so the packaging host needs no FUSE.
+linuxdeploy bundles every library the executable and the deployed Qt plugins need,
+except those it leaves to the system: glibc, the OpenGL and X11 client libraries,
+fontconfig and their like. The only platform plugin is xcb; a Wayland desktop runs
+the application through Xwayland.
+
+The executable links `libGL.so.1`, as Qt's own libraries do
+([CMakeLists.txt](../../CMakeLists.txt) sets `OpenGL_GL_PREFERENCE` to `LEGACY`
+before Qt is found). CMake's GLVND default names `libOpenGL.so.0` and
+`libGLX.so.0` instead, and `libOpenGL.so.0` ships in `libopengl0`, a package a
+desktop can lack — the v0.2.1 AppImage stops there with `libOpenGL.so.0: cannot
+open shared object file`. The script refuses an executable that names it.
+
+The AppImage is built on Ubuntu 24.04, the parser packages' build host, and its
+binaries need at most `GLIBC_2.38`: it runs on Ubuntu 24.04 and newer and on
+distributions with glibc 2.38 or newer; Ubuntu 22.04 and Debian 12 are older.
+Older distributions are built on request. Its runtime mounts the image with the
+system's `fusermount`, so a desktop needs no `libfuse2`.
+
 ## Launch gates
 
-[scripts/smoke_windows.ps1](../../scripts/smoke_windows.ps1) launches the
-packaged executable on the deployed Windows platform plugin and passes only when
-the launched process shows its main window rendered: a visible Qt window titled
-"Automotive Format Explorer" that is no longer cloaked.
-[src/main.cpp](../../src/main.cpp) cloaks the window QML creates and uncloaks it
-on the first swapped frame, so the state proves that the platform plugin loaded,
-the QML engine built the window and the scene graph drew it. No application
-change serves the gate.
+Both gates run the packaged application's own check: `automotive-format-explorer
+--check` opens every bundled sample in turn and exits 0 only when each opened, the
+QML engine reported no warning and the main window drew the last one
+([architecture](../arch/architecture.md#opening-several-files)). Opening the samples
+runs every format backend and builds every center view, so a QML module or plugin
+missing from the package fails the gate, not only one the main window needs.
 
-The gate fails when the process exits first, when any other visible window of
-the process appears, or after its timeout (60 s by default); it stops only the
-process it launched, on every path. Each fault has its own report:
+[scripts/smoke_windows.ps1](../../scripts/smoke_windows.ps1) runs the check on the
+deployed Windows platform plugin and passes on its exit code 0. On Windows the
+check also requires the main window uncloaked: [src/main.cpp](../../src/main.cpp)
+cloaks the window QML creates and uncloaks it on the first swapped frame. The gate
+fails on a non-zero exit, when any other visible window of the process appears, or
+after its timeout (60 s by default); it stops only the process it launched, on
+every path, and prints the check's report after its verdict. Each fault has its
+own report:
 
 | Fault | Report |
 |---|---|
 | A DLL missing from `dist/` | exit `0xC0000135` before the window |
 | No platform plugin in `dist/` | Qt's fatal-error box, with its text |
 | A root object that will not instantiate | exit `-1` (`objectCreationFailed`) |
+| A sample that does not open, or a QML warning | exit `1`; the report names the file or the warning |
 
 The app runs with `PATH` reduced to the system directories and no `QT_*` or
 `QML*` variables, so nothing outside `dist/` can stand in for a missing file —
@@ -105,14 +145,19 @@ To check the gate, copy `dist/`, delete `platforms/qwindows.dll` or
 `Qt6Quick.dll` from the copy and run the gate on it: it must fail with the
 report above and leave no process behind.
 
-[scripts/smoke_linux.sh](../../scripts/smoke_linux.sh) runs the packaged
-AppImage with `QT_QPA_PLATFORM=offscreen` and `QSG_RHI_BACKEND=software`.
-Surviving `SMOKE_SECONDS` is its pass condition, and it requires exactly one
-packaged AppImage in the directory it is pointed at.
+[scripts/smoke_linux.sh](../../scripts/smoke_linux.sh) runs the AppImage's check
+as users run it, on its xcb platform plugin and Qt's default OpenGL scene graph,
+here on a virtual X server (`xvfb-run`) with Mesa's software rasterizer. The
+AppImage runs extracted (`APPIMAGE_EXTRACT_AND_RUN=1`); `SMOKE_SECONDS` (60 s by
+default) bounds the run, and the gate passes on the check's exit code 0. It
+requires exactly one packaged AppImage in the directory it is pointed at. It runs
+on the build host, which has every library the build needed; a start on a stock
+desktop is the srv-one pre-flight's
+([local toolchain](../../../docs/ref/local_toolchain.md#linux-on-srv-one)).
 
-The closure check and the launch gate catch disjoint faults: the first covers
-import tables, the second covers whether the deployed Qt can actually start a
-QML engine and build the window.
+The closure walk and the launch gate catch disjoint faults: the first covers
+import tables, the second whether the deployed Qt starts a QML engine, builds the
+window and every center view, and opens each format.
 
 ## The deployed QML tree
 
@@ -134,8 +179,8 @@ means no release object is ever created, so there is nothing to download.
 `release.yml` triggers only on `v*` tags.
 
 [ci.yml](../../.github/workflows/ci.yml) runs the same package and smoke steps
-on every push to `master` and `release/**`, so a packaging fault surfaces before
-a tag is cut.
+on both platforms on every push to `master` and `release/**`, once
+`PARSER_PACKAGE_LOCK` is set, so a packaging fault surfaces before a tag is cut.
 
 ## What a package must satisfy
 
@@ -145,4 +190,8 @@ a tag is cut.
 - `dist/` holds no Explorer library: the executable imports only Qt, toolchain,
   protobuf/Abseil/zlib and system DLLs.
 - `dist/libstdc++-6.dll` and `dist/libgcc_s_seh-1.dll` are msys2's, not Qt's.
+- `scripts/package_linux.sh` produces the AppImage, and `scripts/smoke_linux.sh`
+  passes against it, in the srv-one check before a tag is pushed.
+- The AppImage's executable names `libGL.so.1` and not `libOpenGL.so.0`, and it
+  starts on srv-one's desktop, which has no `libopengl0`.
 - A failure in either platform job leaves no GitHub release behind.

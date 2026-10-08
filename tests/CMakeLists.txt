@@ -81,6 +81,8 @@ set_property(TEST tst_navpanel APPEND PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offs
 
 explorer_add_test(tst_appcontroller explorer-core)
 
+explorer_add_test(tst_opensequence explorer-core)
+
 # The production format list, opening each bundled sample through the controller.
 explorer_add_test(tst_builtinformats explorer-formats)
 target_compile_definitions(tst_builtinformats PRIVATE

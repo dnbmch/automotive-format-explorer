@@ -1,14 +1,15 @@
-# Launch the packaged app and pass only once its main window has rendered.
+# Run the packaged app's own check and pass on its verdict.
 #
-# src/main.cpp cloaks the window QML creates and uncloaks it on the first
-# swapped frame. A visible, uncloaked Qt window of the launched process titled
-# "Automotive Format Explorer" therefore proves that the deployed Qt loaded its
-# platform plugin, the QML engine built the window and the scene graph drew it.
+# `automotive-format-explorer --check` opens every bundled sample in turn and
+# exits 0 only when each opened, the QML engine reported no warning and the main
+# window, shown and uncloaked, drew the last one (src/main.cpp). Its report is
+# printed after the verdict.
 #
-# Anything else fails: the process exiting first (a missing DLL fails the loader
-# before main(); a root object that will not instantiate exits -1), any other
-# visible window of the process (Qt's fatal-error box when no platform plugin
-# loads), or the timeout. Only the launched process is stopped, on every path.
+# Anything else fails: a non-zero exit (a missing DLL fails the loader before
+# main(); a root object that will not instantiate exits -1), any visible window
+# of the process other than the main window (Qt's fatal-error box when no
+# platform plugin loads), or the timeout. Only the launched process is stopped,
+# on every path.
 #
 # The app runs on the deployed Windows platform plugin with PATH reduced to the
 # system directories and no Qt variables, so a DLL or plugin missing from the
@@ -135,8 +136,10 @@ public static class SmokeWindows {
 
 $start = New-Object System.Diagnostics.ProcessStartInfo
 $start.FileName = $app
+$start.Arguments = '--check'
 $start.WorkingDirectory = Split-Path -Parent $app
 $start.UseShellExecute = $false
+$start.RedirectStandardError = $true
 foreach ($name in @($start.EnvironmentVariables.Keys)) {
     if ($name -match '^(QT_|QML)') {
         $start.EnvironmentVariables.Remove($name)
@@ -146,13 +149,20 @@ $start.EnvironmentVariables['PATH'] =
     "$env:SystemRoot\System32;$env:SystemRoot;$env:SystemRoot\System32\Wbem"
 
 $process = [System.Diagnostics.Process]::Start($start)
+# Read while the app runs, so a long report cannot fill the pipe and stall it.
+$report = $process.StandardError.ReadToEndAsync()
 $clock = [System.Diagnostics.Stopwatch]::StartNew()
 $verdict = $null
 $passed = $false
 try {
     while ($null -eq $verdict) {
         if ($process.HasExited) {
-            $verdict = 'exited before its window, code 0x{0:X8}' -f $process.ExitCode
+            if ($process.ExitCode -eq 0) {
+                $verdict = 'check passed after {0:N1} s' -f $clock.Elapsed.TotalSeconds
+                $passed = $true
+            } else {
+                $verdict = 'check failed, exit code 0x{0:X8}' -f $process.ExitCode
+            }
             break
         }
         foreach ($window in [SmokeWindows]::Visible($process.Id)) {
@@ -161,14 +171,9 @@ try {
                 $verdict = 'unexpected window {0} "{1}" {2}' -f $window.ClassName, $window.Title, $window.Text
                 break
             }
-            if (-not $window.Cloaked) {
-                $verdict = 'main window rendered after {0:N1} s' -f $clock.Elapsed.TotalSeconds
-                $passed = $true
-                break
-            }
         }
         if ($null -eq $verdict -and $clock.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
-            $verdict = "no rendered main window within $TimeoutSeconds s"
+            $verdict = "no verdict within $TimeoutSeconds s"
         }
         if ($null -eq $verdict) {
             Start-Sleep -Milliseconds 100
@@ -182,6 +187,9 @@ try {
 }
 
 Write-Host "smoke: pid $($process.Id): $verdict"
+if ($report.Wait(10000) -and $report.Result) {
+    Write-Host $report.Result.TrimEnd()
+}
 if ($passed) {
     exit 0
 }

@@ -6,11 +6,14 @@ A desktop tool for inspecting **A2L**, **DBC**, **LDF**, and **MDF4** automotive
 
 > **[Download latest release](https://github.com/dnbmch/automotive-format-explorer/releases/latest)**
 >
-> **Windows**: extract the zip and run `automotive-format-explorer.exe`
-> **Linux**: `chmod +x *.AppImage && ./automotive-format-explorer-*.AppImage`
+> **Windows**: extract the zip and run `automotive-format-explorer.exe`. The download is unsigned, so
+> SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**.
+> **Linux**: `chmod +x *.AppImage && ./automotive-format-explorer-*.AppImage` on Ubuntu 24.04 or newer,
+> or another distribution with glibc 2.38 or newer. Older distributions on request.
 >
-> The current v0.2.1 release includes A2L, DBC, and LDF. MDF4 support is on `master` and ships with
-> the next release.
+> The current v0.2.1 release includes A2L, DBC, and LDF; its AppImage needs the `libopengl0` package
+> (`sudo apt install libopengl0`). MDF4 support is on `master` and ships with the next release, whose
+> AppImage needs no extra package.
 
 ---
 
@@ -117,6 +120,10 @@ Open multiple files side by side. Async file loading keeps the UI responsive for
 
 One sample file per format, the `mdf4-writer`-authored `.mf4` recording included, ships with the app ([samples/](samples/)); when no file is open, the sidebar offers them as one-click "open a sample" links. Provenance and licenses: [samples/SAMPLES.md](samples/SAMPLES.md). The DBC sample deliberately demonstrates the diagnostics badge — it carries one dangling `VAL_` entry the parser reports as DROPPED.
 
+### Command Line
+
+`automotive-format-explorer [files...]` opens each named file in its own tab. With `--check` it opens the named files, or every bundled sample when none is named, and exits with 0 when each opened and drew without a QML warning, 1 otherwise, reporting one line per file on stderr. The release builds run it as their launch test.
+
 ---
 
 ## Parser Libraries
@@ -176,7 +183,7 @@ are used directly through the same public targets as installed packages.
 
 - Every format backend is linked statically into the one executable on all platforms.
 - **Windows (MinGW)**: Primary development platform.
-- **Linux**: Tested on Ubuntu 24.04 with system protobuf.
+- **Linux**: Built and tested on Ubuntu 24.04 with system protobuf. The AppImage needs glibc 2.38 or newer and runs on X11 and, through Xwayland, on Wayland desktops.
 
 ## Documentation
 
@@ -187,7 +194,7 @@ are used directly through the same public targets as installed packages.
 - [docs/ref/signal_plot.md](docs/ref/signal_plot.md) — format-neutral time-series plot reference.
 - [docs/ref/keyboard.md](docs/ref/keyboard.md) — application + grid keyboard shortcuts.
 - [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — canonical parser dependencies, runtime dependency closure, static backend composition.
-- [docs/ref/release_packaging.md](docs/ref/release_packaging.md) — Windows package path, launch gates, release publish gating.
+- [docs/ref/release_packaging.md](docs/ref/release_packaging.md) — Windows and Linux package paths, launch gates, release publish gating.
 - [roadmap.md](roadmap.md) — direction and planned work.
 - [project_status.md](project_status.md) — current state of play.
 - [docs/backlog.md](docs/backlog.md) — known issues / planned changes.

@@ -119,6 +119,24 @@ Once shutdown has started, no completion adds a tab, changes the current tab, em
 row change already under way when an observer shuts down still completes; nothing
 follows it. The remaining tabs are destroyed with the controller.
 
+### Opening several files
+
+`OpenSequence` (`src/core/opensequence.h`) opens a list of files one after another
+through `openFile()`, opening the next from the event loop once the previous one's
+outcome has arrived: `fileLoaded`, or an error the controller raises while no load
+runs. An error raised while a load runs refused another open and is not the
+sequence's. Each outcome is reported, a failed one counted; `finished()` follows the
+last, and every step runs from the event loop, `start()` included. `main.cpp` hands
+it the files named on the command line: `automotive-format-explorer [files...]`.
+
+With `--check`, `main.cpp` opens the named files, or every bundled sample when none
+is named. It counts the QML engine's warnings from before the window loads and,
+after the last outcome, waits for the main window's next frame: the exit code is 0
+when every file opened, no warning arrived and the window is visible — on Windows
+also uncloaked — and 1 otherwise. One line per file, every warning and the verdict
+go to stderr. The launch gates run the packaged application this way
+([release packaging](../ref/release_packaging.md#launch-gates)).
+
 ## Tabs
 
 Each open file is one `DocumentTab` (`src/core/documenttab.h`), owned by the

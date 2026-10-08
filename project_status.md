@@ -52,6 +52,10 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - Bundled samples (one per format, `samples/`, including a writer-authored
   `.mf4` recording) with "open a sample" links in the empty sidebar; provenance
   in `samples/SAMPLES.md`.
+- Command line: `automotive-format-explorer [files...]` opens each file as a tab,
+  one after another (`OpenSequence`). `--check` opens the named files or every
+  bundled sample and exits 0 only when each opened, the QML engine reported no
+  warning and the main window drew the last one; the launch gates run it.
 - Splash overlay + DWM cloak startup.
 - Links the four canonical parser targets, from complete installed packages or
   source workspace composition. GPL-3.0.
@@ -73,15 +77,18 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   ctest skip when that resolves to nothing.
 - CI (Windows MinGW + Ubuntu, also on `release/**`; the app jobs run only when the
   repository variable `PARSER_PACKAGE_LOCK` is set) + `release.yml` (Windows zip
-  + Linux AppImage). Windows CI and release build against the same standalone Qt
-  as local development.
-- Windows packaging by dependency closure (`scripts/package_windows.sh`) plus launch
-  gates: on Windows the packaged app must render its main window from `dist/` alone
-  (`scripts/smoke_windows.ps1`), on Linux the AppImage must stay up headless
-  (`scripts/smoke_linux.sh`). Release jobs run ctest before packaging and publish only
-  after both platforms pass. The Windows gate is proven locally on a working and two
-  broken packages; the Linux gate is locally syntax-checked. Neither has a runner
-  proof yet. See
+  + Linux AppImage). Every job builds against Qt 6.10.1, as local development does,
+  and both app jobs package and run the launch gate.
+- Packaging: Windows by dependency closure (`scripts/package_windows.sh`), Linux as
+  an AppImage (`scripts/package_linux.sh`, linuxdeploy pinned) whose executable links
+  `libGL.so.1`. Both launch gates run the packaged app's `--check`
+  (`scripts/smoke_windows.ps1`; `scripts/smoke_linux.sh` on a virtual X server).
+  Release jobs run ctest before packaging and publish only after both platforms pass.
+  Proven locally: the Windows gate passes on `dist/` and fails without the platform
+  plugin; the workspace builds and tests on Ubuntu 24.04 in the srv-one container,
+  where the AppImage's gate passes, and the AppImage's check passes through FUSE on
+  srv-one's Ubuntu 26.04 desktop, which has no `libopengl0`. Neither gate has a
+  runner proof yet. See
   [docs/ref/release_packaging.md](docs/ref/release_packaging.md).
 
 ## In flight
@@ -90,6 +97,9 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 repair, MDF4 excluded). Its tag preserves the shipped commit and the temporary
 release branch is retired. The real Windows download launches self-contained with
 no unresolved imports, and its packaged backends open the bundled A2L, DBC, and LDF.
+Its Linux AppImage starts only where the `libopengl0` package is installed: its
+executable names `libOpenGL.so.0`. `master` links `libGL.so.1`, so the next release
+needs no extra package; the README names the workaround meanwhile.
 
 Tab and session ownership and the bounded recording viewer are on `master`; their
 platform and operator checks are open in

@@ -103,10 +103,10 @@ dialog opened before the flag is dropped.
 
 ### BL-K2: prove the Linux AppImage launch gate on a runner
 
-`scripts/smoke_linux.sh` runs the AppImage offscreen with
-`APPIMAGE_EXTRACT_AND_RUN=1`, and `release.yml` places it before artifact upload.
-The script is syntax-checked locally; close this item after its first successful
-Ubuntu release-workflow run.
+`scripts/smoke_linux.sh` runs the AppImage's `--check` on a virtual X server, after
+packaging in `ci.yml` and before artifact upload in `release.yml`. It passes in the
+srv-one container, an Ubuntu 24.04 image with the release job's packages; close this
+item after its first successful Ubuntu workflow run.
 
 **Size:** XS verification.
 

@@ -160,15 +160,18 @@ See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-works
 
 ### CI / Release
 
-- `ci.yml` runs on push to `master` and `release/**` and on pull requests to `master`. The parser-package acquisition tests always run; the Windows MinGW and Ubuntu 24.04 app jobs run only when the repository variable `PARSER_PACKAGE_LOCK` is set. The Windows job also packages and smoke-tests, so a broken package surfaces before a tag is cut
+- `ci.yml` runs on push to `master` and `release/**` and on pull requests to `master`. The parser-package acquisition tests always run; the Windows MinGW and Ubuntu 24.04 app jobs run only when the repository variable `PARSER_PACKAGE_LOCK` is set. Both app jobs also package and run the launch gate, so a broken package surfaces before a tag is cut
 - `release.yml` triggers on `v*` tags: builds the Windows zip + Linux AppImage, then a `publish` job gated on both creates the GitHub release. A platform failure means no release object exists
-- Windows CI and release build against the same standalone Qt as local development (`install-qt-action`); msys2 supplies gcc, ninja, cmake, and protobuf
+- Every CI and release job builds against Qt 6.10.1 from Qt's own binaries (`install-qt-action`), as local development does; on Windows msys2 supplies gcc, ninja, cmake, and protobuf
+- The launch gates run the packaged app's `--check`, which opens every bundled sample and exits non-zero on a failed open or a QML warning
+- Linux builds, tests and the AppImage run on srv-one before a push needs CI: workspace [local toolchain](../docs/ref/local_toolchain.md#linux-on-srv-one)
 - Do NOT re-tag unless the workflow is verified. Each release build takes ~3 min
-- Packaging path, launch gates, and publish gating: [docs/ref/release_packaging.md](docs/ref/release_packaging.md)
+- Packaging paths, launch gates, and publish gating: [docs/ref/release_packaging.md](docs/ref/release_packaging.md)
 
 ### Platform differences
 
 | | Windows | Linux |
 |---|---------|-------|
-| Qt deploy | `windeployqt` + dependency-closure walk (`scripts/deploy_closure.sh`, shared by the package and the build-tree deploy) | AppImage via linuxdeploy |
+| Qt deploy | `windeployqt` + dependency-closure walk (`scripts/deploy_closure.sh`, shared by the package and the build-tree deploy) | AppImage by `scripts/package_linux.sh`: linuxdeploy and its Qt plugin, pinned |
+| OpenGL link | — | `libGL.so.1`, as Qt's libraries link it (`OpenGL_GL_PREFERENCE` `LEGACY`) |
 | Protobuf JSON | `google/protobuf/util/json_util.h` (stable API, works on both v3 and v4+) | |

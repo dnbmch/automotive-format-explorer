@@ -59,7 +59,7 @@ ApplicationWindow {
 
     // Focus the tree filter (opens the sidebar if hidden)
     Shortcut {
-        sequence: StandardKey.Find
+        sequence: "Ctrl+F"
         onActivated: {
             root.leftPaneVisible = true
             navPanel.focusSearch()

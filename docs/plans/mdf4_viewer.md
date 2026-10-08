@@ -12,6 +12,8 @@ No explorer release carries the MDF4 backend. One needs complete installed packa
 all four parsers in `PARSER_PACKAGE_LOCK`, MDF4's with the bounded reader interface
 (`scan`, `axis`, typed outcomes)
 ([build reference](../ref/cmake_build_system.md#acquire-complete-installed-packages)).
+It ships the reader as landed; the reader increments
+([mdf4-parser roadmap](../../../mdf4-parser/roadmap.md)) follow on demand.
 The explorer release is on-demand; do not create or retag an explorer v0.2.1 release.
 
 ## Real-recording acceptance

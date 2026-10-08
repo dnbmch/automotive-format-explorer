@@ -1,5 +1,26 @@
 # automotive-format-explorer — handoff
 
+## 2026-10-08 — command-line files, `--check`, both launch gates, the Linux package — OPEN
+
+Landed: files named on the command line open as tabs (`OpenSequence`); `--check` opens
+them or every bundled sample and exits on its verdict
+([opening several files](arch/architecture.md#opening-several-files)); both launch
+gates run it; `scripts/package_linux.sh` is the one Linux packaging path, on Qt 6.10.1
+like Windows, and the executable links `libGL.so.1`
+([release packaging](ref/release_packaging.md)). The check found a live QML warning:
+the filter shortcut bound one of `StandardKey.Find`'s keys; it is `Ctrl+F`, as
+documented. Proof: Windows suites green, the gate passes on `dist/` and fails without
+`platforms/qwindows.dll`; on srv-one every workspace suite passes on Ubuntu 24.04,
+the AppImage's gate passes on a virtual X server, and its check passes through FUSE on
+the box's Ubuntu 26.04 desktop, which has neither `libopengl0` nor `libfuse2`.
+
+UNVERIFIED — the AppImage by eye: over remote desktop (`mstsc` to
+`dnbm-srv-one.tail4bd2e4.ts.net`), start "Automotive Format Explorer (dev)" from the
+application grid, open the four samples from the sidebar and click through the A2L
+memory map, the DBC and LDF signal maps and the MDF4 `speed` plot with zoom and pan.
+Pass: readable text and every view draws. Fail: no window, garbled rendering, a view
+that stays empty, a crash.
+
 ## 2026-10-06 — MDF4 detail labels and opening cancellation — OPEN
 
 Landed: the MDF4 detail panel labels the big-endian data types, the algebraic and
@@ -46,16 +67,15 @@ Landmines:
   into the build root. Any script CMake or Ninja invokes must pin its own msys
   runtime's tools first ([runtime provenance](ref/cmake_build_system.md#runtime-provenance-on-windows)).
 
-UNVERIFIED — CI and platforms: no Linux build or test run of the static composition,
-the sparse memory view, tab ownership (the offscreen QML modules of `tst_navpanel`
-and `tst_signalplotview` among them) or the bounded viewer; no Linux AppImage
-packaging and launch gate (BL-K2); no runner run of the Windows launch gate
-(`scripts/smoke_windows.ps1`, proven locally; on a runner it needs an interactive
-desktop and Windows PowerShell under the step's `pwsh` shell). Package CI first needs
-a complete MDF4 package with the bounded interface in `PARSER_PACKAGE_LOCK`. Pass =
-app build and ctest green on both CI jobs and the Windows smoke step reporting
-"main window rendered"; fail = any configure, build or test failure, or a smoke
-report of an early exit, an unexpected window or a timeout.
+UNVERIFIED — CI runners: no runner run of the package-mode app builds or of either
+launch gate. On a runner the Windows gate needs an interactive desktop and Windows
+PowerShell under the step's `pwsh` shell; the Linux gate (BL-K2) needs `xvfb-run`.
+Package CI first needs a complete MDF4 package with the bounded interface in
+`PARSER_PACKAGE_LOCK`. The source-mode Linux build and every suite, the AppImage and
+its gate pass in the srv-one container (2026-10-08 entry). Pass = app build, ctest
+and the launch gate green on both CI jobs, each gate reporting "check passed"; fail
+= any configure, build or test failure, or a gate reporting a failed check, an
+unexpected window or no verdict.
 
 UNVERIFIED — the 16 GB reference laptop: build `build-i2i3/b/measure/` (its
 `CMakeLists.txt`) against the landed reader and Explorer and run its scenarios
