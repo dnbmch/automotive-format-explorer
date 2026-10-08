@@ -70,44 +70,33 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   controller load/shutdown lifetimes and the tab contract through a fake adapter,
   tab navigation and pre-filter snapshots, lazy raw JSON, the painted items'
   model lifetimes, and the production nav panel offscreen, registered with
-  ctest; the CI app jobs run them once `PARSER_PACKAGE_LOCK` is set. The end-to-end
+  ctest; `release-explorer.sh` runs them on both platforms before a release. The end-to-end
   writer-file smoke opens and plots the bundled `samples/demo_recording.mf4`
   through the production adapter, and a truncated copy asks for a reload;
   `MDF4_WRITER_SAMPLE` points it at a different recording, and it reports as a
   ctest skip when that resolves to nothing.
-- CI (Windows MinGW + Ubuntu, also on `release/**`; the app jobs run only when the
-  repository variable `PARSER_PACKAGE_LOCK` is set) + `release.yml` (Windows zip
-  + Linux AppImage). Every job builds against Qt 6.10.1, as local development does,
-  and both app jobs package and run the launch gate.
+- Releases from the workspace sources, one command: `release-explorer.sh <tag>` at the
+  workspace root builds and tests everything on the workstation (Windows) and srv-one
+  (Linux, Ubuntu 24.04), packages and gates both, publishes the GitHub release, gates
+  the downloaded assets again and records the manifest entry. Qt 6.10.1 on both. The
+  repository has no workflows.
 - Packaging: Windows by dependency closure (`scripts/package_windows.sh`), Linux as
   an AppImage (`scripts/package_linux.sh`, linuxdeploy pinned) whose executable links
   `libGL.so.1`. Both launch gates run the packaged app's `--check`
-  (`scripts/smoke_windows.ps1`; `scripts/smoke_linux.sh` on a virtual X server).
-  Release jobs run ctest before packaging and publish only after both platforms pass.
-  Proven locally: the Windows gate passes on `dist/` and fails without the platform
-  plugin; the workspace builds and tests on Ubuntu 24.04 in the srv-one container,
-  where the AppImage's gate passes, and the AppImage's check passes through FUSE on
-  srv-one's Ubuntu 26.04 desktop, which has no `libopengl0`. Neither gate has a
-  runner proof yet. See
+  (`scripts/smoke_windows.ps1`; `scripts/smoke_linux.sh` on a virtual X server); the
+  Windows gate fails without the platform plugin, and the AppImage's check passes
+  through FUSE on srv-one's Ubuntu 26.04 desktop, which has no `libopengl0`. See
   [docs/ref/release_packaging.md](docs/ref/release_packaging.md).
 
 ## In flight
 
-`v0.3.0` is the live release: A2L, DBC, LDF and MDF4, built from the workspace
-sources on the workstation (Windows) and srv-one (Linux), each package passing its
-launch gate before publication
-([release from sources](docs/ref/release_packaging.md#release-from-sources)).
+The [latest release](https://github.com/dnbmch/automotive-format-explorer/releases/latest)
+opens A2L, DBC, LDF and MDF4; every release and the commits in it are in
+`dnbmch/aff-release-manifest`.
 
 Tab and session ownership and the bounded recording viewer are released; their
 remaining platform and operator checks are open in [docs/handoff.md](docs/handoff.md).
-
-Package CI and `release.yml` build against the complete installed packages pinned in
-the `PARSER_PACKAGE_LOCK` repository variable
-([build reference](docs/ref/cmake_build_system.md#acquire-complete-installed-packages))
-and skip while it is unset. A pin needs a complete MDF4 package with the reader's
-bounded interface (`scan`, `axis`, typed outcomes), which the published
-`mdf4-parser-lib` v0.1.0 lacks. Remaining MDF4 viewer scope:
-[plan](docs/plans/mdf4_viewer.md).
+Remaining MDF4 viewer scope: [plan](docs/plans/mdf4_viewer.md).
 
 The README screenshots (`docs/screenshot_*.png`) show the current build: the A2L
 memory map, the DBC and LDF signal maps and the MDF4 plot of a long recording.

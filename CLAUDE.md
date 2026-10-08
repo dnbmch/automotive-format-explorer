@@ -127,7 +127,7 @@ No external consumers: every contract we own — proto, API, schema, file format
 
 ## Project notes
 
-**Release is on-demand; there are no active users.** The app ships as a GPL-3.0 GitHub release, but we release only to exercise the current build against fresh parser artifacts — not on every change. With no users there is no cross-release backward-compat obligation; keep the backend seam (FormatAdapter / DocumentSession) internally coherent and change it when the design improves. See workspace [CLAUDE.md](../CLAUDE.md) "Release cadence".
+**Release is on-demand; there are no active users.** The app ships as a GPL-3.0 GitHub release, cut from the workspace sources on the operator's instruction — not on every change. With no users there is no cross-release backward-compat obligation; keep the backend seam (FormatAdapter / DocumentSession) internally coherent and change it when the design improves. See workspace [CLAUDE.md](../CLAUDE.md) "Release cadence".
 
 **The plot stack takes operator-authored changes only** (`plotdata`, `SignalPlotModel`, `SignalPlotItem`, `SignalPlotView.qml`), so it can be relicensed for a live view in the proprietary product apps ([signal plot](docs/ref/signal_plot.md)).
 
@@ -158,15 +158,14 @@ See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-works
 
 - Qt 6 + QML is the entire UI layer. The workspace "no Qt" rule applies to the parser/library repos, not here
 
-### CI / Release
+### Release
 
-- `ci.yml` runs on push to `master` and `release/**` and on pull requests to `master`. The parser-package acquisition tests always run; the Windows MinGW and Ubuntu 24.04 app jobs run only when the repository variable `PARSER_PACKAGE_LOCK` is set. Both app jobs also package and run the launch gate, so a broken package surfaces before a tag is cut
-- `release.yml` triggers on `v*` tags: builds the Windows zip + Linux AppImage, then a `publish` job gated on both creates the GitHub release. A platform failure means no release object exists. Its jobs skip while `PARSER_PACKAGE_LOCK` is unset; a release is then cut from the workspace sources ([release packaging](docs/ref/release_packaging.md#release-from-sources))
-- Every CI and release job builds against Qt 6.10.1 from Qt's own binaries (`install-qt-action`), as local development does; on Windows msys2 supplies gcc, ninja, cmake, and protobuf
+- A release is one command at the workspace root, run only on the operator's instruction: `bash release-explorer.sh vX.Y.Z [--notes FILE] [--dry-run]`. It refuses unless every repository is committed and pushed, builds and tests everything on Windows here and on Linux on srv-one, packages and gates both, publishes the GitHub release, gates the downloaded assets again and records the manifest entry. `--dry-run` stops before publishing
+- The repository has no workflows: the public repo cannot reach the private parser sources, so builds, tests and gates run in that script
+- Both platforms build against Qt 6.10.1 from Qt's own binaries; on Windows msys2 supplies gcc, ninja, cmake, and protobuf; Linux builds run on srv-one: workspace [local toolchain](../docs/ref/local_toolchain.md#linux-on-srv-one)
 - The launch gates run the packaged app's `--check`, which opens every bundled sample and exits non-zero on a failed open or a QML warning
-- Linux builds, tests and the AppImage run on srv-one before a push needs CI: workspace [local toolchain](../docs/ref/local_toolchain.md#linux-on-srv-one)
-- Do NOT re-tag unless the workflow is verified. Each release build takes ~3 min
-- Packaging paths, launch gates, and publish gating: [docs/ref/release_packaging.md](docs/ref/release_packaging.md)
+- Never re-tag a published version
+- Packaging paths and launch gates: [docs/ref/release_packaging.md](docs/ref/release_packaging.md)
 
 ### Platform differences
 

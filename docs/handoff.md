@@ -46,16 +46,6 @@ Landmines:
   into the build root. Any script CMake or Ninja invokes must pin its own msys
   runtime's tools first ([runtime provenance](ref/cmake_build_system.md#runtime-provenance-on-windows)).
 
-UNVERIFIED — CI runners: no runner run of the package-mode app builds or of either
-launch gate. On a runner the Windows gate needs an interactive desktop and Windows
-PowerShell under the step's `pwsh` shell; the Linux gate (BL-K2) needs `xvfb-run`.
-Package CI first needs a complete MDF4 package with the bounded interface in
-`PARSER_PACKAGE_LOCK`. The source-mode Linux build and every suite, the AppImage and
-its gate pass in the srv-one container (2026-10-08 entry). Pass = app build, ctest
-and the launch gate green on both CI jobs, each gate reporting "check passed"; fail
-= any configure, build or test failure, or a gate reporting a failed check, an
-unexpected window or no verdict.
-
 UNVERIFIED — the 16 GB reference laptop: build `build-i2i3/b/measure/` (its
 `CMakeLists.txt`) against the landed reader and Explorer and run its scenarios
 (`run_measurements.py`) there with the generated 14-hour recordings; the recorded

@@ -101,15 +101,6 @@ dialog opened before the flag is dropped.
 
 **Size:** S to change, M to verify honestly.
 
-### BL-K2: prove the Linux AppImage launch gate on a runner
-
-`scripts/smoke_linux.sh` runs the AppImage's `--check` on a virtual X server, after
-packaging in `ci.yml` and before artifact upload in `release.yml`. It passes in the
-srv-one container, an Ubuntu 24.04 image with the release job's packages; close this
-item after its first successful Ubuntu workflow run.
-
-**Size:** XS verification.
-
 ### BL-K5: a toolchain downgrade can leave a stale DLL in the build tree
 
 `scripts/deploy_closure.sh` refreshes already-deployed files with `cp -u`

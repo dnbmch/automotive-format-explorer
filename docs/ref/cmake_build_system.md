@@ -25,40 +25,18 @@ workspace. From the workspace root, configure with `-DAFF_BUILD_EXPLORER=ON`.
 Both modes configure offline. `EXPLORER_BUILD_TESTS=OFF` omits Qt Test discovery
 and the test executables.
 
-### Acquire complete installed packages
+### Complete installed packages
 
-Each producer archive contains `include/`, `lib/`, `proto/` and
-`share/<target>/build-info.json` from the same install. The identity records
-source and public-header revisions, tracked modifications, compiler, platform,
-build configuration and dependency versions. Keep generated headers paired with
-the archive; changing the local protobuf generator cannot repair an ABI mismatch.
-
-[scripts/acquire_parser_packages.py](../../scripts/acquire_parser_packages.py)
-requires Python 3.12+ and a JSON lock whose platform entries each list the four
-packages. Every package has `name`, `url` and mandatory lowercase `sha256` keys.
-URLs select complete archives; hashes are computed from the actual chosen bytes.
-
-```bash
-python scripts/acquire_parser_packages.py parser-package-lock.json \
-  x86_64-windows-mingw parser-prefix
-```
-
-The script verifies every hash, rejects missing or duplicate parsers and
-incomplete install layouts, and publishes the combined prefix only after every
-archive passes. The destination must be new. The lock is saved in that prefix.
-Local `file://` archive URLs support the same verification path without network.
-
-CI and release workflows obtain the JSON lock from the repository variable
-`PARSER_PACKAGE_LOCK`, with `x86_64-windows-mingw` and `x86_64-linux-gnu` entries.
-Set it to actual complete-install releases before running package CI. The app
-build jobs skip while it is unset; acquisition-script tests still run. Release
-jobs require the lock and fail if it is missing. Historical
-split header/binary releases do not satisfy this contract. New package publication
-and remote workflow execution are separate operator actions.
-
-If package discovery fails, check the install prefix and its compiler/dependency
-identity. If a hash fails, verify the selected bytes and URL. Neither case is
-resolved by skipping verification or replacing producer-generated headers.
+Each parser `-lib` release publishes one complete install archive per platform,
+containing `include/`, `lib/`, `proto/` and `share/<target>/build-info.json` from
+the same install. The identity records source and public-header revisions, tracked
+modifications, compiler, platform, build configuration and dependency versions. A
+`PACKAGE` build unpacks the four archives of its platform into one prefix. Keep
+generated headers paired with the archive; changing the local protobuf generator
+cannot repair an ABI mismatch, and split header/binary releases do not satisfy the
+contract. If package discovery fails, check the prefix and its compiler and
+dependency identity. Releases are built in `SOURCE` mode from the workspace
+([release packaging](release_packaging.md#releasing)).
 
 ## Runtime provenance on Windows
 

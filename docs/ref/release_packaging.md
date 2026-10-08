@@ -1,30 +1,16 @@
 # Release packaging
 
-The explorer ships as a Windows zip and a Linux AppImage, produced either by
-[.github/workflows/release.yml](../../.github/workflows/release.yml) on a `v*`
-tag from pinned parser packages or [from the workspace sources](#release-from-sources).
-Every package resolves its own dependency closure and opens every bundled sample in
-its launch gate before a release object exists.
-
-## Parser package inputs
-
-App builds acquire complete parser install archives before configuring CMake.
-The repository variable `PARSER_PACKAGE_LOCK` supplies platform-specific URLs
-and mandatory SHA256 pins. Parser headers and archives stay paired with their
-producer identity. See [package selection](cmake_build_system.md#parser-dependencies).
-CI app jobs skip until this explicit input is set; acquisition-script tests run
-independently. Release jobs require the lock and cannot publish without a
-successful package build. Source workspace builds need no release artifacts.
+The explorer ships as a Windows zip and a Linux AppImage, built from the workspace
+sources and published by one command ([Releasing](#releasing)). Every package
+resolves its own dependency closure and opens every bundled sample in its launch
+gate before it is published, and again after it is downloaded from the release.
 
 ## One Qt everywhere
 
-Every CI and release job and local development build against Qt 6.10.1 from Qt's
-own binaries, installed in CI by `install-qt-action`
-([.github/workflows/ci.yml](../../.github/workflows/ci.yml),
-[.github/workflows/release.yml](../../.github/workflows/release.yml)) and on srv-one
-by aqtinstall in the workspace's Linux image. On Windows msys2 supplies gcc,
-ninja, cmake, and protobuf, and `build.sh` does the same locally; on Linux Ubuntu
-24.04 supplies them.
+Both platforms build against Qt 6.10.1 from Qt's own binaries: the standalone
+install on the workstation that `build-all.sh` and `build.sh` name, and aqtinstall's
+in the workspace's Linux image on srv-one. On Windows msys2 supplies gcc, ninja,
+cmake and protobuf; on Linux Ubuntu 24.04 supplies them.
 
 Two consequences carry the Windows packaging design:
 
@@ -42,17 +28,16 @@ release.
 ## The Windows package
 
 [scripts/package_windows.sh](../../scripts/package_windows.sh) is the single
-packaging path — CI, the release job, and local runs all invoke it:
+packaging path; the release and local runs invoke it:
 
 ```bash
-QT_PREFIX="$QT_ROOT_DIR" bash scripts/package_windows.sh build dist
+QT_PREFIX=C:/Qt/6.10.1/mingw_64 bash scripts/package_windows.sh <build> <dist>
 ```
 
 `QT_PREFIX` names the standalone Qt `mingw_64` root. `MINGW_BIN` names the msys2
 `mingw64/bin`; it defaults to `$MINGW_PREFIX/bin` inside an msys2 shell and
-otherwise to the directory of `g++` on `PATH`. msys2 does not sit at the same
-absolute path on a workstation and on a CI runner, so the toolchain is located,
-never hardcoded.
+otherwise to the directory of `g++` on `PATH`. msys2 need not sit at one absolute
+path, so the toolchain is located, never hardcoded.
 
 Three steps, in this order:
 
@@ -74,8 +59,8 @@ instead of by overwriting a Qt copy.
 Nothing in the path names a dependency. A hand-written list drifts silently —
 versioned file names roll with the toolchain and Qt redistributes classes across
 libraries between releases — while a closure derived from import tables cannot
-disagree with the binaries. An
-import that resolves nowhere exits non-zero and fails the job.
+disagree with the binaries. An import that resolves nowhere exits non-zero and
+fails the package.
 
 The package is unsigned, so Windows SmartScreen shows "Windows protected your PC"
 when a downloaded copy first starts; "More info → Run anyway" starts it.
@@ -83,10 +68,11 @@ when a downloaded copy first starts; "More info → Run anyway" starts it.
 ## The Linux package
 
 [scripts/package_linux.sh](../../scripts/package_linux.sh) is the single Linux
-packaging path — CI, the release job and the srv-one check all invoke it:
+packaging path; srv-one's check runs it in the workspace's Linux image, which sets
+`QT_PREFIX`:
 
 ```bash
-QT_PREFIX="$QT_ROOT_DIR" VERSION="$GITHUB_REF_NAME" bash scripts/package_linux.sh build .
+VERSION=dev bash scripts/package_linux.sh <build> <out>
 ```
 
 It puts the samples under `usr/share/automotive-format-explorer/samples`, where
@@ -138,7 +124,7 @@ own report:
 
 The app runs with `PATH` reduced to the system directories and no `QT_*` or
 `QML*` variables, so nothing outside `dist/` can stand in for a missing file —
-CI's Qt installation puts its `bin` on `PATH` and its plugin directory in
+a development shell puts Qt's `bin` on `PATH` and its plugins in
 `QT_PLUGIN_PATH`. Critical-error boxes are suppressed, so a loader failure exits
 instead of waiting on the desktop. The gate needs an interactive desktop.
 
@@ -169,52 +155,42 @@ self-register from the linked Qt libraries. The `qml/` tree that `windeployqt
 is the supported deployment mode; the size of what it copies is a backlog
 question, not a correctness one.
 
-## A broken build cannot publish
+## Releasing
 
-Both platform jobs upload workflow artifacts rather than creating the release. A
-`publish` job gated on `needs: [windows-mingw, linux]` downloads both and
-creates the GitHub release with `fail_on_unmatched_files`.
+`bash release-explorer.sh vX.Y.Z [--notes FILE] [--dry-run]` at the workspace root
+releases, on the operator's instruction, from the workstation in Git Bash with `gh`
+logged in and `ssh srv-one` working. It stops at the first failure, so nothing is
+published unless every step before it passed:
 
-A failure in any job — configure, build, ctest, package, closure, or smoke —
-means no release object is ever created, so there is nothing to download.
-`release.yml` triggers only on `v*` tags.
-
-[ci.yml](../../.github/workflows/ci.yml) runs the same package and smoke steps
-on both platforms on every push to `master` and `release/**`, once
-`PARSER_PACKAGE_LOCK` is set, so a packaging fault surfaces before a tag is cut.
-While it is unset, `release.yml`'s jobs skip and a release is cut from sources.
-
-## Release from sources
-
-A release needs no published parser packages: both packages come from the
-workspace's source graph, which links the parsers' current sources, and are
-published with `gh`. Every repository is committed and pushed first, the release
-commit's README naming the version.
-
-1. Windows, on the workstation: `BUILD_TYPE=Release bash build-all.sh` from the
-   workspace root builds and tests everything; then
-   `QT_PREFIX=… bash scripts/package_windows.sh <build>/automotive-format-explorer <dist>`
-   and `scripts/smoke_windows.ps1 <dist>`. The zip holds `dist/`'s contents at its
-   root: `automotive-format-explorer-<tag>-windows-x64.zip`.
-2. Linux, on srv-one: `linux/check.sh` builds and tests the pushed heads and packages
-   and gates `/opt/aff/out/automotive-format-explorer-dev-linux-x86_64.AppImage`,
-   published as `automotive-format-explorer-<tag>-linux-x86_64.AppImage`
+1. The tag is free, and every repository, each parser's `lib` and
+   `aff-release-manifest` is committed and at its pushed head.
+2. Windows: `build-all.sh` builds and tests the workspace in Release; then
+   `scripts/package_windows.sh`, `scripts/smoke_windows.ps1` and the zip, `dist/`'s
+   contents at its root.
+3. Linux: srv-one's `linux/check.sh` builds and tests the same commits, which the
+   script compares with the workstation's, and packages and gates the AppImage
    ([Linux on srv-one](../../../docs/ref/local_toolchain.md#linux-on-srv-one)).
-3. `gh release create <tag> --target <commit> --notes-file <notes> <zip> <AppImage>`
-   creates the tag and the release.
-4. Both assets are downloaded from the release and gated again; the
-   `aff-release-manifest` entry records every repository's commit.
+4. The notes: FILE, or the commit subjects since the previous tag, docs and tests
+   left out; the standard downloads section follows either.
+5. `gh release create` publishes `automotive-format-explorer-<tag>-windows-x64.zip`
+   and `automotive-format-explorer-<tag>-linux-x86_64.AppImage`.
+6. Both are downloaded from the release and gated again: the zip here, the AppImage
+   in srv-one's build container.
+7. The `aff-release-manifest` entry records every repository's commit and is pushed.
+
+`--dry-run` stops after step 4 and leaves the packages and notes in
+`build-release/release`. A release needs no parser `-lib` publication: the parsers
+are compiled in from their sources.
 
 ## What a package must satisfy
 
-- `scripts/package_windows.sh` produces a `dist/` with an empty unresolved set,
-  run locally before a tag is pushed.
+- `scripts/package_windows.sh` produces a `dist/` with an empty unresolved set.
 - `scripts/smoke_windows.ps1` passes against that `dist/`.
 - `dist/` holds no Explorer library: the executable imports only Qt, toolchain,
   protobuf/Abseil/zlib and system DLLs.
 - `dist/libstdc++-6.dll` and `dist/libgcc_s_seh-1.dll` are msys2's, not Qt's.
 - `scripts/package_linux.sh` produces the AppImage, and `scripts/smoke_linux.sh`
-  passes against it, in the srv-one check before a tag is pushed.
+  passes against it, in srv-one's check.
 - The AppImage's executable names `libGL.so.1` and not `libOpenGL.so.0`, and it
   starts on srv-one's desktop, which has no `libopengl0`.
-- A failure in either platform job leaves no GitHub release behind.
+- A failure on either platform stops the release before anything is published.

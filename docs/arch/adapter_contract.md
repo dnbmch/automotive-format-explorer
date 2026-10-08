@@ -141,4 +141,4 @@ plot QML component. This keeps the plot reusable by future recording backends.
 6. Add the format's entry to `builtInFormats()` in `src/builtinformats.cpp`; the dialog filters and sample list follow from it. Extend `tests/tst_builtinformats.cpp` with its suffixes and a bundled sample.
 7. Run the app, open a sample file (Ctrl+O or the NavPanel Open button), verify the tab opens and the tree populates.
 
-Workspace source builds need no parser release; package builds consume the parser's complete install archive, selected as described in [the build reference](../ref/cmake_build_system.md#acquire-complete-installed-packages).
+Workspace source builds need no parser release; package builds consume the parser's complete install archive, as described in [the build reference](../ref/cmake_build_system.md#complete-installed-packages).

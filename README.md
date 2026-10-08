@@ -1,7 +1,5 @@
 # Automotive Format Explorer
 
-[![CI](https://github.com/dnbmch/automotive-format-explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/dnbmch/automotive-format-explorer/actions/workflows/ci.yml)
-
 A desktop tool for inspecting **A2L**, **DBC**, **LDF**, and **MDF4** automotive files. Built with Qt/QML and C++17 by [Danube Mechatronics](https://danube-mechatronics.com).
 
 > **[Download latest release](https://github.com/dnbmch/automotive-format-explorer/releases/latest)**
@@ -11,7 +9,7 @@ A desktop tool for inspecting **A2L**, **DBC**, **LDF**, and **MDF4** automotive
 > **Linux**: `chmod +x *.AppImage && ./automotive-format-explorer-*.AppImage` on Ubuntu 24.04 or newer,
 > or another distribution with glibc 2.38 or newer. Older distributions on request.
 >
-> Release v0.3.0 opens A2L, DBC, LDF and MDF4 files.
+> The latest release opens A2L, DBC, LDF and MDF4 files.
 
 ---
 
@@ -162,9 +160,9 @@ cmake --build build-package
 ctest --test-dir build-package --output-on-failure
 ```
 
-For downloaded archives, acquire the SHA256-pinned complete packages before
-configuring. The lock format and workflow setup are documented in
-[the build reference](docs/ref/cmake_build_system.md#parser-dependencies).
+The parser prefix holds the complete install archives of the four parser `-lib`
+releases, unpacked into one directory
+([build reference](docs/ref/cmake_build_system.md#parser-dependencies)).
 
 ### Build from sibling sources
 
