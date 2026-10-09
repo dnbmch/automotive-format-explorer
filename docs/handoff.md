@@ -1,21 +1,5 @@
 # automotive-format-explorer — handoff
 
-## 2026-10-08 — launch check rejects incomplete bundles and failed MDF4 opens — DONE
-
-`--check` opens the sample filenames declared in the built-in format list, including
-missing paths. MDF4 retains its diagnostic tab after a failed opening and passes that
-opening error through the load result to the sequence. Recoverable diagnostics remain
-successful opens. Contracts are in [architecture](arch/architecture.md#opening-several-files),
-[adapter contract](arch/adapter_contract.md) and [packaging](ref/release_packaging.md#launch-gates).
-
-The new executable and controller regressions failed before the source fix and pass
-after it. Seven focused suites pass on Windows MinGW Debug and Linux GCC Release.
-Both package gates pass a complete bundle; missing/corrupt MDF4 fails with exit 1,
-as does an explicitly missing MDF4 path. Evidence: workspace `build-check-verdict/`
-and srv-one `/tmp/aff-check-verdict-5yicFdZH/workspace/`. Linux used an isolated
-checkout and build; `/opt/aff` and the other srv-one session are untouched.
-No tag or release is part of this correction. Standing operator checks below remain.
-
 ## 2026-10-06 — MDF4 detail labels and opening cancellation — OPEN
 
 Landed: the MDF4 detail panel labels the big-endian data types, the algebraic and

@@ -8,7 +8,7 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 - Qt 6 / QML desktop app: tree view + detail panel + format-specific center view.
 - Static per-format backends for A2L, DBC, LDF, and MDF4, linked into one
   executable on every platform and composed from a single built-in format list
-  (id, suffixes, adapter) that also derives the dialog filters and sample list;
+  (id, suffixes, adapter, bundled sample) that also derives the dialog filters and sample list;
   each backend provides a `FormatAdapter`, a `DocumentSession` and its presenter.
 - `AppController` owns its format list and its one pending load: shutdown stops
   opens, suppresses late completions, asks the load to stop (an MDF4 opening
@@ -54,8 +54,10 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   in `samples/SAMPLES.md`.
 - Command line: `automotive-format-explorer [files...]` opens each file as a tab,
   one after another (`OpenSequence`). `--check` opens the named files or every
-  bundled sample and exits 0 only when each opened, the QML engine reported no
-  warning and the main window drew the last one; the launch gates run it.
+  declared bundled sample, including missing paths, and exits 0 only when each
+  opening succeeded, the QML engine reported no warning and the main window drew
+  the last one. Failed MDF4 openings retain their diagnostic tabs but fail the
+  check; recoverable file diagnostics pass. Both launch gates use this verdict.
 - Splash overlay + DWM cloak startup.
 - Links the four canonical parser targets, from complete installed packages or
   source workspace composition. GPL-3.0.
@@ -88,20 +90,22 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   through FUSE on srv-one's Ubuntu 26.04 desktop, which has no `libopengl0`. See
   [docs/ref/release_packaging.md](docs/ref/release_packaging.md).
 
-## In flight
+## Published
 
 The [latest release](https://github.com/dnbmch/automotive-format-explorer/releases/latest)
 opens A2L, DBC, LDF and MDF4; every release and the commits in it are in
 `dnbmch/aff-release-manifest`.
 
-Tab and session ownership and the bounded recording viewer are released; their
-remaining platform and operator checks are open in [docs/handoff.md](docs/handoff.md).
-Remaining MDF4 viewer scope: [plan](docs/plans/mdf4_viewer.md).
+The source-head launch-check corrections are not in that release.
 
 The README screenshots (`docs/screenshot_*.png`) show the current build: the A2L
 memory map, the DBC and LDF signal maps and the MDF4 plot of a long recording.
 
 ## Deferred
+
+No implementation is mid-flight. Platform and operator checks remain in
+[docs/handoff.md](docs/handoff.md); remaining MDF4 viewer scope is in its
+[plan](docs/plans/mdf4_viewer.md).
 
 Tracked in [docs/backlog.md](docs/backlog.md): the adapter-repetition call
 (BL-E2) remains parked because the loaders have distinct boundaries. Memory-
