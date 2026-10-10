@@ -174,3 +174,4 @@ See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-works
 | Qt deploy | `windeployqt` + dependency-closure walk (`scripts/deploy_closure.sh`, shared by the package and the build-tree deploy) | AppImage by `scripts/package_linux.sh`: linuxdeploy and its Qt plugin, pinned |
 | OpenGL link | — | `libGL.so.1`, as Qt's libraries link it (`OpenGL_GL_PREFERENCE` `LEGACY`) |
 | Protobuf JSON | `google/protobuf/util/json_util.h` (stable API, works on both v3 and v4+) | |
+| File paths | UTF-8 active code page from `resources/explorer.manifest`, so the parsers' narrow opens read the adapters' UTF-8 paths ([FormatAdapter contract](docs/arch/architecture.md#formatadapter-contract)) | UTF-8 natively |

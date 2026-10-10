@@ -1,1 +1,6 @@
+// The process runs with the UTF-8 active code page, so the parsers' narrow file
+// opens read the UTF-8 paths the adapters hand them (explorer.manifest).
+#include <winuser.h>
+
 IDI_ICON1 ICON "icons/explorer.ico"
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "explorer.manifest"

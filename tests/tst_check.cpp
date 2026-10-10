@@ -20,6 +20,7 @@ private slots:
     void corruptMdf4();
     void explicitFiles_data();
     void explicitFiles();
+    void unicodePaths();
 
 private:
     void check(const QStringList& files, int expectedExit, const QByteArray& report);
@@ -108,6 +109,28 @@ void TestCheck::explicitFiles() {
     QFETCH(QString, file);
     QFETCH(int, expectedExit);
     check({file}, expectedExit, QFileInfo(file).fileName().toUtf8());
+}
+
+// Every format under a directory and file names outside ASCII: umlauts, a
+// Hungarian double acute outside the Windows-1252 code page, Japanese. The
+// parsers open the UTF-8 path an adapter hands them with a narrow file stream,
+// which Windows reads in the process code page: UTF-8 under the manifest.
+void TestCheck::unicodePaths() {
+    const QDir source(QStringLiteral(EXPLORER_SAMPLES_DIR));
+    const QDir target(_dir.filePath(QStringLiteral("K\u00fchlung-Gy\u0151r")));
+    QVERIFY(QDir().mkpath(target.path()));
+    const QList<QPair<QString, QString>> samples{
+        {QStringLiteral("demo_ecu.a2l"), QStringLiteral("Messung_K\u00fchlung.a2l")},
+        {QStringLiteral("tesla_can.dbc"), QStringLiteral("Fahrzeug_Gy\u0151r.dbc")},
+        {QStringLiteral("demo_seat.ldf"), QStringLiteral("Sitz_\u00dcl\u00e9s.ldf")},
+        {QStringLiteral("demo_recording.mf4"), QStringLiteral("Aufzeichnung_\u8a18\u9332.mf4")},
+    };
+    QStringList files;
+    for (const auto& [sample, name] : samples) {
+        files.push_back(target.filePath(name));
+        QVERIFY(QFile::copy(source.filePath(sample), files.last()));
+    }
+    check(files, 0, "passed: 4 file(s)");
 }
 
 QTEST_GUILESS_MAIN(TestCheck)

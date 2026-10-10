@@ -111,8 +111,9 @@ removing any sample fails the check. An unopenable or invalid MDF4 still produce
 an interactive diagnostic tab, but the check reports its opening error and fails.
 Recoverable file diagnostics, including the bundled DBC's dangling `VAL_`, remain
 successful opens. `tst_check` exercises the actual executable with complete, missing
-and corrupt sample payloads; `tst_builtinformats` checks that failure diagnostics
-remain available in their tabs.
+and corrupt sample payloads and with the four formats under non-ASCII directory and
+file names; `tst_builtinformats` checks that failure diagnostics remain available in
+their tabs.
 
 [scripts/smoke_windows.ps1](../../scripts/smoke_windows.ps1) runs the check on the
 deployed Windows platform plugin and passes on its exit code 0. On Windows the

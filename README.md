@@ -181,7 +181,7 @@ are used directly through the same public targets as installed packages.
 ### Platform Notes
 
 - Every format backend is linked statically into the one executable on all platforms.
-- **Windows (MinGW)**: Primary development platform.
+- **Windows (MinGW)**: Primary development platform. The executable runs with the UTF-8 code page, so files under non-ASCII directory and file names open on Windows 10 version 1903 or later.
 - **Linux**: Built and tested on Ubuntu 24.04 with system protobuf. The AppImage needs glibc 2.38 or newer and runs on X11 and, through Xwayland, on Wayland desktops.
 
 ## Documentation

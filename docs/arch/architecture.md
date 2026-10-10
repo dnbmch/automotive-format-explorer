@@ -85,6 +85,19 @@ A retained diagnostic session may describe an unsuccessful opening. Its
 it empty. The MDF4 adapter derives this from the existing reader's `ready()` and
 failure diagnostic without opening the file again.
 
+Every adapter hands its parser the path as UTF-8 (`QString::toStdString()`). The
+parsers open it with a narrow `std::ifstream`, which on Windows reads the process code
+page, and the MDF4 reader binds the same string through `std::filesystem` for its
+change check, which libstdc++ decodes as UTF-8 regardless. The executable therefore
+runs with the UTF-8 active code page, declared in its application manifest
+([resources/explorer.manifest](../../resources/explorer.manifest), attached through
+`resources/explorer.rc`): both readings name the same file, and a file opens under any
+directory and file name. The manifest replaces the MinGW toolchain's default one at
+link and carries its entries (execution level `asInvoker`, the supported-OS list).
+Windows before 10 1903 ignores the declaration, and only ASCII paths open there.
+`tst_check` opens all four formats under non-ASCII directory and file names through
+the executable.
+
 ## Opening files and shutdown
 
 `AppController` runs one open at a time: `openFile()` resolves the entry, then runs

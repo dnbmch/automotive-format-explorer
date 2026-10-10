@@ -58,6 +58,9 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   opening succeeded, the QML engine reported no warning and the main window drew
   the last one. Failed MDF4 openings retain their diagnostic tabs but fail the
   check; recoverable file diagnostics pass. Both launch gates use this verdict.
+- On Windows the executable runs with the UTF-8 active code page (application
+  manifest), so files open under non-ASCII directory and file names; `tst_check`
+  opens all four formats that way.
 - Splash overlay + DWM cloak startup.
 - Links the four canonical parser targets, from complete installed packages or
   source workspace composition. GPL-3.0.
@@ -96,7 +99,8 @@ The [latest release](https://github.com/dnbmch/automotive-format-explorer/releas
 opens A2L, DBC, LDF and MDF4; every release and the commits in it are in
 `dnbmch/aff-release-manifest`.
 
-The source-head launch-check corrections are not in that release.
+The source-head launch-check corrections and non-ASCII path opening on Windows are
+not in that release.
 
 The README screenshots (`docs/screenshot_*.png`) show the current build: the A2L
 memory map, the DBC and LDF signal maps and the MDF4 plot of a long recording.
