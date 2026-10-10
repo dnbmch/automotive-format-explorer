@@ -52,12 +52,35 @@ QString conversionKindText(mdf4::ConversionKind kind) {
         return QStringLiteral("Algebraic formula");
     case mdf4::TAB_RANGE:
         return QStringLiteral("Value range table");
+    case mdf4::VALUE_RANGE_TO_TEXT:
+        return QStringLiteral("Value range to text");
+    case mdf4::TEXT_TO_VALUE:
+        return QStringLiteral("Text to value");
+    case mdf4::TEXT_TO_TEXT:
+        return QStringLiteral("Text to text");
+    case mdf4::BITFIELD_TEXT:
+        return QStringLiteral("Bitfield text table");
     case mdf4::CONVERSION_OTHER:
         return QStringLiteral("Other / unsupported");
     case mdf4::CONVERSION_KIND_UNSPECIFIED:
         return QStringLiteral("Unspecified");
     }
     return QStringLiteral("Unknown (%1)").arg(static_cast<int>(kind));
+}
+
+// The family a bitfield text table entry's link names, by its raw cc_type;
+// 255 stands for a NIL link or one naming no readable conversion.
+QString linkedConversionText(quint32 ccType) {
+    switch (ccType) {
+    case 7:
+        return QStringLiteral("value-to-text (7)");
+    case 8:
+        return QStringLiteral("value-range-to-text (8)");
+    case 255:
+        return QStringLiteral("no conversion");
+    default:
+        return QStringLiteral("conversion type %1").arg(ccType);
+    }
 }
 
 QString storageText(mdf4::StorageLayout storage) {
@@ -282,10 +305,30 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
     addField(conversionFields, QStringLiteral("Formula"), text(conversion.formula()));
     addField(conversionFields, QStringLiteral("Unit"), text(conversion.unit()));
     addField(conversionFields, QStringLiteral("Default Text"), text(conversion.default_text()));
+    if (conversion.default_scale()) {
+        conversionFields.push_back({QStringLiteral("Default"), QStringLiteral("Scale conversion")});
+    }
     for (const mdf4::TextEntry& entry : conversion.entries()) {
         conversionFields.push_back({
             QStringLiteral("Value %1").arg(realText(entry.value())),
             text(entry.text()),
+        });
+    }
+    for (const mdf4::RangeTextEntry& range : conversion.ranges()) {
+        conversionFields.push_back({
+            QStringLiteral("Range %1 to %2").arg(realText(range.key_min()), realText(range.key_max())),
+            range.scale() ? QStringLiteral("Scale conversion") : text(range.text()),
+        });
+    }
+    for (const mdf4::TextPair& pair : conversion.translations()) {
+        conversionFields.push_back({QStringLiteral("Text %1").arg(text(pair.key())), text(pair.text())});
+    }
+    for (int index = 0; index < conversion.bitmasks_size(); ++index) {
+        conversionFields.push_back({
+            QStringLiteral("Bitmask %1").arg(index + 1),
+            QStringLiteral("0x%1 → %2")
+                .arg(QString::number(conversion.bitmasks(index), 16).toUpper(),
+                     linkedConversionText(conversion.bitmask_cc_types(index))),
         });
     }
     pushSection(sections, QStringLiteral("Conversion"), std::move(conversionFields));

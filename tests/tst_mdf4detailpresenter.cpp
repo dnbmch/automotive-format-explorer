@@ -69,6 +69,7 @@ private slots:
     void groupCardDescribesStorage();
     void channelCardExplainsPlotSupport();
     void channelCardNamesBigEndianTypesAndFormulaConversions();
+    void channelCardListsTextTables();
     void selectedEntityYieldsRawJson();
 };
 
@@ -154,6 +155,90 @@ void TestMdf4DetailPresenter::channelCardNamesBigEndianTypesAndFormulaConversion
     QCOMPARE(fieldValue(rangedDetails, QStringLiteral("Conversion"), QStringLiteral("Kind")),
              QStringLiteral("Value range table"));
     QVERIFY(fieldValue(rangedDetails, QStringLiteral("Conversion"), QStringLiteral("Formula")).isEmpty());
+}
+
+void TestMdf4DetailPresenter::channelCardListsTextTables() {
+    mdf4::File document = makeDocument();
+    mdf4::ChannelGroup* group = document.mutable_groups(0);
+
+    mdf4::Conversion* ranged = group->add_channels()->mutable_conversion();
+    ranged->set_kind(mdf4::VALUE_RANGE_TO_TEXT);
+    ranged->set_cc_type(8);
+    mdf4::RangeTextEntry* low = ranged->add_ranges();
+    low->set_key_min(0.0);
+    low->set_key_max(2.5);
+    low->set_text("low");
+    mdf4::RangeTextEntry* scaled = ranged->add_ranges();
+    scaled->set_key_min(2.5);
+    scaled->set_key_max(10.0);
+    scaled->set_scale(true);
+    ranged->set_default_text("out of range");
+
+    mdf4::Conversion* keyed = group->add_channels()->mutable_conversion();
+    keyed->set_kind(mdf4::TEXT_TO_VALUE);
+    keyed->set_cc_type(9);
+    mdf4::TextEntry* one = keyed->add_entries();
+    one->set_value(1.0);
+    one->set_text("one");
+    keyed->add_params(1.0);
+    keyed->add_params(-50.0);
+
+    mdf4::Conversion* translated = group->add_channels()->mutable_conversion();
+    translated->set_kind(mdf4::TEXT_TO_TEXT);
+    translated->set_cc_type(10);
+    mdf4::TextPair* pair = translated->add_translations();
+    pair->set_key("one");
+    pair->set_text("Eins");
+    translated->set_default_text("No translation");
+
+    mdf4::Conversion* bits = group->add_channels()->mutable_conversion();
+    bits->set_kind(mdf4::BITFIELD_TEXT);
+    bits->set_cc_type(11);
+    bits->add_bitmasks(0xFF);
+    bits->add_bitmask_cc_types(7);
+    bits->add_bitmasks(0x8000000000000000ull);
+    bits->add_bitmask_cc_types(255);
+
+    mdf4::Conversion* status = group->add_channels()->mutable_conversion();
+    status->set_kind(mdf4::VALUE_RANGE_TO_TEXT);
+    status->set_cc_type(8);
+    mdf4::RangeTextEntry* illegal = status->add_ranges();
+    illegal->set_key_min(9.5);
+    illegal->set_key_max(10.5);
+    illegal->set_text("Illegal value");
+    status->set_default_scale(true);
+
+    const Mdf4DetailPresenter presenter(document);
+    const QString conversion = QStringLiteral("Conversion");
+
+    const QList<DetailSection> ranges = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 1));
+    QCOMPARE(fieldValue(ranges, conversion, QStringLiteral("Kind")), QStringLiteral("Value range to text"));
+    QCOMPARE(fieldValue(ranges, conversion, QStringLiteral("Range 0 to 2.5")), QStringLiteral("low"));
+    QCOMPARE(fieldValue(ranges, conversion, QStringLiteral("Range 2.5 to 10")),
+             QStringLiteral("Scale conversion"));
+    QCOMPARE(fieldValue(ranges, conversion, QStringLiteral("Default Text")), QStringLiteral("out of range"));
+    QVERIFY(fieldValue(ranges, conversion, QStringLiteral("Default")).isEmpty());
+
+    const QList<DetailSection> values = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 2));
+    QCOMPARE(fieldValue(values, conversion, QStringLiteral("Kind")), QStringLiteral("Text to value"));
+    QCOMPARE(fieldValue(values, conversion, QStringLiteral("Value 1")), QStringLiteral("one"));
+    QCOMPARE(fieldValue(values, conversion, QStringLiteral("Coefficients")), QStringLiteral("1, -50"));
+
+    const QList<DetailSection> texts = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 3));
+    QCOMPARE(fieldValue(texts, conversion, QStringLiteral("Kind")), QStringLiteral("Text to text"));
+    QCOMPARE(fieldValue(texts, conversion, QStringLiteral("Text one")), QStringLiteral("Eins"));
+    QCOMPARE(fieldValue(texts, conversion, QStringLiteral("Default Text")), QStringLiteral("No translation"));
+
+    const QList<DetailSection> masks = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 4));
+    QCOMPARE(fieldValue(masks, conversion, QStringLiteral("Kind")), QStringLiteral("Bitfield text table"));
+    QCOMPARE(fieldValue(masks, conversion, QStringLiteral("Bitmask 1")),
+             QStringLiteral("0xFF → value-to-text (7)"));
+    QCOMPARE(fieldValue(masks, conversion, QStringLiteral("Bitmask 2")),
+             QStringLiteral("0x8000000000000000 → no conversion"));
+
+    const QList<DetailSection> rule = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 5));
+    QCOMPARE(fieldValue(rule, conversion, QStringLiteral("Range 9.5 to 10.5")), QStringLiteral("Illegal value"));
+    QCOMPARE(fieldValue(rule, conversion, QStringLiteral("Default")), QStringLiteral("Scale conversion"));
 }
 
 void TestMdf4DetailPresenter::selectedEntityYieldsRawJson() {
