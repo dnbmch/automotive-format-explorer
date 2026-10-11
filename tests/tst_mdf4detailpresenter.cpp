@@ -70,6 +70,8 @@ private slots:
     void channelCardExplainsPlotSupport();
     void channelCardNamesBigEndianTypesAndFormulaConversions();
     void channelCardListsTextTables();
+    void channelCardStatesValidityRule_data();
+    void channelCardStatesValidityRule();
     void selectedEntityYieldsRawJson();
 };
 
@@ -97,6 +99,8 @@ void TestMdf4DetailPresenter::groupCardDescribesStorage() {
              QStringLiteral("Column fragments (LD)"));
     QCOMPARE(fieldValue(details, QStringLiteral("Recording"), QStringLiteral("Record Size")),
              QStringLiteral("16 bytes"));
+    QCOMPARE(fieldValue(details, QStringLiteral("Recording"), QStringLiteral("Invalidation Bytes")),
+             QStringLiteral("4"));
     QCOMPARE(fieldValue(details, QStringLiteral("Recording"), QStringLiteral("Cycle Count")),
              QStringLiteral("1000000"));
 }
@@ -239,6 +243,38 @@ void TestMdf4DetailPresenter::channelCardListsTextTables() {
     const QList<DetailSection> rule = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 5));
     QCOMPARE(fieldValue(rule, conversion, QStringLiteral("Range 9.5 to 10.5")), QStringLiteral("Illegal value"));
     QCOMPARE(fieldValue(rule, conversion, QStringLiteral("Default")), QStringLiteral("Scale conversion"));
+}
+
+void TestMdf4DetailPresenter::channelCardStatesValidityRule_data() {
+    QTest::addColumn<bool>("allInvalid");
+    QTest::addColumn<bool>("invalidationBit");
+    QTest::addColumn<quint32>("bitPos");
+    QTest::addColumn<QString>("validity");
+
+    QTest::newRow("no flags") << false << false << 0u << QStringLiteral("No invalidation");
+    QTest::newRow("invalidation bit")
+        << false << true << 9u
+        << QStringLiteral("Invalidation bit 9 (Byte 1, bit 1 of the invalidation Bytes)");
+    QTest::newRow("all invalid") << true << false << 0u << QStringLiteral("All values invalid");
+    QTest::newRow("all invalid with bit")
+        << true << true << 3u << QStringLiteral("All values invalid (invalidation bit 3)");
+}
+
+void TestMdf4DetailPresenter::channelCardStatesValidityRule() {
+    QFETCH(bool, allInvalid);
+    QFETCH(bool, invalidationBit);
+    QFETCH(quint32, bitPos);
+    QFETCH(QString, validity);
+
+    mdf4::File document = makeDocument();
+    mdf4::Channel* channel = document.mutable_groups(0)->mutable_channels(0);
+    channel->set_all_invalid(allInvalid);
+    channel->set_invalidation_bit(invalidationBit);
+    channel->set_inval_bit_pos(bitPos);
+    const Mdf4DetailPresenter presenter(document);
+
+    const QList<DetailSection> details = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 0));
+    QCOMPARE(fieldValue(details, QStringLiteral("Plot"), QStringLiteral("Validity")), validity);
 }
 
 void TestMdf4DetailPresenter::selectedEntityYieldsRawJson() {

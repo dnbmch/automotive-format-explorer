@@ -135,6 +135,24 @@ QString masterTypeText(const mdf4::Channel& channel) {
     }
 }
 
+// The channel's invalidation flags as the reader evaluated them; the bit sits in
+// Byte pos >> 3 of a record's invalidation Bytes, at bit pos & 7.
+QString validityText(const mdf4::Channel& channel) {
+    const quint32 position = channel.inval_bit_pos();
+    if (channel.all_invalid()) {
+        return channel.invalidation_bit()
+                   ? QStringLiteral("All values invalid (invalidation bit %1)").arg(position)
+                   : QStringLiteral("All values invalid");
+    }
+    if (channel.invalidation_bit()) {
+        return QStringLiteral("Invalidation bit %1 (Byte %2, bit %3 of the invalidation Bytes)")
+            .arg(position)
+            .arg(position >> 3)
+            .arg(position & 7);
+    }
+    return QStringLiteral("No invalidation");
+}
+
 QString parametersText(const mdf4::Conversion& conversion) {
     QStringList parameters;
     for (double value : conversion.params()) {
@@ -340,6 +358,7 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
                  QStringLiteral("Unsupported Reason"),
                  text(channel.not_decodable_reason()));
     }
+    plot.push_back({QStringLiteral("Validity"), validityText(channel)});
     pushSection(sections, QStringLiteral("Plot"), std::move(plot));
 
     appendComment(sections, channel.comment());
