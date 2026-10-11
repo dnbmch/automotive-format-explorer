@@ -1,5 +1,20 @@
 # automotive-format-explorer — handoff
 
+## 2026-10-11 — invalidated samples plot as gaps — OPEN
+
+The MDF4 reader delivers a sample whose invalidation bit is set as NaN at its time
+([reader contract](../../mdf4-parser/docs/arch/reader.md#read-set)); the plot draws a
+nonfinite value as a gap and the detail panel's Plot section states the channel's
+validity rule (`8061dd0`). OPEN only for the check below.
+
+UNVERIFIED — operator-visual: author a file with asammdf 8.8.18 (`MDF(version="4.10")`,
+`append([Signal(samples, timestamps, name, invalidation_bits=mask)])`, 40 samples at
+10 ms, the mask set at indices 0, 3, 4, 17 and 39), open it and select that channel.
+Pass: the exact-sample line breaks at t = 0.00, 0.03, 0.04, 0.17 and 0.39 s, the
+hover over a gap names no value, and the detail panel reads `Invalidation bit 0
+(Byte 0, bit 0 of the invalidation Bytes)`. Fail: a continuous line through those
+times, or a value shown there.
+
 ## 2026-10-06 — MDF4 detail labels and opening cancellation — OPEN
 
 Landed: the MDF4 detail panel labels the big-endian data types, the algebraic and
