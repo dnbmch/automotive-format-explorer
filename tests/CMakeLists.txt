@@ -101,6 +101,14 @@ explorer_add_test(tst_a2ldetailpresenter
     a2lparser::a2lparser
 )
 
+# An inline LDF through the production adapter and the session's signal map.
+explorer_add_test(tst_ldfdocumentsession
+    explorer-core
+    explorer-ldf-backend
+    protobuf::libprotobuf
+    ldfparser::ldfparser
+)
+
 explorer_add_test(tst_mdf4detailpresenter
     explorer-core
     explorer-mdf4-backend

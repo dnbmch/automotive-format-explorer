@@ -284,7 +284,8 @@ void LdfDocumentSession::buildSignalMap() {
             SignalEntry sig;
             sig.name = text(frameSig.signal_name());
             sig.startBit = static_cast<int>(frameSig.start_bit());
-            sig.bigEndian = false; // LIN is always LE
+            // ISO 17987 big-endian signals are drawn little-endian (BL-V3).
+            sig.bigEndian = false;
             sig.colorIndex = j % 8;
 
             // Enrich from top-level signal definition.
@@ -300,8 +301,11 @@ void LdfDocumentSession::buildSignalMap() {
                         const auto& pv = enc.physical_values(0);
                         sig.factor = pv.factor();
                         sig.offset = pv.offset();
-                        sig.minimum = static_cast<double>(pv.min_raw());
-                        sig.maximum = static_cast<double>(pv.max_raw());
+                        // The range's raw bounds in physical units; a negative factor swaps them.
+                        const double first = static_cast<double>(pv.min_raw()) * pv.factor() + pv.offset();
+                        const double last = static_cast<double>(pv.max_raw()) * pv.factor() + pv.offset();
+                        sig.minimum = std::min(first, last);
+                        sig.maximum = std::max(first, last);
                         sig.unit = text(pv.unit());
                     }
                 }

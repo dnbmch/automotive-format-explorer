@@ -60,18 +60,6 @@ print-friendly view of it (`SignalMapView.qml`, `SignalGridItem`). Neither exist
 
 **Size:** S.
 
-### BL-V5: an LDF signal-map tooltip shows raw bounds as a physical range
-
-`LdfDocumentSession::buildSignalMap` sets `SignalEntry::minimum` / `maximum` from
-the first physical range's `min_raw` / `max_raw`, and `SignalMapModel::signalTooltip`
-prints them on the `Physical:` line, where a DBC signal shows its physical bounds.
-A signal with factor 0.1 over raw 0..255 shows `[0 .. 255]`. Fix: convert both
-bounds as raw × factor + offset; drop the "LIN is always LE" comment with BL-V3.
-Reword the LDF sentence of [signal_map.md](ref/signal_map.md) "Hover tooltip" when
-this lands.
-
-**Size:** XS.
-
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant
