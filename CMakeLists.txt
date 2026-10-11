@@ -90,6 +90,12 @@ qt_add_executable(automotive-format-explorer
     src/ui/signalplotitem.cpp
     $<$<PLATFORM_ID:Windows>:resources/explorer.rc>
 )
+if(WIN32)
+    # The resource script includes the manifest, which the resource compiler's
+    # dependency scan does not see.
+    set_source_files_properties(resources/explorer.rc PROPERTIES
+        OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/explorer.manifest")
+endif()
 
 target_include_directories(explorer-core PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src"

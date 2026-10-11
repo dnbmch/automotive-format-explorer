@@ -284,7 +284,8 @@ void LdfDocumentSession::buildSignalMap() {
             SignalEntry sig;
             sig.name = text(frameSig.signal_name());
             sig.startBit = static_cast<int>(frameSig.start_bit());
-            // ISO 17987 big-endian signals are drawn little-endian (BL-V3).
+            // ISO 17987 big-endian signals are drawn little-endian until the
+            // standard's bit numbering is confirmed (docs/backlog.md).
             sig.bigEndian = false;
             sig.colorIndex = j % 8;
 
