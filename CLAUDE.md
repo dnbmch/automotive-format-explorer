@@ -129,6 +129,8 @@ No external consumers: every contract we own — proto, API, schema, file format
 
 **Release is on-demand; there are no active users.** The app ships as a GPL-3.0 GitHub release, cut from the workspace sources on the operator's instruction — not on every change. With no users there is no cross-release backward-compat obligation; keep the backend seam (FormatAdapter / DocumentSession) internally coherent and change it when the design improves. See workspace [CLAUDE.md](../CLAUDE.md) "Release cadence".
 
+**Sources hold literal UTF-8 in display strings** (em dashes, the middle dot); `tst_check` spells non-ASCII paths as `\u` escapes. A file-edit tool can decode such escapes into literal characters: check the bytes after writing them.
+
 **The plot stack takes operator-authored changes only** (`plotdata`, `SignalPlotModel`, `SignalPlotItem`, `SignalPlotView.qml`), so it can be relicensed for a live view in the proprietary product apps ([signal plot](docs/ref/signal_plot.md)).
 
 ### Architecture
