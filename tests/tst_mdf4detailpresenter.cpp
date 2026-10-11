@@ -49,7 +49,7 @@ mdf4::File makeDocument() {
     channel->set_sample_count(1'000'000);
     channel->set_cn_type(0);
     channel->set_decodable(false);
-    channel->set_not_decodable_reason("invalidation bits are not supported");
+    channel->set_not_decodable_reason("composed channel (array or structure) not supported");
 
     mdf4::Conversion* conversion = channel->mutable_conversion();
     conversion->set_kind(mdf4::LINEAR);
@@ -119,7 +119,7 @@ void TestMdf4DetailPresenter::channelCardExplainsPlotSupport() {
     QCOMPARE(fieldValue(details, QStringLiteral("Plot"), QStringLiteral("Plottable")),
              QStringLiteral("No"));
     QCOMPARE(fieldValue(details, QStringLiteral("Plot"), QStringLiteral("Unsupported Reason")),
-             QStringLiteral("invalidation bits are not supported"));
+             QStringLiteral("composed channel (array or structure) not supported"));
 }
 
 void TestMdf4DetailPresenter::channelCardNamesBigEndianTypesAndFormulaConversions() {
