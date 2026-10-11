@@ -4,14 +4,11 @@
 
 #pragma push_macro("signals")
 #undef signals
+#include "dbc/extract.h"
 #include "dbc/dbcfile.h"
 #pragma pop_macro("signals")
 
 #include <QFileInfo>
-
-namespace dbc::extract {
-dbc::DbcFile extractFile(dbcfile::DbcFile* file);
-}
 
 namespace {
 DiagnosticMessage toDiagnostic(const dbc::Diagnostic& d) {

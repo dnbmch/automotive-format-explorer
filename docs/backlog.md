@@ -29,18 +29,6 @@ state saved into the tab and restored around the rebuild, for each of the views.
 
 **Size:** S per view; wanted only if the reset proves a real annoyance.
 
-## Adapters and presenters
-
-### BL-E4: DBC adapter declares the extraction entry point by hand
-
-`src/adapters/dbcadapter.cpp` includes `dbc/dbcfile.h` and re-declares
-`dbc::extract::extractFile` locally instead of including the public
-`dbc/extract.h`, so a signature change in the parser would surface as a link error
-rather than a compile error. The A2L adapter already includes its extraction
-header directly; do the same here, inside the existing `signals` macro guard.
-
-**Size:** XS.
-
 ## Viewer data
 
 ### BL-V2: a channel that fits one window is scanned twice
