@@ -143,6 +143,22 @@ mdf4::File makeDocument(std::uint64_t sampleCount = 4) {
     return document;
 }
 
+// makeDocument() with a text channel after the unsupported one in group 0: the
+// reader decodes it, and its samples are text.
+constexpr int kText = Unsupported + 1;
+
+mdf4::File makeTextDocument() {
+    mdf4::File document = makeDocument();
+    mdf4::Channel* message = document.mutable_groups(0)->add_channels();
+    message->set_name("DriverMessage");
+    message->set_sample_count(4);
+    message->set_data_type(mdf4::STRING);
+    message->set_raw_data_type(7);
+    message->set_decodable(true);
+    message->set_textual(true);
+    return document;
+}
+
 // The source's axes: group 0 has its own time master, group 1 none.
 mdf4::Axis timeMaster(std::uint32_t group) {
     return group == 0 ? mdf4::Axis{mdf4::AxisKind::Master, 0, Master}
@@ -553,6 +569,8 @@ private slots:
     void overviewThenExactWindowOfTheView();
     void domainComesFromTheSourceAxis();
     void masterChannelIsAnAxisNotASignal();
+    void textChannelIsAnOrdinaryTreeChannel();
+    void textChannelScansNothing();
     void regressingTimePlotsSampleIndices();
     void supersededScansAreCancelled();
     void reselectingAfterCancelScansAgain();
@@ -663,6 +681,37 @@ void TestMdf4DocumentSession::masterChannelIsAnAxisNotASignal() {
     QCOMPARE(model->plotState(), SignalPlotModel::Empty);
     QCOMPARE(model->name(), QStringLiteral("Acquisition time"));
     QCOMPARE(model->message(), QStringLiteral("Master channel — this group's time axis"));
+    QVERIFY(settle(*session));
+    QVERIFY(scans->channels().empty());
+}
+
+// Readable, so listed like any channel rather than as unsupported; its role
+// says what it is.
+void TestMdf4DocumentSession::textChannelIsAnOrdinaryTreeChannel() {
+    auto scans = std::make_shared<Scans>(false);
+    auto session = openSession(scans, makeTextDocument());
+    TreeModel* tree = session->treeModel();
+    const QModelIndex group = tree->index(0, 0, tree->index(0, 0));
+    const QModelIndex row = tree->index(kText, 0, group);
+    QCOMPARE(tree->data(row, TreeModel::TitleRole).toString(), QStringLiteral("DriverMessage"));
+    QCOMPARE(tree->data(row, TreeModel::SemanticKindRole).toInt(),
+             static_cast<int>(SemanticKind::Entity));
+    QCOMPARE(tree->data(row, TreeModel::IconKeyRole).toString(), QStringLiteral("channel"));
+    QCOMPARE(tree->data(row, TreeModel::SubtitleRole).toString(), QStringLiteral("Text channel"));
+}
+
+// Not plottable: selecting it shows its details and a note, and scans nothing.
+void TestMdf4DocumentSession::textChannelScansNothing() {
+    auto scans = std::make_shared<Scans>(false);
+    auto session = openSession(scans, makeTextDocument());
+    SignalPlotModel* model = plotOf(*session);
+    session->selectNode(channelKey(*session, kText));
+    QCOMPARE(detailName(session->detailModel()), QStringLiteral("DriverMessage"));
+    QVERIFY(!model->busy());
+    QVERIFY(!model->hasSamples());
+    QCOMPARE(model->plotState(), SignalPlotModel::Empty);
+    QCOMPARE(model->name(), QStringLiteral("DriverMessage"));
+    QCOMPARE(model->message(), QStringLiteral("Text channel — not plottable"));
     QVERIFY(settle(*session));
     QVERIFY(scans->channels().empty());
 }

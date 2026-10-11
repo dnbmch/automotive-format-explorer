@@ -59,6 +59,51 @@ mdf4::File makeDocument() {
     return document;
 }
 
+// Group 0 of makeDocument() gains, after EngineSpeed: a fixed-length UTF-8
+// string, the integer size channel of an MLSD string, that MLSD string, and an
+// MLSD string whose size channel the reader refused.
+enum TextRow : int { FixedText = 1, SizeChannel, MlsdText, RefusedMlsd };
+
+mdf4::File makeTextDocument() {
+    mdf4::File document = makeDocument();
+    mdf4::ChannelGroup* group = document.mutable_groups(0);
+
+    mdf4::Channel* fixed = group->add_channels();
+    fixed->set_name("Label");
+    fixed->set_data_type(mdf4::STRING);
+    fixed->set_raw_data_type(7);
+    fixed->set_bit_count(64);
+    fixed->set_decodable(true);
+    fixed->set_textual(true);
+
+    mdf4::Channel* size = group->add_channels();
+    size->set_name("MessageLength");
+    size->set_data_type(mdf4::UINT_LE);
+    size->set_raw_data_type(0);
+    size->set_bit_count(8);
+    size->set_decodable(true);
+
+    mdf4::Channel* mlsd = group->add_channels();
+    mlsd->set_name("Message");
+    mlsd->set_cn_type(5);
+    mlsd->set_data_type(mdf4::STRING);
+    mlsd->set_raw_data_type(6);
+    mlsd->set_bit_count(256);
+    mlsd->set_decodable(true);
+    mlsd->set_textual(true);
+    mlsd->set_size_channel(SizeChannel);
+
+    mdf4::Channel* refused = group->add_channels();
+    refused->set_name("Note");
+    refused->set_cn_type(5);
+    refused->set_data_type(mdf4::STRING);
+    refused->set_raw_data_type(6);
+    refused->set_bit_count(256);
+    refused->set_decodable(false);
+    refused->set_not_decodable_reason("MLSD size channel is not an integer channel of this group");
+    return document;
+}
+
 } // namespace
 
 class TestMdf4DetailPresenter : public QObject {
@@ -72,6 +117,9 @@ private slots:
     void channelCardListsTextTables();
     void channelCardStatesValidityRule_data();
     void channelCardStatesValidityRule();
+    void channelCardNamesStringType();
+    void textChannelIsReadableNotPlottable();
+    void mlsdChannelNamesItsSizeChannel();
     void selectedEntityYieldsRawJson();
 };
 
@@ -275,6 +323,61 @@ void TestMdf4DetailPresenter::channelCardStatesValidityRule() {
 
     const QList<DetailSection> details = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 0));
     QCOMPARE(fieldValue(details, QStringLiteral("Plot"), QStringLiteral("Validity")), validity);
+}
+
+void TestMdf4DetailPresenter::channelCardNamesStringType() {
+    const mdf4::File document = makeTextDocument();
+    const Mdf4DetailPresenter presenter(document);
+
+    const QList<DetailSection> details = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, FixedText));
+    QCOMPARE(fieldValue(details, QStringLiteral("Bit Geometry"), QStringLiteral("Data Type")),
+             QStringLiteral("String"));
+    QCOMPARE(fieldValue(details, QStringLiteral("Bit Geometry"), QStringLiteral("Raw Data Type")),
+             QStringLiteral("7"));
+}
+
+// A text channel is read, not plotted: its values are text, and no reason is
+// given because nothing is unsupported.
+void TestMdf4DetailPresenter::textChannelIsReadableNotPlottable() {
+    const mdf4::File document = makeTextDocument();
+    const Mdf4DetailPresenter presenter(document);
+    const QString plot = QStringLiteral("Plot");
+
+    const QList<DetailSection> fixed = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, FixedText));
+    QCOMPARE(fieldValue(fixed, plot, QStringLiteral("Values")), QStringLiteral("Text (UTF-8)"));
+    QCOMPARE(fieldValue(fixed, plot, QStringLiteral("Plottable")), QStringLiteral("No"));
+    QVERIFY(fieldValue(fixed, plot, QStringLiteral("Unsupported Reason")).isEmpty());
+    QCOMPARE(fieldValue(fixed, plot, QStringLiteral("Validity")), QStringLiteral("No invalidation"));
+
+    const QList<DetailSection> number = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, SizeChannel));
+    QCOMPARE(fieldValue(number, plot, QStringLiteral("Plottable")), QStringLiteral("Yes"));
+    QVERIFY(fieldValue(number, plot, QStringLiteral("Values")).isEmpty());
+}
+
+// A decodable MLSD channel names the channel of its group whose value is the
+// count of valid Bytes; a refused one, or a fixed-length string, names none.
+void TestMdf4DetailPresenter::mlsdChannelNamesItsSizeChannel() {
+    mdf4::File document = makeTextDocument();
+    const QString plot = QStringLiteral("Plot");
+    {
+        const Mdf4DetailPresenter presenter(document);
+        const QList<DetailSection> mlsd = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, MlsdText));
+        QCOMPARE(fieldValue(mlsd, plot, QStringLiteral("Size Channel")), QStringLiteral("MessageLength"));
+        QCOMPARE(fieldValue(mlsd, plot, QStringLiteral("Values")), QStringLiteral("Text (UTF-8)"));
+
+        const QList<DetailSection> refused = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, RefusedMlsd));
+        QCOMPARE(fieldValue(refused, plot, QStringLiteral("Plottable")), QStringLiteral("No"));
+        QVERIFY(fieldValue(refused, plot, QStringLiteral("Size Channel")).isEmpty());
+
+        const QList<DetailSection> fixed = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, FixedText));
+        QVERIFY(fieldValue(fixed, plot, QStringLiteral("Size Channel")).isEmpty());
+    }
+
+    // An unnamed size channel is named as the tree titles it.
+    document.mutable_groups(0)->mutable_channels(SizeChannel)->clear_name();
+    const Mdf4DetailPresenter presenter(document);
+    const QList<DetailSection> mlsd = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, MlsdText));
+    QCOMPARE(fieldValue(mlsd, plot, QStringLiteral("Size Channel")), QStringLiteral("Channel 3"));
 }
 
 void TestMdf4DetailPresenter::selectedEntityYieldsRawJson() {

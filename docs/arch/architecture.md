@@ -314,8 +314,8 @@ the latest wanted:
   whose range covers it; otherwise the window the plot names becomes the pending scan
   and a window in flight is cancelled. A view with more samples than one window holds
   keeps the overview and cancels windows.
-- Selecting a master, an unsupported channel or a row that is no channel drops the
-  pending scan and cancels the one in flight.
+- Selecting a master, a text channel, an unsupported channel or a row that is no
+  channel drops the pending scan and cancels the one in flight.
 - The completion of a cancelled scan is taken before the pending scan starts, even
   when the scan finished before it saw the cancellation. Its result is released
   while its reservation still stands, then its request with the reservation, before

@@ -31,12 +31,15 @@ QString channelTitle(const mdf4::Channel& channel, int index) {
 
 // A master carries the group's domain, so it is described by what it is rather
 // than offered as a signal: decoding it returns its own samples in both time
-// and value, which plots as a 45-degree line.
+// and value, which plots as a 45-degree line. A text channel is readable, but
+// its samples are text, not values to plot.
 QString channelSubtitle(const mdf4::Channel& channel) {
     const QString unit = text(channel.unit());
     QString role;
     if (channel.is_master()) {
         role = QStringLiteral("Master channel");
+    } else if (channel.textual()) {
+        role = QStringLiteral("Text channel");
     } else if (!channel.decodable()) {
         role = QStringLiteral("Not plottable");
     } else {
@@ -248,14 +251,17 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t sele
         _metadata->groups(path.groupIndex).channels(path.channelIndex);
     QPointer<SignalPlotModel> model(_plot_model.get());
 
-    // A master is the group's own domain, not a signal against it.
-    if (channel.is_master() || !channel.decodable()) {
+    // A master is the group's own domain, not a signal against it; a text
+    // channel's samples are text.
+    if (channel.is_master() || channel.textual() || !channel.decodable()) {
         _selected.reset();
         _pending.reset();
         cancelActive();
         model->setSignal(header(key), {}, PlotNote::Empty,
                          channel.is_master()
                              ? QStringLiteral("Master channel — this group's time axis")
+                         : channel.textual()
+                             ? QStringLiteral("Text channel — not plottable")
                              : QStringLiteral("This channel type is not plottable"));
         if (model && selection == _selections) {
             updateBusy();
@@ -586,10 +592,11 @@ std::uint64_t Mdf4DocumentSession::treeBytes(const mdf4::File& document) {
         textBytes += (group.name().empty() ? 24 : group.name().size()) + 28;
         for (const mdf4::Channel& channel : group.channels()) {
             ++rows;
-            // The name or "Channel <n>", then the unit and an axis or unplottable role.
+            // The name or "Channel <n>", then the unit and an axis, text or
+            // unplottable role.
             textBytes += (channel.name().empty() ? 18 : channel.name().size()) +
                          channel.unit().size() +
-                         (channel.is_master() || !channel.decodable() ? 19 : 0);
+                         (channel.is_master() || channel.textual() || !channel.decodable() ? 20 : 0);
         }
     }
     return rows * kRowBytes + textBytes * 9 / 4;

@@ -26,6 +26,8 @@ QString dataTypeText(mdf4::DataType type) {
         return QStringLiteral("Signed integer (big-endian)");
     case mdf4::FLOAT_BE:
         return QStringLiteral("IEEE floating point (big-endian)");
+    case mdf4::STRING:
+        return QStringLiteral("String");
     case mdf4::DATA_TYPE_OTHER:
         return QStringLiteral("Other / unsupported");
     case mdf4::DATA_TYPE_UNSPECIFIED:
@@ -351,12 +353,24 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
     }
     pushSection(sections, QStringLiteral("Conversion"), std::move(conversionFields));
 
+    // A text channel is read, not plotted; an MLSD channel's valid Byte count is
+    // the value of the size channel of its group.
     QList<DetailField> plot;
-    plot.push_back({QStringLiteral("Plottable"), boolText(channel.decodable())});
+    plot.push_back({QStringLiteral("Plottable"), boolText(channel.decodable() && !channel.textual())});
     if (!channel.decodable()) {
         addField(plot,
                  QStringLiteral("Unsupported Reason"),
                  text(channel.not_decodable_reason()));
+    }
+    if (channel.textual()) {
+        plot.push_back({QStringLiteral("Values"), QStringLiteral("Text (UTF-8)")});
+    }
+    if (channel.decodable() && channel.cn_type() == 5) {
+        const int sizeIndex = static_cast<int>(channel.size_channel());
+        const mdf4::Channel& size = group.channels(sizeIndex);
+        plot.push_back({QStringLiteral("Size Channel"),
+                        size.name().empty() ? QStringLiteral("Channel %1").arg(sizeIndex + 1)
+                                            : text(size.name())});
     }
     plot.push_back({QStringLiteral("Validity"), validityText(channel)});
     pushSection(sections, QStringLiteral("Plot"), std::move(plot));

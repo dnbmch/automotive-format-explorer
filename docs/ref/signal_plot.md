@@ -126,7 +126,11 @@ decoding a master returns its own samples in both time and value — so the tree
 lists it as the group's axis channel, with its detail view intact, and never
 scans it. A channel the reader cannot decode stays in the tree marked "Not
 plottable", with its reason in the detail cards; selecting it scans nothing and the
-plot says it is not plottable.
+plot says it is not plottable. A text channel (`Channel.textual`) is readable, but its
+samples are text: the tree lists it as an ordinary channel marked "Text channel", its
+detail cards read "Plottable: No" and "Values: Text (UTF-8)", and selecting it scans
+nothing while the plot says "Text channel — not plottable". A decodable MLSD
+channel's cards name its size channel.
 
 ## Measured scale
 

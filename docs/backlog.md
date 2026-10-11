@@ -60,6 +60,22 @@ print-friendly view of it (`SignalMapView.qml`, `SignalGridItem`). Neither exist
 
 **Size:** S.
 
+### BL-V5: a text channel's values are not shown
+
+A text channel (`Channel.textual`) is listed and described, but its samples are
+never read: selecting it shows "Text channel — not plottable" and scans nothing
+(`Mdf4DocumentSession::selectChannel()`). A value table, one row per sample with its
+index, time and text, would read through the reader's text lane (`scanText`, the
+mdf4-parser string-channel increment), bound by `Mdf4Adapter::load()` beside `scan`,
+into a windowed list model the session owns and accounts within its result
+allowance, shown in the center panel in place of the plot. The center panel's source
+and model are one per session (`DocumentSession::centerPanelSource()`, announced only
+by `AppController::currentSessionChanged`), so either the selection switches the
+center view or one MDF4 center view hosts both the plot and the table. The plot stack
+is untouched.
+
+**Size:** M.
+
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant
