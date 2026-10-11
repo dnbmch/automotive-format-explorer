@@ -1,5 +1,26 @@
 # automotive-format-explorer — handoff
 
+## 2026-10-11 — text channels are readable, not plottable — OPEN
+
+The MDF4 reader delivers a string channel's samples as UTF-8 text through its text
+operations ([reader contract](../../mdf4-parser/docs/arch/reader.md#read-set)); the
+Explorer lists such a channel as an ordinary channel with the role "Text channel",
+its detail panel reads "Plottable: No" and "Values: Text (UTF-8)" (an MLSD channel
+also names its size channel), and selecting it scans nothing
+([signal plot](ref/signal_plot.md)). Reading the texts into a value table is
+BL-V5 in the [backlog](backlog.md). Evidence: the presenter and session suites with
+the five new cases seen failing first, the whole suite green against the landed
+parser, and the launch check opening the 4.2.0 corpus's VLSD, MLSD, unsorted VLSD
+and text-to-text files without a QML warning. OPEN only for the check below.
+
+UNVERIFIED — operator-visual: open
+`ASAM_MDF_BS_V4-2-0/BaseStandard/Examples/ChannelTypes/MLSD/Vector_MLSDStringSBC.mf4`
+from the corpus and select `Data channel`. Pass: the tree row reads "Text channel",
+the plot area reads "Text channel — not plottable", and the detail panel's Plot
+section reads "Data Type: String", "Plottable: No", "Values: Text (UTF-8)" and
+"Size Channel: Size channel". Fail: a scan starts, the row carries the unsupported
+icon, or the data type reads "Unknown (8)".
+
 ## 2026-10-11 — invalidated samples plot as gaps — OPEN
 
 The MDF4 reader delivers a sample whose invalidation bit is set as NaN at its time
