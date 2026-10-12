@@ -47,7 +47,7 @@ Browse every parsed entity in a structured tree with expand/collapse, keyboard s
 - **A2L**: Modules, Measurements, Characteristics, Axis Points, Compu Methods, Record Layouts, Units, Functions, Groups, Typedef Characteristics/Structures/Axes, Instances, Variant Coding, XCP and CCP protocol summaries
 - **DBC**: Messages, Signals, Nodes, Value Tables, Attribute Definitions, Environment Variables, Signal Groups
 - **LDF**: Frames, Signals, Nodes (Master/Slave), Schedule Tables, Signal Encoding Types, Signal Representations
-- **MDF4**: Channel Groups and Channels, each channel showing its unit and whether it is plottable (sources, storage layouts, invalidation Bytes, conversions, masters, validity rules, and unsupported-feature reasons live in the detail panel)
+- **MDF4**: Channel Groups and Channels, each channel showing its unit and whether it is plottable, an array channel its type and shape (sources, storage layouts, invalidation Bytes, conversions, masters, validity rules, array dimensions and axes, and unsupported-feature reasons live in the detail panel)
 
 ### Detail Panel
 
@@ -105,6 +105,8 @@ per open file.
 - Progress while reading; a newer selection or view cancels obsolete reads
 - A recording that ends early is marked incomplete with the samples it holds
 - Unsupported channels stay browsable and explain why they are not plottable
+- Array channels (look-ups, classification results and other MDF4 arrays) are listed
+  with their type and shape and described with their axes, not plotted
 - A group's master channel is listed as its axis rather than offered as a signal
 
 ### Bidirectional Selection

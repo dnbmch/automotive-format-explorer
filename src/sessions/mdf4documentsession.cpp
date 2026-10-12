@@ -8,6 +8,7 @@
 #include <QPromise>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <utility>
@@ -32,7 +33,8 @@ QString channelTitle(const mdf4::Channel& channel, int index) {
 // A master carries the group's domain, so it is described by what it is rather
 // than offered as a signal: decoding it returns its own samples in both time
 // and value, which plots as a 45-degree line. A text channel is readable, but
-// its samples are text, not values to plot.
+// its samples are text, not values to plot; an array channel's sample is a whole
+// array, so its role is its type and shape.
 QString channelSubtitle(const mdf4::Channel& channel) {
     const QString unit = text(channel.unit());
     QString role;
@@ -40,6 +42,9 @@ QString channelSubtitle(const mdf4::Channel& channel) {
         role = QStringLiteral("Master channel");
     } else if (channel.textual()) {
         role = QStringLiteral("Text channel");
+    } else if (channel.has_array()) {
+        role = QStringLiteral("%1 %2").arg(arrayTypeText(channel.array().ca_type()),
+                                           arrayShapeText(channel.array()));
     } else if (!channel.decodable()) {
         role = QStringLiteral("Not plottable");
     } else {
@@ -252,8 +257,8 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t sele
     QPointer<SignalPlotModel> model(_plot_model.get());
 
     // A master is the group's own domain, not a signal against it; a text
-    // channel's samples are text.
-    if (channel.is_master() || channel.textual() || !channel.decodable()) {
+    // channel's samples are text, an array channel's whole arrays.
+    if (channel.is_master() || channel.textual() || channel.has_array() || !channel.decodable()) {
         _selected.reset();
         _pending.reset();
         cancelActive();
@@ -262,6 +267,8 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t sele
                              ? QStringLiteral("Master channel — this group's time axis")
                          : channel.textual()
                              ? QStringLiteral("Text channel — not plottable")
+                         : channel.has_array()
+                             ? QStringLiteral("Array channel — not plottable")
                              : QStringLiteral("This channel type is not plottable"));
         if (model && selection == _selections) {
             updateBusy();
@@ -593,10 +600,20 @@ std::uint64_t Mdf4DocumentSession::treeBytes(const mdf4::File& document) {
         for (const mdf4::Channel& channel : group.channels()) {
             ++rows;
             // The name or "Channel <n>", then the unit and an axis, text or
-            // unplottable role.
+            // unplottable role, or an array's: 28 for the separator and type, 24
+            // for each printed size with its " × ", and 24 for " … (<count>
+            // dimensions)", whose count may take ten digits because the first
+            // size has no " × ".
+            std::uint64_t role = 0;
+            if (channel.has_array()) {
+                const int dimensions = channel.array().dimensions_size();
+                role = 28 + 24 * static_cast<std::uint64_t>(std::min(dimensions, kArrayDimensionsShown)) +
+                       (dimensions > kArrayDimensionsShown ? 24 : 0);
+            } else if (channel.is_master() || channel.textual() || !channel.decodable()) {
+                role = 20;
+            }
             textBytes += (channel.name().empty() ? 18 : channel.name().size()) +
-                         channel.unit().size() +
-                         (channel.is_master() || channel.textual() || !channel.decodable() ? 20 : 0);
+                         channel.unit().size() + role;
         }
     }
     return rows * kRowBytes + textBytes * 9 / 4;

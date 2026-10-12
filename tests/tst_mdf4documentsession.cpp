@@ -159,6 +159,28 @@ mdf4::File makeTextDocument() {
     return document;
 }
 
+// makeDocument() with an array channel after the unsupported one in group 0: the
+// reader decodes it, and each of its samples is a whole 52 x 142 classification
+// result.
+constexpr int kArray = Unsupported + 1;
+
+mdf4::File makeArrayDocument() {
+    mdf4::File document = makeDocument();
+    mdf4::Channel* result = document.mutable_groups(0)->add_channels();
+    result->set_name("2D_classification");
+    result->set_unit("s");
+    result->set_sample_count(4);
+    result->set_data_type(mdf4::FLOAT_LE);
+    result->set_bit_count(32);
+    result->set_decodable(true);
+    mdf4::ChannelArray* array = result->mutable_array();
+    array->set_ca_type(4);
+    array->add_dimensions()->set_size(52);
+    array->add_dimensions()->set_size(142);
+    array->set_element_count(52 * 142);
+    return document;
+}
+
 // The source's axes: group 0 has its own time master, group 1 none.
 mdf4::Axis timeMaster(std::uint32_t group) {
     return group == 0 ? mdf4::Axis{mdf4::AxisKind::Master, 0, Master}
@@ -571,6 +593,8 @@ private slots:
     void masterChannelIsAnAxisNotASignal();
     void textChannelIsAnOrdinaryTreeChannel();
     void textChannelScansNothing();
+    void arrayChannelIsAnOrdinaryTreeChannel();
+    void arrayChannelScansNothing();
     void regressingTimePlotsSampleIndices();
     void supersededScansAreCancelled();
     void reselectingAfterCancelScansAgain();
@@ -712,6 +736,38 @@ void TestMdf4DocumentSession::textChannelScansNothing() {
     QCOMPARE(model->plotState(), SignalPlotModel::Empty);
     QCOMPARE(model->name(), QStringLiteral("DriverMessage"));
     QCOMPARE(model->message(), QStringLiteral("Text channel — not plottable"));
+    QVERIFY(settle(*session));
+    QVERIFY(scans->channels().empty());
+}
+
+// Readable, so listed like any channel rather than as unsupported; its role
+// names its type and shape after the unit.
+void TestMdf4DocumentSession::arrayChannelIsAnOrdinaryTreeChannel() {
+    auto scans = std::make_shared<Scans>(false);
+    auto session = openSession(scans, makeArrayDocument());
+    TreeModel* tree = session->treeModel();
+    const QModelIndex group = tree->index(0, 0, tree->index(0, 0));
+    const QModelIndex row = tree->index(kArray, 0, group);
+    QCOMPARE(tree->data(row, TreeModel::TitleRole).toString(), QStringLiteral("2D_classification"));
+    QCOMPARE(tree->data(row, TreeModel::SemanticKindRole).toInt(),
+             static_cast<int>(SemanticKind::Entity));
+    QCOMPARE(tree->data(row, TreeModel::IconKeyRole).toString(), QStringLiteral("channel"));
+    QCOMPARE(tree->data(row, TreeModel::SubtitleRole).toString(),
+             QStringLiteral("s  ·  Classification result 52 × 142"));
+}
+
+// Not plottable: selecting it shows its details and a note, and scans nothing.
+void TestMdf4DocumentSession::arrayChannelScansNothing() {
+    auto scans = std::make_shared<Scans>(false);
+    auto session = openSession(scans, makeArrayDocument());
+    SignalPlotModel* model = plotOf(*session);
+    session->selectNode(channelKey(*session, kArray));
+    QCOMPARE(detailName(session->detailModel()), QStringLiteral("2D_classification"));
+    QVERIFY(!model->busy());
+    QVERIFY(!model->hasSamples());
+    QCOMPARE(model->plotState(), SignalPlotModel::Empty);
+    QCOMPARE(model->name(), QStringLiteral("2D_classification"));
+    QCOMPARE(model->message(), QStringLiteral("Array channel — not plottable"));
     QVERIFY(settle(*session));
     QVERIFY(scans->channels().empty());
 }

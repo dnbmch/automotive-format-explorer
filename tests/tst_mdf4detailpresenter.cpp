@@ -2,6 +2,8 @@
 
 #include <QTest>
 
+#include <initializer_list>
+
 namespace {
 
 Mdf4Path pathFor(Mdf4EntityKind kind, int group = -1, int channel = -1) {
@@ -49,7 +51,7 @@ mdf4::File makeDocument() {
     channel->set_sample_count(1'000'000);
     channel->set_cn_type(0);
     channel->set_decodable(false);
-    channel->set_not_decodable_reason("composed channel (array or structure) not supported");
+    channel->set_not_decodable_reason("structure channel not supported");
 
     mdf4::Conversion* conversion = channel->mutable_conversion();
     conversion->set_kind(mdf4::LINEAR);
@@ -104,6 +106,58 @@ mdf4::File makeTextDocument() {
     return document;
 }
 
+// A decodable array channel of `type` over `sizes`, outer first, with an index
+// axis per dimension.
+mdf4::ChannelArray* addArray(mdf4::ChannelGroup* group, const char* name, quint32 type,
+                             std::initializer_list<quint64> sizes) {
+    mdf4::Channel* channel = group->add_channels();
+    channel->set_name(name);
+    channel->set_sample_count(group->cycle_count());
+    channel->set_data_type(mdf4::UINT_LE);
+    channel->set_bit_count(8);
+    channel->set_decodable(true);
+    mdf4::ChannelArray* array = channel->mutable_array();
+    array->set_ca_type(type);
+    quint64 elements = 1;
+    for (quint64 size : sizes) {
+        array->add_dimensions()->set_size(size);
+        elements *= size;
+    }
+    array->set_element_count(elements);
+    return array;
+}
+
+// Group 0 of makeDocument() gains, after EngineSpeed: a look-up whose axes are
+// fixed points, an axis channel and the element index; an interval axis with
+// left-closed and one with left-open intervals; and an array of nine dimensions
+// with a type the standard does not define, its first dimension one fixed point.
+// An unnamed second group holds the look-up's axis channel, a scaling axis.
+enum ArrayRow : int { LookUp = 1, ClosedIntervals, OpenIntervals, NineDimensions };
+
+mdf4::File makeArrayDocument() {
+    mdf4::File document = makeDocument();
+    mdf4::ChannelGroup* group = document.mutable_groups(0);
+
+    mdf4::ChannelArray* lookUp = addArray(group, "KF4", 2, {6, 8, 2});
+    for (int point = 0; point < 6; ++point) {
+        lookUp->mutable_dimensions(0)->add_axis_values(point);
+    }
+    lookUp->mutable_dimensions(1)->set_axis_from_channel(true);
+    lookUp->mutable_dimensions(1)->set_axis_group(1);
+    lookUp->mutable_dimensions(1)->set_axis_channel(0);
+
+    addArray(group, "nmot", 3, {143});
+    addArray(group, "speed_bins", 3, {20})->set_left_open(true);
+
+    mdf4::ChannelArray* deep = addArray(group, "Cube9", 9, {1, 2, 2, 2, 2, 2, 2, 2, 2});
+    deep->mutable_dimensions(0)->add_axis_values(3.5);
+
+    mdf4::ChannelGroup* axes = document.add_groups();
+    axes->set_cycle_count(1);
+    addArray(axes, "Curve1", 1, {8});
+    return document;
+}
+
 } // namespace
 
 class TestMdf4DetailPresenter : public QObject {
@@ -120,6 +174,10 @@ private slots:
     void channelCardNamesStringType();
     void textChannelIsReadableNotPlottable();
     void mlsdChannelNamesItsSizeChannel();
+    void arrayChannelIsReadableNotPlottable();
+    void arrayCardNamesEachAxis();
+    void intervalAxisStatesItsIntervals();
+    void deepArrayCapsItsDimensions();
     void selectedEntityYieldsRawJson();
 };
 
@@ -167,7 +225,7 @@ void TestMdf4DetailPresenter::channelCardExplainsPlotSupport() {
     QCOMPARE(fieldValue(details, QStringLiteral("Plot"), QStringLiteral("Plottable")),
              QStringLiteral("No"));
     QCOMPARE(fieldValue(details, QStringLiteral("Plot"), QStringLiteral("Unsupported Reason")),
-             QStringLiteral("composed channel (array or structure) not supported"));
+             QStringLiteral("structure channel not supported"));
 }
 
 void TestMdf4DetailPresenter::channelCardNamesBigEndianTypesAndFormulaConversions() {
@@ -378,6 +436,105 @@ void TestMdf4DetailPresenter::mlsdChannelNamesItsSizeChannel() {
     const Mdf4DetailPresenter presenter(document);
     const QList<DetailSection> mlsd = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, MlsdText));
     QCOMPARE(fieldValue(mlsd, plot, QStringLiteral("Size Channel")), QStringLiteral("Channel 3"));
+}
+
+// An array channel is read, not plotted: each sample is a whole array, and no
+// reason is given because nothing is unsupported. Its sample count stays the
+// group's cycle count.
+void TestMdf4DetailPresenter::arrayChannelIsReadableNotPlottable() {
+    mdf4::File document = makeArrayDocument();
+    const QString plot = QStringLiteral("Plot");
+    {
+        const Mdf4DetailPresenter presenter(document);
+        const QList<DetailSection> lookUp = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, LookUp));
+        QCOMPARE(fieldValue(lookUp, plot, QStringLiteral("Plottable")), QStringLiteral("No"));
+        QCOMPARE(fieldValue(lookUp, plot, QStringLiteral("Values")),
+                 QStringLiteral("Array of 96 elements per sample"));
+        QVERIFY(fieldValue(lookUp, plot, QStringLiteral("Unsupported Reason")).isEmpty());
+        QCOMPARE(fieldValue(lookUp, QStringLiteral("Samples"), QStringLiteral("Sample Count")),
+                 QStringLiteral("1000000"));
+    }
+
+    // One element per sample is still an array.
+    mdf4::ChannelArray* single = document.mutable_groups(0)->mutable_channels(ClosedIntervals)->mutable_array();
+    single->mutable_dimensions(0)->set_size(1);
+    single->set_element_count(1);
+    const Mdf4DetailPresenter presenter(document);
+    const QList<DetailSection> one = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, ClosedIntervals));
+    QCOMPARE(fieldValue(one, plot, QStringLiteral("Plottable")), QStringLiteral("No"));
+    QCOMPARE(fieldValue(one, plot, QStringLiteral("Values")), QStringLiteral("Array of 1 element per sample"));
+}
+
+// The Array card states the type and shape, and per dimension its axis: fixed
+// points, an axis channel named as the tree titles it and its group, or the
+// element index. A scalar channel has no Array card.
+void TestMdf4DetailPresenter::arrayCardNamesEachAxis() {
+    mdf4::File document = makeArrayDocument();
+    const QString array = QStringLiteral("Array");
+    {
+        const Mdf4DetailPresenter presenter(document);
+        const QList<DetailSection> lookUp = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, LookUp));
+        QCOMPARE(fieldValue(lookUp, array, QStringLiteral("Array Type")), QStringLiteral("Look-up"));
+        QCOMPARE(fieldValue(lookUp, array, QStringLiteral("Dimensions")), QStringLiteral("6 × 8 × 2"));
+        QCOMPARE(fieldValue(lookUp, array, QStringLiteral("Elements per Sample")), QStringLiteral("96"));
+        QCOMPARE(fieldValue(lookUp, array, QStringLiteral("Axis 1")), QStringLiteral("Fixed: 0 … 5 (6 points)"));
+        QCOMPARE(fieldValue(lookUp, array, QStringLiteral("Axis 2")),
+                 QStringLiteral("Channel Curve1 (Channel Group 2)"));
+        QCOMPARE(fieldValue(lookUp, array, QStringLiteral("Axis 3")), QStringLiteral("Index"));
+        QVERIFY(fieldValue(lookUp, array, QStringLiteral("Axis 4")).isEmpty());
+        QVERIFY(fieldValue(lookUp, array, QStringLiteral("Intervals")).isEmpty());
+
+        const QList<DetailSection> scalar = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 0));
+        QVERIFY(fieldValue(scalar, array, QStringLiteral("Array Type")).isEmpty());
+    }
+
+    document.mutable_groups(1)->set_name("Axes");
+    const Mdf4DetailPresenter presenter(document);
+    const QList<DetailSection> lookUp = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, LookUp));
+    QCOMPARE(fieldValue(lookUp, array, QStringLiteral("Axis 2")), QStringLiteral("Channel Curve1 (Axes)"));
+}
+
+// An interval axis states which border each interval includes; the flag means
+// nothing on any other type.
+void TestMdf4DetailPresenter::intervalAxisStatesItsIntervals() {
+    mdf4::File document = makeArrayDocument();
+    const QString array = QStringLiteral("Array");
+    {
+        const Mdf4DetailPresenter presenter(document);
+        const QList<DetailSection> closed =
+            presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, ClosedIntervals));
+        QCOMPARE(fieldValue(closed, array, QStringLiteral("Array Type")), QStringLiteral("Interval axis"));
+        QCOMPARE(fieldValue(closed, array, QStringLiteral("Dimensions")), QStringLiteral("143"));
+        QCOMPARE(fieldValue(closed, array, QStringLiteral("Intervals")), QStringLiteral("[a, b["));
+        QCOMPARE(fieldValue(closed, array, QStringLiteral("Axis 1")), QStringLiteral("Index"));
+
+        const QList<DetailSection> open = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, OpenIntervals));
+        QCOMPARE(fieldValue(open, array, QStringLiteral("Intervals")), QStringLiteral("]a, b]"));
+    }
+
+    document.mutable_groups(0)->mutable_channels(LookUp)->mutable_array()->set_left_open(true);
+    const Mdf4DetailPresenter presenter(document);
+    const QList<DetailSection> lookUp = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, LookUp));
+    QCOMPARE(fieldValue(lookUp, array, QStringLiteral("Array Type")), QStringLiteral("Look-up"));
+    QVERIFY(fieldValue(lookUp, array, QStringLiteral("Intervals")).isEmpty());
+}
+
+// Past eight dimensions the shape names the first eight sizes and the count,
+// and the card lists the axes of those eight. A type the standard does not
+// define is named by its number.
+void TestMdf4DetailPresenter::deepArrayCapsItsDimensions() {
+    const mdf4::File document = makeArrayDocument();
+    const Mdf4DetailPresenter presenter(document);
+    const QString array = QStringLiteral("Array");
+
+    const QList<DetailSection> deep = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, NineDimensions));
+    QCOMPARE(fieldValue(deep, array, QStringLiteral("Array Type")), QStringLiteral("Array type 9"));
+    QCOMPARE(fieldValue(deep, array, QStringLiteral("Dimensions")),
+             QStringLiteral("1 × 2 × 2 × 2 × 2 × 2 × 2 × 2 … (9 dimensions)"));
+    QCOMPARE(fieldValue(deep, array, QStringLiteral("Elements per Sample")), QStringLiteral("256"));
+    QCOMPARE(fieldValue(deep, array, QStringLiteral("Axis 1")), QStringLiteral("Fixed: 3.5 (1 point)"));
+    QCOMPARE(fieldValue(deep, array, QStringLiteral("Axis 8")), QStringLiteral("Index"));
+    QVERIFY(fieldValue(deep, array, QStringLiteral("Axis 9")).isEmpty());
 }
 
 void TestMdf4DetailPresenter::selectedEntityYieldsRawJson() {

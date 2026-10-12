@@ -1,5 +1,28 @@
 # automotive-format-explorer — handoff
 
+## 2026-10-12 — array channels are described, not plotted — OPEN
+
+The MDF4 reader reads an array channel through its array operations and publishes
+its type, dimensions and axes as `Channel.array`
+([reader contract](../../mdf4-parser/docs/arch/reader.md#read-set)); the Explorer
+lists such a channel as an ordinary channel whose role is its type and shape, its
+detail panel reads "Plottable: No" and "Values: Array of N elements per sample" beside
+an Array card with each dimension's axis, and selecting it scans nothing
+([signal plot](ref/signal_plot.md)). Reading the values into a table is BL-V6 in the
+[backlog](backlog.md). Evidence: the presenter and session suites with the six new
+cases seen failing first, both green against mdf4-parser `0f34508`. OPEN only for the
+check below.
+
+UNVERIFIED: open POR (`Arrays/Classification/Porsche_2D_classification_result.mf4`)
+and VMA (`Arrays/Simple/Vector_MeasurementArrays.mf4`), both under the 4.2.0
+corpus's `ASAM_MDF_BS_V4-2-0/BaseStandard/Examples/`. Pass: `2D_classification`
+reads `s  ·  Classification result 52 × 142` (two spaces each side of the dot) and `KF4` `Look-up 6 × 8` in the tree;
+selecting either shows "Array channel — not plottable"; the Array card of
+`2D_classification` lists `Axis 1: Channel throttle (2D_classification_axis)` and
+`Axis 2: Channel nmot (2D_classification_axis)`, KF4's `Axis 1: Fixed: 0 … 5 (6
+points)` and `Axis 2: Channel Curve1 (…)`. Fail: "Not plottable", a plot, or a
+failure note.
+
 ## 2026-10-11 — text channels are readable, not plottable — OPEN
 
 The MDF4 reader delivers a string channel's samples as UTF-8 text through its text

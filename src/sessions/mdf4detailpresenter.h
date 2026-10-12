@@ -20,6 +20,16 @@ struct Mdf4Path {
     int channelIndex = -1;
 };
 
+// The dimensions of an array channel whose sizes and axes the tree and the
+// detail panel spell out; past them the shape gives the dimension count.
+constexpr int kArrayDimensionsShown = 8;
+
+// An array channel's type (ca_type) as the tree and the detail panel name it,
+// and its shape: the first kArrayDimensionsShown sizes, outer first, then the
+// count of dimensions when there are more.
+QString arrayTypeText(quint32 caType);
+QString arrayShapeText(const mdf4::ChannelArray& array);
+
 class Mdf4DetailPresenter final {
 public:
     explicit Mdf4DetailPresenter(const mdf4::File& document)

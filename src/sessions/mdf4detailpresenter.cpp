@@ -2,6 +2,8 @@
 
 #include <QStringList>
 
+#include <algorithm>
+
 namespace {
 
 QString integerText(quint64 value) {
@@ -171,7 +173,63 @@ void appendComment(QList<DetailSection>& sections, const std::string& comment) {
     }
 }
 
+// One dimension's axis: an axis channel, named as the tree titles it and its
+// group, fixed physical points, or the zero-based element index.
+QString axisText(const mdf4::File& document, const mdf4::ArrayDimension& dimension) {
+    if (dimension.axis_from_channel()) {
+        const int groupIndex = static_cast<int>(dimension.axis_group());
+        const int channelIndex = static_cast<int>(dimension.axis_channel());
+        const mdf4::ChannelGroup& group = document.groups(groupIndex);
+        const mdf4::Channel& axis = group.channels(channelIndex);
+        return QStringLiteral("Channel %1 (%2)")
+            .arg(axis.name().empty() ? QStringLiteral("Channel %1").arg(channelIndex + 1)
+                                     : text(axis.name()),
+                 group.name().empty() ? QStringLiteral("Channel Group %1").arg(groupIndex + 1)
+                                      : text(group.name()));
+    }
+    const int points = dimension.axis_values_size();
+    if (points == 1) {
+        return QStringLiteral("Fixed: %1 (1 point)").arg(realText(dimension.axis_values(0)));
+    }
+    if (points > 1) {
+        return QStringLiteral("Fixed: %1 … %2 (%3 points)")
+            .arg(realText(dimension.axis_values(0)), realText(dimension.axis_values(points - 1)))
+            .arg(points);
+    }
+    return QStringLiteral("Index");
+}
+
 } // namespace
+
+QString arrayTypeText(quint32 caType) {
+    switch (caType) {
+    case 0:
+        return QStringLiteral("Array");
+    case 1:
+        return QStringLiteral("Scaling axis");
+    case 2:
+        return QStringLiteral("Look-up");
+    case 3:
+        return QStringLiteral("Interval axis");
+    case 4:
+        return QStringLiteral("Classification result");
+    default:
+        return QStringLiteral("Array type %1").arg(caType);
+    }
+}
+
+QString arrayShapeText(const mdf4::ChannelArray& array) {
+    const int dimensions = array.dimensions_size();
+    QStringList sizes;
+    for (int index = 0; index < std::min(dimensions, kArrayDimensionsShown); ++index) {
+        sizes.push_back(integerText(array.dimensions(index).size()));
+    }
+    QString shape = sizes.join(QStringLiteral(" × "));
+    if (dimensions > kArrayDimensionsShown) {
+        shape += QStringLiteral(" … (%1 dimensions)").arg(dimensions);
+    }
+    return shape;
+}
 
 QList<DetailSection> Mdf4DetailPresenter::buildDetails(const Mdf4Path& path) const {
     switch (path.kind) {
@@ -317,6 +375,26 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
                     {QStringLiteral("Bit Count"), integerText(channel.bit_count())},
                 });
 
+    // The geometry above is element 0's, the template of every element; an
+    // interval axis's left_open flag says which border an interval includes.
+    if (channel.has_array()) {
+        const mdf4::ChannelArray& array = channel.array();
+        QList<DetailField> arrayFields{
+            {QStringLiteral("Array Type"), arrayTypeText(array.ca_type())},
+            {QStringLiteral("Dimensions"), arrayShapeText(array)},
+            {QStringLiteral("Elements per Sample"), integerText(array.element_count())},
+        };
+        if (array.ca_type() == 3) {
+            arrayFields.push_back({QStringLiteral("Intervals"),
+                                   array.left_open() ? QStringLiteral("]a, b]") : QStringLiteral("[a, b[")});
+        }
+        for (int index = 0; index < std::min(array.dimensions_size(), kArrayDimensionsShown); ++index) {
+            arrayFields.push_back({QStringLiteral("Axis %1").arg(index + 1),
+                                   axisText(_document, array.dimensions(index))});
+        }
+        pushSection(sections, QStringLiteral("Array"), std::move(arrayFields));
+    }
+
     const mdf4::Conversion& conversion = channel.conversion();
     QList<DetailField> conversionFields;
     conversionFields.push_back({QStringLiteral("Kind"), conversionKindText(conversion.kind())});
@@ -353,10 +431,12 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
     }
     pushSection(sections, QStringLiteral("Conversion"), std::move(conversionFields));
 
-    // A text channel is read, not plotted; an MLSD channel's valid Byte count is
-    // the value of the size channel of its group.
+    // A text channel is read, not plotted, and so is an array channel, whose
+    // sample is a whole array; an MLSD channel's valid Byte count is the value of
+    // the size channel of its group.
     QList<DetailField> plot;
-    plot.push_back({QStringLiteral("Plottable"), boolText(channel.decodable() && !channel.textual())});
+    plot.push_back({QStringLiteral("Plottable"),
+                    boolText(channel.decodable() && !channel.textual() && !channel.has_array())});
     if (!channel.decodable()) {
         addField(plot,
                  QStringLiteral("Unsupported Reason"),
@@ -364,6 +444,12 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
     }
     if (channel.textual()) {
         plot.push_back({QStringLiteral("Values"), QStringLiteral("Text (UTF-8)")});
+    }
+    if (channel.has_array()) {
+        const quint64 elements = channel.array().element_count();
+        plot.push_back({QStringLiteral("Values"),
+                        elements == 1 ? QStringLiteral("Array of 1 element per sample")
+                                      : QStringLiteral("Array of %1 elements per sample").arg(elements)});
     }
     if (channel.decodable() && channel.cn_type() == 5) {
         const int sizeIndex = static_cast<int>(channel.size_channel());

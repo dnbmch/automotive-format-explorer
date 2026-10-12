@@ -76,6 +76,41 @@ is untouched.
 
 **Size:** M.
 
+### BL-V6: an array channel's values are not shown
+
+An array channel (`Channel.array`) is listed with its type and shape and described
+with its axes, but its values are never read: selecting it shows "Array channel — not
+plottable" and scans nothing (`Mdf4DocumentSession::selectChannel()`). A one-sample
+table in the center panel would read through the reader's array lane,
+`readArray(g, c, s, 1, window)` (the mdf4-parser channel-array increment), bound by
+`Mdf4Adapter::load()` beside `scan`, on a worker shaped like `launch()`, into an
+`ArrayTableModel`: a `QAbstractListModel` with one row per matrix row and a `cells`
+role (the center-panel contract, `DocumentSession::centerPanelModel()`), the axes as
+headers (an interval axis's borders as `[a, b[` labels, `]a, b]` when left-open), a
+sample selector, slice selectors for more than two dimensions, NaN cells blank, the
+matrix retained at 8 B per value within the session's result allowance. The center-view
+switch and the retained-result variant are BL-V5's, shared.
+
+Its own fork: which axis-channel sample labels array sample s. Recommended: the spec's
+rule (ASAM MDF 4.2.0 base standard p.118, p.115, p.128-129) — a one-cycle axis group
+without a master labels every sample (the classification results of
+`Arrays/Classification/Porsche_2D_classification_result.mf4`,
+`ClassificationResults/2DClassification.mf4` and `ClassificationResults/Rainflow.mf4`),
+otherwise the axis sample with the latest common-master value at or before the array
+sample's, index headers before the first. The same record index (asammdf 8.8.18's
+rule, `mdf_v4.py:8129-8140`) only as a labelled non-spec fallback: on
+`Arrays/Simple/Vector_MeasurementArrays.mf4` it labels `KF2` sample s with the `Curve2`
+sample recorded 0.14 s after it.
+
+Check list, files under the 4.2.0 corpus's `ASAM_MDF_BS_V4-2-0/BaseStandard/Examples/`:
+`2D_classification` of `Arrays/Classification/Porsche_2D_classification_result.mf4`,
+52 × 142 with `throttle` / `nmot` interval headers; `KF4` of
+`Arrays/Simple/Vector_MeasurementArrays.mf4` with a fixed and a channel axis;
+`Signal_MatrixDim` of `Arrays/Simple/dSPACE_MeasurementArrays.mf4` with a slice
+selector.
+
+**Size:** M.
+
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant
