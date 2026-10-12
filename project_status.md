@@ -37,8 +37,9 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   else holds and refusing, with the numbers, when held results leave no room.
   Empty, short, refused, changed-file and failed scans read differently; the domain
   is the reader's time axis or the sample index; group masters are listed as axis
-  channels, not signals. Closing a tab cancels its scan and waits for the reader's
-  next checkpoint.
+  channels, not signals, and text and array channels are described, not plotted
+  (an array with its type, shape and axes). Closing a tab cancels its scan and waits
+  for the reader's next checkpoint.
 - Memory grid: sparse byte queries remove the 16 MiB coverage cap and support tested
   multi-GiB spans, with overlap hatching (bytes claimed by more than
   one object), click-drag byte-range selection with status readout, and hover
