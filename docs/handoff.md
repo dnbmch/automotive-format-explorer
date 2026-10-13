@@ -16,6 +16,29 @@ against the 4.2.0 examples (POR, VMA, dSPACE, VLSD, unsorted VLSD); every Explor
 suite green with 0 warnings against mdf4-parser `ff1483f`. OPEN only for the checks
 below.
 
+The independent review of the landed tables found two P2 defects, corrected in
+`5fb890a` and `f2f2fbf` (plan archived: [table storage and slice
+controls](archive/table_storage_and_slice_controls.md)): a table read's builders held
+more live heap than the reservation the session admitted (the text arena's doubling
+and shrink, three copies of a fixed axis), and the slice controls took the whole
+viewport at a high rank (126 spin boxes, a 0 px matrix for 128 singleton dimensions).
+Now every builder allocates its storage at construction and never reallocates, a fixed
+axis is a pointer into the document copied once into the result, the selectors sit in
+one lazy strip for the outer dimensions with a choice, and the row headers measure the
+corner text with `TextMetrics`, which also removed a binding loop that fired whenever
+the view opened before its first sample arrived (the app's cache-miss path). Evidence:
+`tst_tablestorage` (heap counted by the executable's own `operator new`) and the view
+suite's three new cases seen failing first; the reviewer's probes rebuilt on the fixed
+sources read peak 1,060,968 of 1,060,968 (text) and 1,048,584 of 1,048,856 (array)
+against 1,585,256 and 2,097,160 before; 26 of 26 suites green with 0 warnings.
+
+UNVERIFIED — operator-visual, the slice strip: open the corpus's
+`Arrays/Simple/dSPACE_MeasurementArrays.mf4`, select `Signal_MatrixDim` (2 × 3 × 4).
+Pass: one row under the sample controls reading "Slice", "1" and a spin box 0–1, the
+3 × 4 matrix filling the rest of the pane, the spin box stepping the matrix to the
+other slice; a 2-D array (KF4 below) shows no such row. Fail: a wrapped or missing
+row, a spin box for a singleton dimension, or a matrix squeezed by the controls.
+
 UNVERIFIED — operator-visual, three opens from the corpus's
 `ASAM_MDF_BS_V4-2-0/BaseStandard/Examples/`:
 - `ChannelTypes/VLSD/Vector_VLSDStringUTF8.mf4`, select the first group's `Data
