@@ -29,6 +29,19 @@ Item {
                                      : String(isArray ? mapModel.sample : mapModel.firstRow)
     readonly property int timeColumnWidth: 120
     readonly property int rowHeight: 22
+    // An array's outer dimensions of more than one element, outer first: the
+    // ones with an index to choose.
+    readonly property var selectable: {
+        const dimensions = []
+        if (!isArray)
+            return dimensions
+        const sizes = mapModel.dimensions
+        for (let d = 0; d < sizes.length - 2; ++d) {
+            if (sizes[d] > 1)
+                dimensions.push(d)
+        }
+        return dimensions
+    }
 
     // The column headers' font, which an array column's width also fits.
     FontMetrics {
@@ -145,11 +158,13 @@ Item {
         }
 
         // Where the table stands: a sample field with the previous and next
-        // page (text) or sample (array), and one index per outer dimension.
-        // The controls wrap onto a second line in a narrow pane.
+        // page (text) or sample (array); below it, one index per outer
+        // dimension with a choice, in one row that scrolls sideways, so the
+        // controls' height does not grow with the rank.
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: controls.implicitHeight + 8
+            Layout.preferredHeight: controls.implicitHeight
+                                    + (sliceStrip.visible ? sliceStrip.height + 6 : 0) + 8
             color: Theme.bgPanel
             visible: tableView.tableState !== ValueTableModel.NoChannel
 
@@ -157,7 +172,8 @@ Item {
                 id: controls
                 anchors.left: parent.left
                 anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
+                anchors.top: parent.top
+                anchors.topMargin: 4
                 anchors.leftMargin: 10
                 anchors.rightMargin: 8
                 spacing: 6
@@ -238,43 +254,87 @@ Item {
                         }
                     }
                 }
+            }
+
+            // The selectors are made as the strip shows them; its scroll bar
+            // runs beneath them.
+            Item {
+                id: sliceStrip
+                visible: tableView.selectable.length > 0
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: controls.bottom
+                anchors.topMargin: 6
+                anchors.leftMargin: 10
+                anchors.rightMargin: 8
+                height: 24 + sliceBar.implicitHeight
 
                 Label {
-                    visible: sliceRepeater.count > 0
+                    id: sliceLabel
                     height: 24
-                    leftPadding: 8
                     verticalAlignment: Text.AlignVCenter
                     text: "Slice"
                     font.pixelSize: Theme.fontSizeS
                     color: Theme.textSecondary
                 }
 
-                Repeater {
-                    id: sliceRepeater
-                    model: tableView.isArray ? mapModel.slice.length : 0
+                ListView {
+                    anchors.left: sliceLabel.right
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.leftMargin: 6
+                    orientation: ListView.Horizontal
+                    spacing: 12
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    // A count, so a new slice of the same channel keeps the
+                    // selectors.
+                    model: tableView.selectable.length
 
-                    delegate: SpinBox {
+                    ScrollBar.horizontal: ScrollBar {
+                        id: sliceBar
+                        policy: ScrollBar.AsNeeded
+                    }
+
+                    delegate: Row {
+                        id: selector
                         required property int index
-                        width: 88
-                        height: 24
-                        from: 0
-                        to: Math.max(0, mapModel.dimensions[index] - 1)
-                        value: mapModel.slice[index]
-                        editable: true
-                        font.family: Theme.fontMono
-                        font.pixelSize: Theme.fontSizeS
-                        palette.base: Theme.bg
-                        palette.text: Theme.textPrimary
-                        palette.button: Theme.bgButton
-                        palette.buttonText: Theme.textPrimary
-                        palette.mid: Theme.border
-                        palette.dark: Theme.border
-                        palette.highlight: Theme.accent
-                        ToolTip.text: "Index of dimension " + (index + 1) + " of "
-                                      + mapModel.dimensions.length
-                        ToolTip.visible: hovered
-                        ToolTip.delay: 400
-                        onValueModified: mapModel.setSlice(index, value)
+                        readonly property int dimension: tableView.selectable[index]
+                        spacing: 4
+
+                        // The dimension as the detail panel counts it.
+                        Label {
+                            height: 24
+                            verticalAlignment: Text.AlignVCenter
+                            text: String(selector.dimension + 1)
+                            font.family: Theme.fontMono
+                            font.pixelSize: Theme.fontSizeS
+                            color: Theme.textMuted
+                        }
+
+                        SpinBox {
+                            width: 88
+                            height: 24
+                            from: 0
+                            to: Math.max(0, mapModel.dimensions[selector.dimension] - 1)
+                            value: mapModel.slice[selector.dimension]
+                            editable: true
+                            font.family: Theme.fontMono
+                            font.pixelSize: Theme.fontSizeS
+                            palette.base: Theme.bg
+                            palette.text: Theme.textPrimary
+                            palette.button: Theme.bgButton
+                            palette.buttonText: Theme.textPrimary
+                            palette.mid: Theme.border
+                            palette.dark: Theme.border
+                            palette.highlight: Theme.accent
+                            ToolTip.text: "Index of dimension " + (selector.dimension + 1) + " of "
+                                          + mapModel.dimensions.length
+                            ToolTip.visible: hovered
+                            ToolTip.delay: 400
+                            onValueModified: mapModel.setSlice(selector.dimension, value)
+                        }
                     }
                 }
             }
@@ -308,6 +368,14 @@ Item {
                         elide: Text.ElideRight
                         font.pixelSize: Theme.fontSizeS
                         color: Theme.textMuted
+                    }
+
+                    // The corner text's width for the row headers, apart from
+                    // the label's layout, which follows their width.
+                    TextMetrics {
+                        id: cornerMetrics
+                        font: cornerLabel.font
+                        text: mapModel ? mapModel.cornerText : ""
                     }
                 }
 
@@ -351,7 +419,7 @@ Item {
                         required property var model
                         // Wide enough for the corner's axis names, within reason.
                         implicitWidth: Math.max(48, rowLabel.implicitWidth + 12,
-                                                Math.min(160, cornerLabel.implicitWidth + 12))
+                                                Math.min(160, cornerMetrics.advanceWidth + 12))
                         implicitHeight: tableView.rowHeight
                         color: Theme.bgHeader
 

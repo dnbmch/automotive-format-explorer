@@ -88,10 +88,15 @@ and reads one array sample.
   the time master's unit ("t = …"); without a master the time is the sample's index
   and is not shown.
 - The sample field shows the sample: entering one shows it, clamped to the channel's
-  samples; the arrows move one sample; one spin box per outer dimension sets its
-  index. A new sample or slice clears the rows while it is read. A column is as wide
-  as its values and its header label; the row headers fit their labels and the
-  corner's axis names, up to 160 px.
+  samples; the arrows move one sample. Below them, one row holds a spin box per outer
+  dimension of more than one element, numbered as the Array card counts the
+  dimensions, in a strip that scrolls sideways and makes only the selectors it shows,
+  so the controls' height does not grow with the rank and the matrix keeps the pane;
+  a singleton dimension has nothing to choose and no selector. A new sample or slice
+  clears the rows while it is read. A column is as wide as its values and its header
+  label; the row headers fit their labels and the corner's axis names, measured by a
+  `TextMetrics` on the corner label's font so the measurement does not depend on the
+  headers it sizes, up to 160 px.
 
 ## Reads and storage
 

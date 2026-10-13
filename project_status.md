@@ -41,9 +41,9 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   channels, not signals. Text and array channels are shown as value tables in place
   of the plot: a text channel in pages of 1,024 samples, an array channel one sample
   at a time with its axes as headers, paired with the array's samples by the spec's
-  rule, and a slice index per outer dimension; their reads share the scheduler and
-  the allowance. Closing a tab cancels its read and waits for the reader's next
-  checkpoint.
+  rule, and a slice selector per outer dimension with more than one element; their
+  reads share the scheduler and the allowance. Closing a tab cancels its read and waits
+  for the reader's next checkpoint.
 - Memory grid: sparse byte queries remove the 16 MiB coverage cap and support tested
   multi-GiB spans, with overlap hatching (bytes claimed by more than
   one object), click-drag byte-range selection with status readout, and hover
