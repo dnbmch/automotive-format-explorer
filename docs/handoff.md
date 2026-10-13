@@ -22,8 +22,8 @@ controls](archive/table_storage_and_slice_controls.md)): a table read's builders
 more live heap than the reservation the session admitted (the text arena's doubling
 and shrink, three copies of a fixed axis), and the slice controls took the whole
 viewport at a high rank (126 spin boxes, a 0 px matrix for 128 singleton dimensions).
-Now every builder allocates its storage at construction and never reallocates, a fixed
-axis is a pointer into the document copied once into the result, the selectors sit in
+Now the text page builder allocates its storage at construction and never reallocates,
+a fixed axis is a pointer into the document copied once into the result, the selectors sit in
 one lazy strip for the outer dimensions with a choice, and the row headers measure the
 corner text with `TextMetrics`, which also removed a binding loop that fired whenever
 the view opened before its first sample arrived (the app's cache-miss path). Evidence:
@@ -108,6 +108,9 @@ Landmines:
 - The painted-item suites compile their item's source themselves (the items belong to
   the executable, not a library) and run with `QT_QPA_PLATFORM=offscreen`. Pixel
   checks compare 8-bit RGB; a `QColor` keeps finer components than the image stores.
+- The offscreen platform finds no font directory and falls back to a 10 px sans
+  serif that measures wider than the real fonts, so a width assertion states the rule
+  (fits, or sits at its cap), never a pixel count.
 - `tst_appcontroller` and `tst_mdf4documentsession` synchronise on
   `QThreadPool::globalInstance()->waitForDone()`; the session suite's `settle()` runs
   the pool dry repeatedly, because a completion starts the next scan. Unrelated pool

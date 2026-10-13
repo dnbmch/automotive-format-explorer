@@ -90,8 +90,9 @@ and reads one array sample.
 - The sample field shows the sample: entering one shows it, clamped to the channel's
   samples; the arrows move one sample. Below them, one row holds a spin box per outer
   dimension of more than one element, numbered as the Array card counts the
-  dimensions, in a strip that scrolls sideways and makes only the selectors it shows,
-  so the controls' height does not grow with the rank and the matrix keeps the pane;
+  dimensions, in a strip that scrolls sideways and makes selectors as it shows them
+  (its cache buffer included), not one per dimension, so the controls' height does
+  not grow with the rank and the matrix keeps the pane;
   a singleton dimension has nothing to choose and no selector. A new sample or slice
   clears the rows while it is read. A column is as wide as its values and its header
   label; the row headers fit their labels and the corner's axis names, measured by a

@@ -342,8 +342,9 @@ The worker passes on progress at most once per 100 ms and only when it grew; the
 or the table shows the progress of the read in flight only while that read is not
 cancelled and belongs to the selection.
 
-The task captures a copy of the source function it reads with and plain request
-values, never the session, a model or a result. It hands over its result only after
+The task captures copies of the source functions it reads with, plain request values
+and, for an array sample, the metadata its plan refers into, never the session, a
+model or a result. It hands over its result only after
 the read returned Ok, which the reader reports after checking the source once more,
 so no chunk of a cancelled, refused or failed read reaches the plot or the table.
 Each launch creates one cancellation flag, shared by the read in flight and its task,
@@ -377,8 +378,8 @@ covers the retained results, cached or shown, and the reservation of the read in
 flight. A read's `PlotOverviewBuilder::reservation()`,
 `PlotWindowBuilder::reservation()`, `TextPageBuilder::reservation()` or
 `mdf4array::reservation()` is admitted before it launches; every builder allocates its
-result's storage at construction and never reallocates, so its live storage never
-exceeds its reservation; its completion replaces the reservation with the result's own
+result's storage once and never reallocates, so its live storage never exceeds its
+reservation; its completion replaces the reservation with the result's own
 `bytes()` in the same step, and a cancelled, refused or failed read releases it; a
 cancelled read's result goes first, so no result outlives its charge. Admission
 evicts the least recently used results nobody else holds. A result is held while the
@@ -404,8 +405,8 @@ ways, in the table's words ([value table](../ref/value_table.md#states-and-notes
 
 **Teardown.** Destroying the session disconnects delivery, drops the pending read,
 cancels the one in flight and waits on this thread until it returns; its result is
-released there. The task may drop its copy of the source function on the worker
-afterwards; nothing else touches it. The reader checks cancellation at its
+released there. The task may drop its copies of the source functions, and an array
+task its metadata, on the worker afterwards; nothing else touches them. The reader checks cancellation at its
 checkpoints, so closing a tab waits for the next one, and for a blocking file call in
 progress.
 

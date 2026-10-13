@@ -52,8 +52,9 @@ class TextPageBuilder {
 public:
     TextPageBuilder(std::uint64_t first, std::uint64_t rows);
     // What the builder allocates, before it exists: the page's structure and
-    // arrays, and sizeof(TextPageBuilder), which covers the header of the
-    // make_shared block that holds the page.
+    // arrays, and sizeof(TextPageBuilder), which covers the 16-Byte header of the
+    // make_shared block that holds the page on libstdc++ (tst_tablestorage measures
+    // it; a runtime with a larger header exceeds the reservation by the difference).
     static std::uint64_t reservation(std::uint64_t rows);
 
     void add(const double* time, const std::string_view* text, std::size_t size);
