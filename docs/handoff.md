@@ -1,48 +1,40 @@
 # automotive-format-explorer — handoff
 
-## 2026-10-12 — array channels are described, not plotted — OPEN
+## 2026-10-13 — text and array channels show value tables — OPEN
 
-The MDF4 reader reads an array channel through its array operations and publishes
-its type, dimensions and axes as `Channel.array`
-([reader contract](../../mdf4-parser/docs/arch/reader.md#read-set)); the Explorer
-lists such a channel as an ordinary channel whose role is its type and shape, its
-detail panel reads "Plottable: No" and "Values: Array of N elements per sample" beside
-an Array card with each dimension's axis, and selecting it scans nothing
-([signal plot](ref/signal_plot.md)). Reading the values into a table is BL-V6 in the
-[backlog](backlog.md). Evidence: the presenter and session suites with the six new
-cases seen failing first, both green against mdf4-parser `0f34508`. OPEN only for the
-check below.
+Selecting a decodable text channel switches the center panel from the plot to a
+value table of its samples, one page of 1,024 per read through the reader's text
+lane; selecting a decodable array channel shows one sample as a matrix with its
+axes as headers, read through the array lane with the spec's common-master pairing
+of axis samples ([value table](ref/value_table.md), [center panel and
+scheduling](arch/architecture.md)). The controller announces the switch as
+`centerPanelChanged`; table results are admitted, retained and evicted within the
+session's result allowance like plot results, and a reservation above the whole
+allowance is refused outright. Evidence: the session, controller, model and view
+suites with their new cases seen failing first; the array unit and the corpus suite
+against the 4.2.0 examples (POR, VMA, dSPACE, VLSD, unsorted VLSD); every Explorer
+suite green with 0 warnings against mdf4-parser `ff1483f`. OPEN only for the checks
+below.
 
-UNVERIFIED: open POR (`Arrays/Classification/Porsche_2D_classification_result.mf4`)
-and VMA (`Arrays/Simple/Vector_MeasurementArrays.mf4`), both under the 4.2.0
-corpus's `ASAM_MDF_BS_V4-2-0/BaseStandard/Examples/`. Pass: `2D_classification`
-reads `s  ·  Classification result 52 × 142` (two spaces each side of the dot) and `KF4` `Look-up 6 × 8` in the tree;
-selecting either shows "Array channel — not plottable"; the Array card of
-`2D_classification` lists `Axis 1: Channel throttle (2D_classification_axis)` and
-`Axis 2: Channel nmot (2D_classification_axis)`, KF4's `Axis 1: Fixed: 0 … 5 (6
-points)` and `Axis 2: Channel Curve1 (…)`. Fail: "Not plottable", a plot, or a
-failure note.
-
-## 2026-10-11 — text channels are readable, not plottable — OPEN
-
-The MDF4 reader delivers a string channel's samples as UTF-8 text through its text
-operations ([reader contract](../../mdf4-parser/docs/arch/reader.md#read-set)); the
-Explorer lists such a channel as an ordinary channel with the role "Text channel",
-its detail panel reads "Plottable: No" and "Values: Text (UTF-8)" (an MLSD channel
-also names its size channel), and selecting it scans nothing
-([signal plot](ref/signal_plot.md)). Reading the texts into a value table is
-BL-V5 in the [backlog](backlog.md). Evidence: the presenter and session suites with
-the five new cases seen failing first, the whole suite green against the landed
-parser, and the launch check opening the 4.2.0 corpus's VLSD, MLSD, unsorted VLSD
-and text-to-text files without a QML warning. OPEN only for the check below.
-
-UNVERIFIED — operator-visual: open
-`ASAM_MDF_BS_V4-2-0/BaseStandard/Examples/ChannelTypes/MLSD/Vector_MLSDStringSBC.mf4`
-from the corpus and select `Data channel`. Pass: the tree row reads "Text channel",
-the plot area reads "Text channel — not plottable", and the detail panel's Plot
-section reads "Data Type: String", "Plottable: No", "Values: Text (UTF-8)" and
-"Size Channel: Size channel". Fail: a scan starts, the row carries the unsupported
-icon, or the data type reads "Unknown (8)".
+UNVERIFIED — operator-visual, three opens from the corpus's
+`ASAM_MDF_BS_V4-2-0/BaseStandard/Examples/`:
+- `ChannelTypes/VLSD/Vector_VLSDStringUTF8.mf4`, select the first group's `Data
+  channel`. Pass: the center turns into a table with the chip "Text channel", rows
+  0–9 reading "zero" through "nine" at times 0–9, the footer "Rows 0–9 of 10";
+  selecting a numeric channel brings the plot back; switching tabs and returning
+  shows the same table.
+- `Arrays/Classification/Porsche_2D_classification_result.mf4`, select
+  `2D_classification`. Pass: chips "s" and "Classification result 52 × 142", 52 rows
+  × 142 columns, the corner "throttle \ nmot", the first row and column headers
+  starting "[−∞, " and the last ending ", ∞[", cell (1, 0) "3698.8" and (26, 0)
+  "10697.06", no footer note.
+- `Arrays/Simple/Vector_MeasurementArrays.mf4`, select `KF4` (ninth group). Pass:
+  chip "Look-up 6 × 8", the corner "Axis 1 \ Curve1", rows headed 0…5 and columns
+  0…7, the footer "no Curve1 sample at or before this one", cell (2, 4) "24", the
+  header "t = 0.660880207" with the master's unit.
+- Fail, any of them: a plot or plot note, an empty table, a stuck busy indicator,
+  index headers on POR, cut-off headers, other values in those cells, a missing note,
+  or a crash.
 
 ## 2026-10-11 — invalidated samples plot as gaps — OPEN
 
@@ -86,9 +78,10 @@ Contracts: [tabs](arch/architecture.md#tabs), [tree navigation](arch/architectur
 acceptance: [plan](plans/mdf4_viewer.md).
 
 Landmines:
-- `tst_navpanel` and `tst_signalplotview` load the production QML from a test-time
-  `ExplorerApp` module that `tests/CMakeLists.txt` assembles; a new import or
-  singleton of `NavPanel.qml` or `SignalPlotView.qml` must be added there.
+- `tst_navpanel`, `tst_signalplotview` and `tst_valuetableview` load the production
+  QML from a test-time `ExplorerApp` module that `tests/CMakeLists.txt` assembles; a
+  new import or singleton of `NavPanel.qml`, `SignalPlotView.qml` or
+  `ValueTableView.qml` must be added there.
 - The painted-item suites compile their item's source themselves (the items belong to
   the executable, not a library) and run with `QT_QPA_PLATFORM=offscreen`. Pixel
   checks compare 8-bit RGB; a `QColor` keeps finer components than the image stores.
