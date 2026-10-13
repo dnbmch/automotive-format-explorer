@@ -30,7 +30,8 @@ the view opened before its first sample arrived (the app's cache-miss path). Evi
 `tst_tablestorage` (heap counted by the executable's own `operator new`) and the view
 suite's three new cases seen failing first; the reviewer's probes rebuilt on the fixed
 sources read peak 1,060,968 of 1,060,968 (text) and 1,048,584 of 1,048,856 (array)
-against 1,585,256 and 2,097,160 before; 26 of 26 suites green with 0 warnings.
+against 1,585,256 and 2,097,160 before; 26 of 26 suites green with 0 warnings; the
+reviewer accepted both corrections with no new defect found.
 
 UNVERIFIED — operator-visual, the slice strip: open the corpus's
 `Arrays/Simple/dSPACE_MeasurementArrays.mf4`, select `Signal_MatrixDim` (2 × 3 × 4).
