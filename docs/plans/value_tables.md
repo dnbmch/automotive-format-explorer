@@ -93,7 +93,9 @@ pairing is the spec's common-master rule (`backlog.md` BL-V6; `mdf4.proto`
     columnAxis`.
   - `AxisSource { Kind kind (Index, Fixed, Channel); std::vector<double> fixed;
     std::uint32_t group, channel; bool intervals; bool leftOpen; AxisPairing
-    pairing (Same, Constant, CommonMaster, None); std::uint64_t labels; }`. Fixed:
+    pairing (Same, Constant, CommonMaster, None); std::uint64_t labels; std::string
+    name; mdf4::Axis master; std::uint64_t cycleCount; }` (the name for the notes, the
+    axis group's master and length for the common-master scan). Fixed:
     `axis_values`. Channel: the axis channel at (`axis_group`, `axis_channel`) is
     itself a one-dimensional array channel (`ca_type` 1: the first N elements;
     `ca_type` 3: N + 1 borders, `intervals`, `leftOpen` from its own
@@ -184,8 +186,8 @@ Every new case is seen failing first.
 | 19 | Real unsorted text | `UnsortedData/VLSD/Vector_Unsorted_VLSD.MF4` g1 c1 | 140 rows; first "1 Rekorder mit Aufzeichnung gestartet", last "Messung gestoppt" | same |
 | 20 | Classification | `Arrays/Classification/Porsche_2D_classification_result.mf4` `2D_classification` | 52×142; (1,0) "3698.8", (26,0) "10697.06"; both headers intervals starting "[−∞" | same, and tst_mdf4arrayread |
 | 21 | Fixed axis and a channel axis before its first sample | `Arrays/Simple/Vector_MeasurementArrays.mf4` KF4 s = 0 | row headers "0"…"5"; column headers indices with the note (Curve1's first sample at 0.771 s is after KF4's 0.661 s); (2,4) "24" | same |
-| 22 | Common-master pairing | same file, KF2 s = 3 | columns labelled by Curve2 sample 2 (11…22), not sample 3 | tst_mdf4arrayread |
-| 23 | Slices on real data | `Arrays/Events/Trigger` dSPACE `Signal_MatrixDim` 2×3×4 (the file the parser's `corpus_array.cpp` uses) | slice 0 (0,1) "0.01"; slice 1 (0,0) "1"; sample 4 slice 1 (2,3) "1.234" | tst_mdf4tablecorpus |
+| 22 | Common-master pairing | same file, KF2 s = 3 | the row axis (Curve2, dimension 1) read at its sample 2, not sample 3 (every Curve2 sample holds the same points, so the request index is the evidence) | tst_mdf4arrayread |
+| 23 | Slices on real data | `Arrays/Simple/dSPACE_MeasurementArrays.mf4` `Signal_MatrixDim` 2×3×4 (the file the parser's `corpus_array.cpp` uses) | slice 0 (0,1) "0.01"; slice 1 (0,0) "1"; sample 4 slice 1 (2,3) "1.234" | tst_mdf4tablecorpus |
 
 ## Packets
 
