@@ -105,8 +105,11 @@ per open file.
 - Progress while reading; a newer selection or view cancels obsolete reads
 - A recording that ends early is marked incomplete with the samples it holds
 - Unsupported channels stay browsable and explain why they are not plottable
-- Array channels (look-ups, classification results and other MDF4 arrays) are listed
-  with their type and shape and described with their axes, not plotted
+- Text channels open a value table in place of the plot: each sample's index, time and
+  text, 1,024 rows per page, a text longer than 1 KiB cut and marked
+- Array channels (look-ups, classification results and other MDF4 arrays) open the
+  value table one sample at a time: the last two dimensions as rows and columns, the
+  axes as headers, an index for each outer dimension
 - A group's master channel is listed as its axis rather than offered as a signal
 
 ### Bidirectional Selection
@@ -193,6 +196,7 @@ are used directly through the same public targets as installed packages.
 - [docs/ref/memory_view.md](docs/ref/memory_view.md) — A2L memory grid visual + interaction reference.
 - [docs/ref/signal_map.md](docs/ref/signal_map.md) — DBC/LDF signal grid visual + interaction reference.
 - [docs/ref/signal_plot.md](docs/ref/signal_plot.md) — format-neutral time-series plot reference.
+- [docs/ref/value_table.md](docs/ref/value_table.md) — MDF4 value table: center switch, text pages, array samples, accounting, states, cell text.
 - [docs/ref/keyboard.md](docs/ref/keyboard.md) — application + grid keyboard shortcuts.
 - [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — canonical parser dependencies, runtime dependency closure, static backend composition.
 - [docs/ref/release_packaging.md](docs/ref/release_packaging.md) — Windows and Linux package paths, launch gates, release publish gating.

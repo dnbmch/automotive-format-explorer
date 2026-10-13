@@ -55,7 +55,7 @@ QUrl LdfDocumentSession::centerPanelSource() const {
     return {};
 }
 
-QAbstractListModel* LdfDocumentSession::centerPanelModel() {
+QAbstractItemModel* LdfDocumentSession::centerPanelModel() {
     return _signal_map_model.get();
 }
 

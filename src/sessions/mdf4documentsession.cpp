@@ -1,6 +1,7 @@
 #include "sessions/mdf4documentsession.h"
 
 #include "models/signalplotmodel.h"
+#include "models/valuetablemodel.h"
 #include "sessions/presentertext.h"
 
 #include <QObject>
@@ -15,7 +16,7 @@
 
 namespace {
 
-// Scan progress reaches the GUI at most this often.
+// Read progress reaches the GUI at most this often.
 constexpr std::chrono::milliseconds kProgressInterval{100};
 
 QString groupTitle(const mdf4::ChannelGroup& group, int index) {
@@ -32,22 +33,30 @@ QString channelTitle(const mdf4::Channel& channel, int index) {
 
 // A master carries the group's domain, so it is described by what it is rather
 // than offered as a signal: decoding it returns its own samples in both time
-// and value, which plots as a 45-degree line. A text channel is readable, but
-// its samples are text, not values to plot; an array channel's sample is a whole
-// array, so its role is its type and shape.
+// and value, which plots as a 45-degree line. A text channel's samples are text
+// and an array channel's sample is a whole array, so their roles say so, the
+// array's as its type and shape. A plottable channel has no role.
+QString channelRole(const mdf4::Channel& channel) {
+    if (channel.is_master()) {
+        return QStringLiteral("Master channel");
+    }
+    if (channel.textual()) {
+        return QStringLiteral("Text channel");
+    }
+    if (channel.has_array()) {
+        return QStringLiteral("%1 %2").arg(arrayTypeText(channel.array().ca_type()),
+                                           arrayShapeText(channel.array()));
+    }
+    if (!channel.decodable()) {
+        return QStringLiteral("Not plottable");
+    }
+    return {};
+}
+
 QString channelSubtitle(const mdf4::Channel& channel) {
     const QString unit = text(channel.unit());
-    QString role;
-    if (channel.is_master()) {
-        role = QStringLiteral("Master channel");
-    } else if (channel.textual()) {
-        role = QStringLiteral("Text channel");
-    } else if (channel.has_array()) {
-        role = QStringLiteral("%1 %2").arg(arrayTypeText(channel.array().ca_type()),
-                                           arrayShapeText(channel.array()));
-    } else if (!channel.decodable()) {
-        role = QStringLiteral("Not plottable");
-    } else {
+    const QString role = channelRole(channel);
+    if (role.isEmpty()) {
         return unit;
     }
     return unit.isEmpty() ? role : QStringLiteral("%1  ·  %2").arg(unit, role);
@@ -66,9 +75,9 @@ QString sizeText(std::uint64_t bytes) {
         : QStringLiteral("%1 MiB").arg(static_cast<qulonglong>((bytes >> 20) + ((bytes & 0xFFFFF) != 0)));
 }
 
-// Why a finished scan shows nothing, in the plot's terms. `what` names the
-// samples: the channel's, or the exact ones of a view. Cancelled work shows
-// nothing at all and never gets here.
+// Why a finished read shows nothing, in the plot's terms. `what` names the
+// values: the channel's samples, the exact ones of a view, or texts. Cancelled
+// work shows nothing at all and never gets here.
 std::pair<PlotNote, QString> noteFor(const mdf4::ScanResult& scan, PlotBuild build,
                                      const QString& what) {
     const mdf4::Outcome& outcome = scan.outcome;
@@ -103,10 +112,96 @@ std::pair<PlotNote, QString> noteFor(const mdf4::ScanResult& scan, PlotBuild bui
     }
 }
 
-// Held by someone besides the cache: shown by the plot, pending or in flight
-// as the result set of a window, or the result set of a cached window.
-bool held(const PlotOverviewPtr& overview, const PlotWindowPtr& window) {
-    return window ? window.use_count() > 1 : overview.use_count() > 1;
+// The same note in the table's terms; noteFor() gives only failures and
+// refusals.
+TableNote tableNote(PlotNote note) {
+    return note == PlotNote::Refused ? TableNote::Refused : TableNote::Failed;
+}
+
+// The samples of a text page from `first`: its share of the stated count, which
+// the reader clamps every request to.
+std::uint64_t pageRows(std::uint64_t stated, std::uint64_t first) {
+    return first < stated ? std::min(kTextPageSamples, stated - first) : 0;
+}
+
+// The name of dimension `d`'s axis: its axis channel, titled as the tree titles
+// it, else the dimension as the detail panel's Array card counts it.
+QString axisName(const mdf4::File& document, const mdf4::ChannelArray& array, int d) {
+    const mdf4::ArrayDimension& dimension = array.dimensions(d);
+    if (!dimension.axis_from_channel()) {
+        return QStringLiteral("Axis %1").arg(d + 1);
+    }
+    const int channel = static_cast<int>(dimension.axis_channel());
+    return channelTitle(
+        document.groups(static_cast<int>(dimension.axis_group())).channels(channel), channel);
+}
+
+TableAxis tableAxis(mdf4array::AxisLabels&& labels) {
+    TableAxis axis;
+    switch (labels.kind) {
+    case mdf4array::AxisLabels::Kind::Index:
+        axis.kind = TableAxis::Kind::Index;
+        break;
+    case mdf4array::AxisLabels::Kind::Points:
+        axis.kind = TableAxis::Kind::Points;
+        break;
+    case mdf4array::AxisLabels::Kind::Intervals:
+        axis.kind = TableAxis::Kind::Intervals;
+        break;
+    }
+    axis.values = std::move(labels.values);
+    axis.leftOpen = labels.leftOpen;
+    axis.note = std::move(labels.note);
+    return axis;
+}
+
+// The slice holds its sample's moved vectors in a smaller structure, so its
+// bytes() stays within the sample's reservation.
+static_assert(sizeof(ArraySlice) <= sizeof(mdf4array::ArraySample));
+
+ArraySlicePtr sliceOf(mdf4array::ArraySample&& sample, std::uint64_t index) {
+    auto slice = std::make_shared<ArraySlice>();
+    slice->sample = index;
+    slice->time = sample.time;
+    slice->rows = sample.rows;
+    slice->columns = sample.columns;
+    slice->values = std::move(sample.values);
+    slice->rowAxis = tableAxis(std::move(sample.rowLabels));
+    slice->columnAxis = tableAxis(std::move(sample.columnLabels));
+    return slice;
+}
+
+// Why array sample `sample` shows nothing although its read succeeded: the
+// source holds fewer samples than it states, and no more than `sample`.
+QString pastEndText(std::uint64_t sample) {
+    return sample == 0
+        ? QStringLiteral("No samples: the recording ends before its first one")
+        : QStringLiteral("No sample %1: the recording ends after at most %1 samples")
+              .arg(QString::number(static_cast<qulonglong>(sample)));
+}
+
+// The control of one read: its cancellation flag, and progress passed on at
+// most once per interval and only when it grew.
+template <typename Promise>
+mdf4::Control readControl(Promise& promise, const std::atomic<bool>* cancel) {
+    promise.setProgressRange(0, 1000);
+    mdf4::Control control;
+    control.cancel = cancel;
+    control.progress = [&promise, shownAt = std::chrono::steady_clock::now() - kProgressInterval,
+                        shown = 0](std::uint64_t done, std::uint64_t total) mutable {
+        const auto now = std::chrono::steady_clock::now();
+        if (total == 0 || now - shownAt < kProgressInterval) {
+            return;
+        }
+        const int permille = static_cast<int>(static_cast<double>(std::min(done, total)) *
+                                              1000.0 / static_cast<double>(total));
+        if (permille > shown) {
+            shown = permille;
+            shownAt = now;
+            promise.setProgressValue(permille);
+        }
+    };
+    return control;
 }
 
 } // namespace
@@ -114,8 +209,7 @@ bool held(const PlotOverviewPtr& overview, const PlotWindowPtr& window) {
 Mdf4DocumentSession::Mdf4DocumentSession(QString displayName,
                                          QString sourcePath,
                                          std::shared_ptr<const mdf4::File> metadata,
-                                         ScanFunction scan,
-                                         AxisFunction axis,
+                                         Mdf4Source source,
                                          QList<DiagnosticMessage> diagnostics,
                                          const Mdf4SessionLimits& limits)
     : AdapterSessionBase(FormatId::MDF4,
@@ -126,24 +220,27 @@ Mdf4DocumentSession::Mdf4DocumentSession(QString displayName,
       _metadata(std::move(metadata)),
       _limits(limits),
       _presenter(*_metadata),
-      _scan(std::move(scan)),
-      _axis(std::move(axis)),
-      _plot_model(std::make_unique<SignalPlotModel>()) {
+      _source(std::move(source)),
+      _plot_model(std::make_unique<SignalPlotModel>()),
+      _table_model(std::make_unique<ValueTableModel>()) {
     QObject::connect(&_watcher, &QFutureWatcher<Completion>::finished, &_watcher,
                      [this] { onScanFinished(); });
     QObject::connect(&_watcher, &QFutureWatcher<Completion>::progressValueChanged, &_watcher,
                      [this](int permille) { onProgress(permille); });
     QObject::connect(_plot_model.get(), &SignalPlotModel::detailWanted, &_watcher,
                      [this] { onDetailWanted(); });
+    QObject::connect(_table_model.get(), &ValueTableModel::requestWanted, &_watcher,
+                     [this] { onTableWanted(); });
     buildTree();
 }
 
 Mdf4DocumentSession::~Mdf4DocumentSession() {
-    // The task holds its own copy of the scan function and never touches this
+    // The task holds its own copy of the source function and never touches this
     // session, so it may still release that copy on its worker after the wait
     // below.
     QObject::disconnect(&_watcher, nullptr, nullptr, nullptr);
     QObject::disconnect(_plot_model.get(), nullptr, &_watcher, nullptr);
+    QObject::disconnect(_table_model.get(), nullptr, &_watcher, nullptr);
     _pending.reset();
     if (_active) {
         _active->cancel->store(true);
@@ -154,14 +251,19 @@ Mdf4DocumentSession::~Mdf4DocumentSession() {
 }
 
 QUrl Mdf4DocumentSession::centerPanelSource() const {
-    return QUrl(QStringLiteral("qrc:/qt/qml/ExplorerApp/qml/components/SignalPlotView.qml"));
+    return QUrl(_center == Center::Table
+                    ? QStringLiteral("qrc:/qt/qml/ExplorerApp/qml/components/ValueTableView.qml")
+                    : QStringLiteral("qrc:/qt/qml/ExplorerApp/qml/components/SignalPlotView.qml"));
 }
 
-QAbstractListModel* Mdf4DocumentSession::centerPanelModel() {
+QAbstractItemModel* Mdf4DocumentSession::centerPanelModel() {
+    if (_center == Center::Table) {
+        return _table_model.get();
+    }
     return _plot_model.get();
 }
 
-// The detail panel shows the row first, then the plot follows. Observers of
+// The detail panel shows the row first, then the center follows. Observers of
 // either may select anew or close this session from inside a notification;
 // after each one the flow continues only while the session lives and no newer
 // selection has run.
@@ -183,10 +285,13 @@ void Mdf4DocumentSession::selectNode(quint64 key) {
         selectChannel(path, selection);
         return;
     }
-    // A row that is no channel: nothing to plot, no scan wanted.
+    // A row that is no channel: nothing to show, no read wanted.
     _selected.reset();
     _pending.reset();
     cancelActive();
+    if (!showPlot(selection)) {
+        return;
+    }
     model->clear();
     if (model && selection == _selections) {
         updateBusy();
@@ -204,6 +309,7 @@ TreeItem* Mdf4DocumentSession::appendEntity(TreeItem* parent, const QString& tit
 void Mdf4DocumentSession::moveModelsToThread(QThread* thread) {
     AdapterSessionBase::moveModelsToThread(thread);
     _plot_model->moveToThread(thread);
+    _table_model->moveToThread(thread);
     _watcher.moveToThread(thread);
 }
 
@@ -213,7 +319,7 @@ Mdf4DocumentSession::ResultBytes Mdf4DocumentSession::resultBytes() const {
     bytes.reserved = _active ? _active->reserved : 0;
     bytes.results = _retained.size();
     for (const Retained& entry : _retained) {
-        if (held(entry.overview, entry.window)) {
+        if (entry.held()) {
             ++bytes.held;
         }
     }
@@ -228,7 +334,7 @@ PlotHeader Mdf4DocumentSession::header(ChannelKey key) const {
         _metadata->groups(static_cast<int>(key.first)).channels(channelIndex);
     PlotHeader result{channelTitle(channel, channelIndex), text(channel.unit()),
                       QStringLiteral("Sample index"), {}};
-    const mdf4::Axis axis = _axis(key.first);
+    const mdf4::Axis axis = _source.axis(key.first);
     if (axis.kind == mdf4::AxisKind::Master) {
         const mdf4::Channel& master = _metadata->groups(static_cast<int>(axis.group))
                                           .channels(static_cast<int>(axis.channel));
@@ -238,37 +344,86 @@ PlotHeader Mdf4DocumentSession::header(ChannelKey key) const {
     return result;
 }
 
+// The time is the time master's: a text table's Time column, an array sample's
+// time. A group without one shows its samples by their indices alone. An array
+// names the axes of its rows and columns, its last two dimensions, or of its
+// rows alone when it has one.
+TableHeader Mdf4DocumentSession::tableHeader(ChannelKey key) const {
+    const mdf4::Channel& channel = _metadata->groups(static_cast<int>(key.first))
+                                       .channels(static_cast<int>(key.second));
+    const PlotHeader plot = header(key);
+    TableHeader result;
+    result.name = plot.name;
+    result.role = channelRole(channel);
+    result.unit = plot.unit;
+    result.sampleCount = statedCount(key);
+    if (_source.axis(key.first).kind == mdf4::AxisKind::Master) {
+        result.timeName = plot.domainName;
+        result.timeUnit = plot.domainUnit;
+    }
+    if (channel.has_array()) {
+        const mdf4::ChannelArray& array = channel.array();
+        for (const mdf4::ArrayDimension& dimension : array.dimensions()) {
+            result.dimensions.push_back(dimension.size());
+        }
+        const int dimensions = array.dimensions_size();
+        if (dimensions == 1) {
+            result.rowAxis = axisName(*_metadata, array, 0);
+        } else {
+            result.rowAxis = axisName(*_metadata, array, dimensions - 2);
+            result.columnAxis = axisName(*_metadata, array, dimensions - 1);
+        }
+    }
+    return result;
+}
+
+Mdf4DocumentSession::Request Mdf4DocumentSession::tableRequest(
+    ChannelKey key, std::uint64_t sample, const std::vector<std::uint64_t>& slice) const {
+    const mdf4::Channel& channel = _metadata->groups(static_cast<int>(key.first))
+                                       .channels(static_cast<int>(key.second));
+    if (!channel.has_array()) {
+        return Request{Request::Kind::TextPage, key, nullptr, {}, textPageFirst(sample)};
+    }
+    Request request{Request::Kind::ArraySample, key, nullptr, {}, sample};
+    request.plan = mdf4array::arrayPlan(*_metadata, _source.axis, key.first, key.second, sample,
+                                        slice);
+    return request;
+}
+
 std::uint64_t Mdf4DocumentSession::statedCount(ChannelKey key) const {
     return _metadata->groups(static_cast<int>(key.first))
         .channels(static_cast<int>(key.second))
         .sample_count();
 }
 
-// Plot model observers run synchronously and may select another node or close
-// this session. Every flow therefore settles the scans, the cache and the
-// selection first and notifies last, the busy state last of all, and touches
-// nothing after a notification that destroyed the session. A selection flow
-// also stops after a notification inside which a newer selection ran.
+// Plot and table observers run synchronously and may select another node or
+// close this session. Every flow therefore settles the reads, the cache, the
+// selection and the center first and notifies last, the busy state last of
+// all, and touches nothing after a notification that destroyed the session. A
+// selection flow also stops after a notification inside which a newer
+// selection ran.
 void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t selection) {
     const ChannelKey key{static_cast<std::uint32_t>(path.groupIndex),
                          static_cast<std::uint32_t>(path.channelIndex)};
     const mdf4::Channel& channel =
         _metadata->groups(path.groupIndex).channels(path.channelIndex);
+    if (!channel.is_master() && channel.decodable() && (channel.textual() || channel.has_array())) {
+        selectTable(key, selection);
+        return;
+    }
     QPointer<SignalPlotModel> model(_plot_model.get());
 
-    // A master is the group's own domain, not a signal against it; a text
-    // channel's samples are text, an array channel's whole arrays.
-    if (channel.is_master() || channel.textual() || channel.has_array() || !channel.decodable()) {
+    // A master is the group's own domain, not a signal against it.
+    if (channel.is_master() || !channel.decodable()) {
         _selected.reset();
         _pending.reset();
         cancelActive();
+        if (!showPlot(selection)) {
+            return;
+        }
         model->setSignal(header(key), {}, PlotNote::Empty,
                          channel.is_master()
                              ? QStringLiteral("Master channel — this group's time axis")
-                         : channel.textual()
-                             ? QStringLiteral("Text channel — not plottable")
-                         : channel.has_array()
-                             ? QStringLiteral("Array channel — not plottable")
                              : QStringLiteral("This channel type is not plottable"));
         if (model && selection == _selections) {
             updateBusy();
@@ -282,6 +437,9 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t sele
         const PlotOverviewPtr overview = cached->overview;
         _pending.reset();
         cancelActive();
+        if (!showPlot(selection)) {
+            return;
+        }
         // Showing it asks for the detail of the whole view.
         model->setSignal(header(key), overview);
         if (model && selection == _selections) {
@@ -291,12 +449,15 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t sele
     }
 
     // The overview in flight for this channel serves; anything else is obsolete.
-    if (_active && !_active->cancel->load() && !_active->request.set &&
+    if (_active && !_active->cancel->load() && _active->request.kind == Request::Kind::Overview &&
         _active->request.channel == key) {
         _pending.reset();
     } else {
         cancelActive();
-        _pending = Request{key, nullptr, {}};
+        _pending = Request{Request::Kind::Overview, key, nullptr, {}, 0};
+    }
+    if (!showPlot(selection)) {
+        return;
     }
     model->setSignal(header(key));
     if (!model || selection != _selections) {
@@ -306,6 +467,57 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t sele
     if (model && selection == _selections) {
         updateBusy();
     }
+}
+
+// A decodable text or array channel: the table shows the text channel's first
+// page, or the array's sample 0 with every slice index 0, from the cache at
+// once, from the read already in flight for it, or from a new read.
+void Mdf4DocumentSession::selectTable(ChannelKey key, std::uint64_t selection) {
+    Request wanted = tableRequest(key, 0, {});
+    const bool array = wanted.kind == Request::Kind::ArraySample;
+    _selected = key;
+    _center = Center::Table;
+    TextPagePtr page;
+    ArraySlicePtr slice;
+    if (Retained* cached = retainedTable(wanted)) {
+        cached->lastUse = ++_clock;
+        page = cached->page;
+        slice = cached->slice;
+        _pending.reset();
+        cancelActive();
+    } else if (_active && !_active->cancel->load() && _active->request.sameTableRead(wanted)) {
+        _pending.reset();
+    } else {
+        cancelActive();
+        _pending = std::move(wanted);
+    }
+    QPointer<SignalPlotModel> model(_plot_model.get());
+    model->clear();
+    if (!model || selection != _selections) {
+        return;
+    }
+    if (array) {
+        _table_model->setArrayChannel(tableHeader(key), std::move(slice));
+    } else {
+        _table_model->setTextChannel(tableHeader(key), std::move(page));
+    }
+    if (!model || selection != _selections) {
+        return;
+    }
+    startPending();
+    if (model && selection == _selections) {
+        updateBusy();
+    }
+}
+
+bool Mdf4DocumentSession::showPlot(std::uint64_t selection) {
+    if (_center == Center::Plot) {
+        return true;
+    }
+    _center = Center::Plot;
+    QPointer<ValueTableModel> table(_table_model.get());
+    table->clear();
+    return table && selection == _selections;
 }
 
 // The view shows more than the plot's window covers: install a cached window
@@ -320,10 +532,10 @@ void Mdf4DocumentSession::onDetailWanted() {
     const double start = _plot_model->viewStart();
     const double end = _plot_model->viewEnd();
     const std::optional<PlotWindowRequest> wanted = _plot_model->detailRequest();
-    const bool windowActive = _active && _active->request.set;
+    const bool windowActive = _active && _active->request.kind == Request::Kind::Window;
     QPointer<SignalPlotModel> model(_plot_model.get());
 
-    if (_pending && _pending->set) {
+    if (_pending && _pending->kind == Request::Kind::Window) {
         _pending.reset();
     }
     if (!wanted) {
@@ -355,9 +567,47 @@ void Mdf4DocumentSession::onDetailWanted() {
     if (windowActive) {
         cancelActive();
     }
-    _pending = Request{key, set, *wanted};
+    _pending = Request{Request::Kind::Window, key, set, *wanted, 0};
     startPending();
     if (model) {
+        updateBusy();
+    }
+}
+
+// The table wants another page, sample or slice: install a cached one, keep the
+// read in flight for it, or read it. A read of anything else is obsolete.
+void Mdf4DocumentSession::onTableWanted() {
+    if (_center != Center::Table) {
+        return;
+    }
+    Request wanted =
+        tableRequest(*_selected, _table_model->wantedSample(), _table_model->wantedSlice());
+    QPointer<ValueTableModel> table(_table_model.get());
+    if (Retained* cached = retainedTable(wanted)) {
+        cached->lastUse = ++_clock;
+        const TextPagePtr page = cached->page;
+        const ArraySlicePtr slice = cached->slice;
+        _pending.reset();
+        cancelActive();
+        if (wanted.kind == Request::Kind::ArraySample) {
+            table->setArraySlice(slice);
+        } else {
+            table->setTextPage(page);
+        }
+        if (table) {
+            updateBusy();
+        }
+        return;
+    }
+    if (_active && !_active->cancel->load() && _active->request.sameTableRead(wanted)) {
+        _pending.reset();
+        updateBusy();
+        return;
+    }
+    cancelActive();
+    _pending = std::move(wanted);
+    startPending();
+    if (table) {
         updateBusy();
     }
 }
@@ -366,7 +616,7 @@ void Mdf4DocumentSession::onDetailWanted() {
 void Mdf4DocumentSession::onScanFinished() {
     QPointer<SignalPlotModel> model(_plot_model.get());
     if (_active->cancel->load()) {
-        // Cancelled work keeps nothing, even when its scan finished first.
+        // Cancelled work keeps nothing, even when its read finished first.
         // Taking the completion releases its result while the reservation still
         // covers it; the request goes with the reservation, before anything
         // else is admitted or announced.
@@ -374,19 +624,39 @@ void Mdf4DocumentSession::onScanFinished() {
         _active.reset();
     } else {
         // The reservation becomes the result's own charge in one step. The
-        // work is for the selection and view as they stand.
+        // work is for the selection, view and page as they stand.
         Completion completion = _watcher.future().takeResult();
         const Request request = std::move(_active->request);
-        if (completion.overview) {
-            retain({request.channel, completion.overview, {}, completion.overview->bytes(),
-                    ++_clock});
-        } else if (completion.window) {
-            retain({request.channel, request.set, completion.window, completion.window->bytes(),
-                    ++_clock});
+        switch (request.kind) {
+        case Request::Kind::Overview:
+            if (completion.overview) {
+                retain({request.kind, request.channel, completion.overview, {}, {}, {}, 0, {},
+                        completion.overview->bytes(), ++_clock});
+            }
+            break;
+        case Request::Kind::Window:
+            if (completion.window) {
+                retain({request.kind, request.channel, request.set, completion.window, {}, {}, 0,
+                        {}, completion.window->bytes(), ++_clock});
+            }
+            break;
+        case Request::Kind::TextPage:
+            if (completion.page) {
+                retain({request.kind, request.channel, {}, {}, completion.page, {}, request.first,
+                        {}, completion.page->bytes(), ++_clock});
+            }
+            break;
+        case Request::Kind::ArraySample:
+            if (completion.slice) {
+                retain({request.kind, request.channel, {}, {}, {}, completion.slice, request.first,
+                        request.plan.window, completion.slice->bytes(), ++_clock});
+            }
+            break;
         }
         _active.reset();
 
-        if (!request.set) {
+        switch (request.kind) {
+        case Request::Kind::Overview:
             if (completion.overview) {
                 model->setSignal(header(request.channel), completion.overview);
             } else {
@@ -394,12 +664,36 @@ void Mdf4DocumentSession::onScanFinished() {
                     noteFor(completion.scan, completion.build, QStringLiteral("Samples"));
                 model->setSignal(header(request.channel), {}, note, text);
             }
-        } else if (completion.window) {
-            model->setWindow(completion.window);
-        } else {
-            const auto [note, text] =
-                noteFor(completion.scan, completion.build, QStringLiteral("Exact samples"));
-            model->setWindow({}, note, text);
+            break;
+        case Request::Kind::Window:
+            if (completion.window) {
+                model->setWindow(completion.window);
+            } else {
+                const auto [note, text] =
+                    noteFor(completion.scan, completion.build, QStringLiteral("Exact samples"));
+                model->setWindow({}, note, text);
+            }
+            break;
+        case Request::Kind::TextPage:
+            if (completion.page) {
+                _table_model->setTextPage(completion.page);
+            } else {
+                const auto [note, text] =
+                    noteFor(completion.scan, completion.build, QStringLiteral("Texts"));
+                _table_model->setTextPage({}, tableNote(note), text);
+            }
+            break;
+        case Request::Kind::ArraySample:
+            if (completion.slice) {
+                _table_model->setArraySlice(completion.slice);
+            } else if (completion.scan.outcome.status == mdf4::Status::Ok) {
+                _table_model->setArraySlice({}, TableNote::Empty, pastEndText(request.first));
+            } else {
+                const auto [note, text] =
+                    noteFor(completion.scan, completion.build, QStringLiteral("Values"));
+                _table_model->setArraySlice({}, tableNote(note), text);
+            }
+            break;
         }
         if (!model) {
             return;
@@ -411,14 +705,19 @@ void Mdf4DocumentSession::onScanFinished() {
     }
 }
 
-// Progress of the scan in flight, already coalesced on the worker. Progress of
-// cancelled work, or of another channel's, never reaches the plot.
+// Progress of the read in flight, already coalesced on the worker. Progress of
+// cancelled work, or of another channel's, never reaches the plot or the table.
 void Mdf4DocumentSession::onProgress(int permille) {
     if (!_active || _active->cancel->load() || _selected != _active->request.channel) {
         return;
     }
     _active->progress = permille / 1000.0;
-    _plot_model->setProgress(_active->progress);
+    const Request::Kind kind = _active->request.kind;
+    if (kind == Request::Kind::TextPage || kind == Request::Kind::ArraySample) {
+        _table_model->setProgress(_active->progress);
+    } else {
+        _plot_model->setProgress(_active->progress);
+    }
 }
 
 void Mdf4DocumentSession::cancelActive() {
@@ -433,9 +732,26 @@ void Mdf4DocumentSession::startPending() {
     }
     Request request = std::move(*_pending);
     _pending.reset();
-    const std::uint64_t bytes = request.set
-        ? PlotWindowBuilder::reservation(request.window)
-        : PlotOverviewBuilder::reservation(statedCount(request.channel));
+    std::uint64_t bytes = 0;
+    QString what;
+    switch (request.kind) {
+    case Request::Kind::Overview:
+        bytes = PlotOverviewBuilder::reservation(statedCount(request.channel));
+        what = QStringLiteral("Samples");
+        break;
+    case Request::Kind::Window:
+        bytes = PlotWindowBuilder::reservation(request.window);
+        what = QStringLiteral("Exact samples");
+        break;
+    case Request::Kind::TextPage:
+        bytes = TextPageBuilder::reservation(pageRows(statedCount(request.channel), request.first));
+        what = QStringLiteral("Texts");
+        break;
+    case Request::Kind::ArraySample:
+        bytes = mdf4array::reservation(request.plan);
+        what = QStringLiteral("Values");
+        break;
+    }
     if (admit(bytes)) {
         launch(std::move(request), bytes);
         return;
@@ -443,50 +759,86 @@ void Mdf4DocumentSession::startPending() {
 
     // Results in use leave no room: say so where the result would have shown.
     const QString text =
-        QStringLiteral("%1 need %2 of plot memory, but results in use hold %3 of the plot's %4")
-            .arg(request.set ? QStringLiteral("Exact samples") : QStringLiteral("Samples"),
-                 sizeText(bytes), sizeText(heldBytes()), sizeText(_limits.resultBytes));
-    if (request.set) {
-        _plot_model->setWindow({}, PlotNote::Refused, text);
-    } else {
+        QStringLiteral("%1 need %2 of result memory, but results in use hold %3 of this "
+                       "file's %4")
+            .arg(what, sizeText(bytes), sizeText(heldBytes()), sizeText(_limits.resultBytes));
+    switch (request.kind) {
+    case Request::Kind::Overview:
         _plot_model->setSignal(header(request.channel), {}, PlotNote::Refused, text);
+        break;
+    case Request::Kind::Window:
+        _plot_model->setWindow({}, PlotNote::Refused, text);
+        break;
+    case Request::Kind::TextPage:
+        _table_model->setTextPage({}, TableNote::Refused, text);
+        break;
+    case Request::Kind::ArraySample:
+        _table_model->setArraySlice({}, TableNote::Refused, text);
+        break;
     }
 }
 
-// The task owns a copy of the scan function, and with it the source, plus plain
-// request values: it never reaches this session, its models or its results. It
-// builds its result from the scan's chunks and hands it over only after an Ok
-// outcome, when the reader has checked the source after the traversal.
+// The task owns copies of the source functions it reads with, and with them the
+// source, plus plain request values: it never reaches this session, its models
+// or its results. It builds its result from the read's chunks and hands it over
+// only after an Ok outcome, when the reader has checked the source after the
+// traversal.
 void Mdf4DocumentSession::launch(Request request, std::uint64_t reserved) {
     auto cancel = std::make_shared<std::atomic<bool>>(false);
+    const Request::Kind kind = request.kind;
     const ChannelKey channel = request.channel;
-    const bool window = request.set != nullptr;
     const PlotWindowRequest cover = request.window;
+    const std::uint64_t first = request.first;
     const std::uint64_t stated = statedCount(channel);
+    mdf4array::ArrayPlan plan = request.plan;
     _active = Active{std::move(request), cancel, reserved, -1.0};
-    _watcher.setFuture(QtConcurrent::run(
-        [scan = _scan, channel, window, cover, stated, cancel](QPromise<Completion>& promise) {
-            // At most one progress value per interval, and only when it grew.
-            promise.setProgressRange(0, 1000);
-            auto shownAt = std::chrono::steady_clock::now() - kProgressInterval;
-            int shown = 0;
-            mdf4::Control control;
-            control.cancel = cancel.get();
-            control.progress = [&](std::uint64_t done, std::uint64_t total) {
-                const auto now = std::chrono::steady_clock::now();
-                if (total == 0 || now - shownAt < kProgressInterval) {
-                    return;
-                }
-                const int permille = static_cast<int>(
-                    static_cast<double>(std::min(done, total)) * 1000.0 /
-                    static_cast<double>(total));
-                if (permille > shown) {
-                    shown = permille;
-                    shownAt = now;
-                    promise.setProgressValue(permille);
-                }
-            };
 
+    if (kind == Request::Kind::ArraySample) {
+        // The sample's elements, then its axes' labels: every read of the
+        // sample runs in this one task, so none overlaps another operation.
+        _watcher.setFuture(QtConcurrent::run(
+            [readArray = _source.readArray, scan = _source.scan, plan = std::move(plan),
+             cancel](QPromise<Completion>& promise) {
+                const mdf4::Control control = readControl(promise, cancel.get());
+                mdf4array::ArraySample sample =
+                    mdf4array::readArraySample(plan, readArray, scan, control);
+                Completion completion;
+                completion.scan.outcome = sample.outcome;
+                completion.scan.samplesRead = sample.samplesRead;
+                if (sample.outcome.status == mdf4::Status::Ok && sample.samplesRead > 0) {
+                    completion.slice = sliceOf(std::move(sample), plan.sample);
+                }
+                promise.addResult(std::move(completion));
+            }));
+        return;
+    }
+
+    if (kind == Request::Kind::TextPage) {
+        // One bounded read of the page; the reader clamps it to the samples.
+        _watcher.setFuture(QtConcurrent::run(
+            [scanText = _source.scanText, channel, first, rows = pageRows(stated, first),
+             cancel](QPromise<Completion>& promise) {
+                const mdf4::Control control = readControl(promise, cancel.get());
+                TextPageBuilder builder(first, rows);
+                Completion completion;
+                completion.scan = scanText(channel.first, channel.second, first,
+                                           kTextPageSamples, control,
+                                           [&builder](const mdf4::TextChunk& chunk) {
+                                               builder.add(chunk.time, chunk.text, chunk.size);
+                                               return mdf4::Visit::Continue;
+                                           });
+                if (completion.scan.outcome.status == mdf4::Status::Ok) {
+                    completion.page = builder.finish(completion.scan.invalidValues);
+                }
+                promise.addResult(std::move(completion));
+            }));
+        return;
+    }
+
+    const bool window = kind == Request::Kind::Window;
+    _watcher.setFuture(QtConcurrent::run(
+        [scan = _source.scan, channel, window, cover, stated, cancel](QPromise<Completion>& promise) {
+            const mdf4::Control control = readControl(promise, cancel.get());
             Completion completion;
             if (window) {
                 PlotWindowBuilder builder(cover);
@@ -520,26 +872,42 @@ void Mdf4DocumentSession::launch(Request request, std::uint64_t reserved) {
         }));
 }
 
-// Busy while the selected channel has a scan pending or in flight that was not
-// cancelled; progress is that scan's. An observer of the progress may select or
-// view anew and start a scan, so the busy state is read after it returns.
+// The center's model is busy while the selected channel has a read pending or
+// in flight that was not cancelled; progress is that read's. The other model is
+// idle. An observer of a notification may select or view anew and start a read,
+// so the state is read again after each one.
 void Mdf4DocumentSession::updateBusy() {
     const auto running = [this] {
         return _active && !_active->cancel->load() && _selected == _active->request.channel;
     };
+    const auto busy = [&] { return running() || (_pending && _selected == _pending->channel); };
+    const auto table = [this] { return _center == Center::Table; };
     QPointer<SignalPlotModel> model(_plot_model.get());
-    model->setProgress(running() ? _active->progress : -1.0);
-    if (model) {
-        model->setBusy(running() || (_pending && _selected == _pending->channel));
+    model->setProgress(!table() && running() ? _active->progress : -1.0);
+    if (!model) {
+        return;
     }
+    model->setBusy(!table() && busy());
+    if (!model) {
+        return;
+    }
+    _table_model->setProgress(table() && running() ? _active->progress : -1.0);
+    if (!model) {
+        return;
+    }
+    _table_model->setBusy(table() && busy());
 }
 
 bool Mdf4DocumentSession::admit(std::uint64_t bytes) {
+    // More than the whole allowance is refused outright: nothing to evict for it,
+    // and a saturated reservation must not wrap the sum.
+    if (bytes > _limits.resultBytes) {
+        return false;
+    }
     while (_retained_bytes + bytes > _limits.resultBytes) {
         auto victim = _retained.end();
         for (auto it = _retained.begin(); it != _retained.end(); ++it) {
-            if (!held(it->overview, it->window) &&
-                (victim == _retained.end() || it->lastUse < victim->lastUse)) {
+            if (!it->held() && (victim == _retained.end() || it->lastUse < victim->lastUse)) {
                 victim = it;
             }
         }
@@ -555,14 +923,28 @@ bool Mdf4DocumentSession::admit(std::uint64_t bytes) {
 std::uint64_t Mdf4DocumentSession::heldBytes() const {
     std::uint64_t bytes = 0;
     for (const Retained& entry : _retained) {
-        bytes += held(entry.overview, entry.window) ? entry.bytes : 0;
+        bytes += entry.held() ? entry.bytes : 0;
     }
     return bytes;
 }
 
+bool Mdf4DocumentSession::Retained::held() const {
+    switch (kind) {
+    case Request::Kind::Overview:
+        return overview.use_count() > 1;
+    case Request::Kind::Window:
+        return window.use_count() > 1;
+    case Request::Kind::TextPage:
+        return page.use_count() > 1;
+    case Request::Kind::ArraySample:
+        return slice.use_count() > 1;
+    }
+    return false;
+}
+
 Mdf4DocumentSession::Retained* Mdf4DocumentSession::retainedOverview(ChannelKey key) {
     for (Retained& entry : _retained) {
-        if (!entry.window && entry.channel == key) {
+        if (entry.kind == Request::Kind::Overview && entry.channel == key) {
             return &entry;
         }
     }
@@ -573,8 +955,22 @@ Mdf4DocumentSession::Retained* Mdf4DocumentSession::retainedWindow(ChannelKey ke
                                                                     const PlotOverview* set,
                                                                     double start, double end) {
     for (Retained& entry : _retained) {
-        if (entry.window && entry.channel == key && entry.overview.get() == set &&
-            entry.window->covers(start, end)) {
+        if (entry.kind == Request::Kind::Window && entry.channel == key &&
+            entry.overview.get() == set && entry.window->covers(start, end)) {
+            return &entry;
+        }
+    }
+    return nullptr;
+}
+
+// A text page by its channel and first sample; an array slice by its channel,
+// sample and element window. A text read has no element window: both sides
+// carry the default.
+Mdf4DocumentSession::Retained* Mdf4DocumentSession::retainedTable(const Request& wanted) {
+    for (Retained& entry : _retained) {
+        if (entry.kind == wanted.kind && entry.channel == wanted.channel &&
+            entry.first == wanted.first && entry.elements.first == wanted.plan.window.first &&
+            entry.elements.count == wanted.plan.window.count) {
             return &entry;
         }
     }
@@ -685,4 +1081,3 @@ void Mdf4DocumentSession::buildTree() {
 
     setRootItem(std::move(root));
 }
-

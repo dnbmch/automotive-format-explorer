@@ -54,7 +54,7 @@ QUrl A2lDocumentSession::centerPanelSource() const {
     return {};
 }
 
-QAbstractListModel* A2lDocumentSession::centerPanelModel() {
+QAbstractItemModel* A2lDocumentSession::centerPanelModel() {
     return _memory_map_model.get();
 }
 

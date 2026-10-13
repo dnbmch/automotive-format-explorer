@@ -5,7 +5,7 @@
 #include "models/detailmodel.h"
 #include "models/tabmodel.h"
 
-#include <QAbstractListModel>
+#include <QAbstractItemModel>
 #include <QFutureWatcher>
 #include <QObject>
 #include <QStringList>
@@ -19,8 +19,8 @@ class AppController : public QObject {
     Q_PROPERTY(TabModel* tabModel READ tabModel CONSTANT)
     Q_PROPERTY(DocumentTab* currentTab READ currentTab NOTIFY currentSessionChanged)
     Q_PROPERTY(DetailModel* currentDetailModel READ currentDetailModel NOTIFY currentSessionChanged)
-    Q_PROPERTY(QUrl centerPanelSource READ centerPanelSource NOTIFY currentSessionChanged)
-    Q_PROPERTY(QAbstractListModel* centerPanelModel READ centerPanelModel NOTIFY currentSessionChanged)
+    Q_PROPERTY(QUrl centerPanelSource READ centerPanelSource NOTIFY centerPanelChanged)
+    Q_PROPERTY(QAbstractItemModel* centerPanelModel READ centerPanelModel NOTIFY centerPanelChanged)
     Q_PROPERTY(int currentTabIndex READ currentTabIndex WRITE setCurrentTabIndex NOTIFY currentTabIndexChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(bool fileLoading READ fileLoading NOTIFY fileLoadingChanged)
@@ -37,7 +37,7 @@ public:
     DocumentTab* currentTab() const;
     DetailModel* currentDetailModel();
     QUrl centerPanelSource();
-    QAbstractListModel* centerPanelModel();
+    QAbstractItemModel* centerPanelModel();
 
     // The current tab's row, or -1 when no tab is current.
     int currentTabIndex() const;
@@ -76,6 +76,9 @@ public:
 
 signals:
     void currentSessionChanged();
+    // The center panel's source or model differs from the last announced: a
+    // new current tab, or a selection that switched its session's center view.
+    void centerPanelChanged();
     void currentTabIndexChanged();
     void lastErrorChanged();
     void fileLoadingChanged();
@@ -90,6 +93,7 @@ private:
     void setFileLoading(bool loading);
     void makeCurrent(DocumentTab* tab);
     void announceCurrentTab();
+    void announceCenterPanel();
     DocumentTab* insertTab(std::unique_ptr<DocumentTab> tab);
     std::unique_ptr<DocumentTab> removeTab(int index);
     void deferSwitch(DocumentTab* tab);
@@ -105,6 +109,10 @@ private:
     const DocumentTab* _announced_row_tab = nullptr;
     int _announced_row = -1;
     const DocumentTab* _announced_tab = nullptr;
+    // The tab, source and model behind centerPanelChanged.
+    const DocumentTab* _announced_center_tab = nullptr;
+    QUrl _announced_center_source;
+    const QAbstractItemModel* _announced_center_model = nullptr;
     // True while the tab model inserts or removes a row.
     bool _in_row_change = false;
     QString _last_error;

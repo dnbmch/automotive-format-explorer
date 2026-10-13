@@ -29,7 +29,7 @@ DiagnosticMessage toDiagnostic(const mdf4::Diagnostic& diagnostic) {
 // The file is opened and indexed once, with the reader's default limits; the
 // reader observes `cancel` while it opens, and a cancelled opening yields a
 // session whose one diagnostic says so. The session's tree, details, time axes
-// and every scan use that one reader, which lives as long as any of its handles.
+// and every read use that one reader, which lives as long as any of its handles.
 LoadResult Mdf4Adapter::load(const QString& path, const std::atomic<bool>& cancel) const {
     auto reader = std::make_shared<mdf4::Reader>(path.toStdString(), mdf4::Limits{}, &cancel);
     std::shared_ptr<const mdf4::File> metadata(reader, &reader->metadata());
@@ -46,12 +46,23 @@ LoadResult Mdf4Adapter::load(const QString& path, const std::atomic<bool>& cance
         QFileInfo(path).fileName(),
         path,
         std::move(metadata),
-        [reader](std::uint32_t group, std::uint32_t channel, std::uint64_t first,
-                 std::uint64_t count, const mdf4::Control& control,
-                 const mdf4::Visitor& visitor) {
-            return reader->scan(group, channel, first, count, control, visitor);
-        },
-        [reader](std::uint32_t group) { return reader->axis(group); },
+        Mdf4Source{
+            [reader](std::uint32_t group, std::uint32_t channel, std::uint64_t first,
+                     std::uint64_t count, const mdf4::Control& control,
+                     const mdf4::Visitor& visitor) {
+                return reader->scan(group, channel, first, count, control, visitor);
+            },
+            [reader](std::uint32_t group, std::uint32_t channel, std::uint64_t first,
+                     std::uint64_t count, const mdf4::Control& control,
+                     const mdf4::TextVisitor& visitor) {
+                return reader->scanText(group, channel, first, count, control, visitor);
+            },
+            [reader](std::uint32_t group, std::uint32_t channel, std::uint64_t first,
+                     std::uint64_t count, const mdf4::ElementWindow& elements,
+                     const mdf4::Control& control) {
+                return reader->readArray(group, channel, first, count, elements, control);
+            },
+            [reader](std::uint32_t group) { return reader->axis(group); }},
         diagnostics);
     return LoadResult{std::move(session), diagnostics, openingError};
 }

@@ -11,11 +11,9 @@ what is not built.
 - Open an `mdf4-writer` output file, plot a channel and compare its values with
   `mdf4-writer/tools/mdf_roundtrip.py`.
 - Open a foreign recording (an ASAM example or a real file): its structure shows in
-  full, numeric channels plot, text and array channels are described but not
-  plotted, the others are listed as not plottable with their reason. The reader reads
-  array channels; the Explorer describes their type, shape and axes
-  ([signal plot](../ref/signal_plot.md#mdf4-selection-lifecycle)), and their value
-  table is [BL-V6](../backlog.md#bl-v6-an-array-channels-values-are-not-shown).
+  full, numeric channels plot, text channels show their texts and array channels
+  their samples in the value table ([value table](../ref/value_table.md)), the others
+  are listed as not plottable with their reason.
 - If a real recording that matters comes back mostly non-plottable, dump it with the
   parser's `mdf4_json` example, map each non-decodable channel class to the reader
   increment that unlocks it (the increments in `mdf4-parser/roadmap.md`) and

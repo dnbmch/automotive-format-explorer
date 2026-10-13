@@ -29,17 +29,21 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   dense, as columns. Hover reports a bin range or an exact sample with its index;
   a source that ended early shows "N of M samples"; zoom, pan and reset.
 - MDF4 open indexes metadata once into one retained `mdf4::Reader` shared by the
-  tree, detail cards, time axes and every scan. The tree is admitted against a
-  384 MiB estimate before it is built. One scan runs at a time with a single
-  replaceable pending scan; obsolete scans are cancelled and their results and
-  progress discarded. Completed overviews and windows share one 256 MiB allowance
-  per session with the scan in flight's reservation, evicting only results nobody
-  else holds and refusing, with the numbers, when held results leave no room.
+  tree, detail cards, time axes and every read. The tree is admitted against a
+  384 MiB estimate before it is built. One read runs at a time with a single
+  replaceable pending read; obsolete reads are cancelled and their results and
+  progress discarded. Completed overviews, windows, text pages and array slices
+  share one 256 MiB allowance per session with the read in flight's reservation,
+  evicting only results nobody else holds and refusing, with the numbers, when held
+  results leave no room or the request exceeds the whole allowance.
   Empty, short, refused, changed-file and failed scans read differently; the domain
   is the reader's time axis or the sample index; group masters are listed as axis
-  channels, not signals, and text and array channels are described, not plotted
-  (an array with its type, shape and axes). Closing a tab cancels its scan and waits
-  for the reader's next checkpoint.
+  channels, not signals. Text and array channels are shown as value tables in place
+  of the plot: a text channel in pages of 1,024 samples, an array channel one sample
+  at a time with its axes as headers, paired with the array's samples by the spec's
+  rule, and a slice index per outer dimension; their reads share the scheduler and
+  the allowance. Closing a tab cancels its read and waits for the reader's next
+  checkpoint.
 - Memory grid: sparse byte queries remove the 16 MiB coverage cap and support tested
   multi-GiB spans, with overlap hatching (bytes claimed by more than
   one object), click-drag byte-range selection with status readout, and hover

@@ -128,16 +128,19 @@ scans it. A channel the reader cannot decode stays in the tree marked "Not
 plottable", with its reason in the detail cards; selecting it scans nothing and the
 plot says it is not plottable. A text channel (`Channel.textual`) is readable, but its
 samples are text: the tree lists it as an ordinary channel marked "Text channel", its
-detail cards read "Plottable: No" and "Values: Text (UTF-8)", and selecting it scans
-nothing while the plot says "Text channel — not plottable". A decodable MLSD
-channel's cards name its size channel. An array channel (`Channel.array`) is
+detail cards read "Plottable: No" and "Values: Text (UTF-8)", and selecting it turns
+the center to the value table, which shows its samples in pages with their indices
+and times ([value table](value_table.md)). A decodable MLSD channel's cards name its
+size channel. An array channel (`Channel.array`) is
 readable, but each of its samples is a whole array: the tree lists it as an ordinary
 channel whose role is its type and shape ("Classification result 52 × 142", at most
 eight sizes, then "… (D dimensions)"), its detail cards read "Plottable: No" and
 "Values: Array of N elements per sample" beside an Array card (type, dimensions,
 elements per sample, the intervals of an interval axis, and for the first eight
 dimensions the axis: "Index", the fixed points, or the axis channel and its group),
-and selecting it scans nothing while the plot says "Array channel — not plottable".
+and selecting it turns the center to the value table, which shows one sample at a
+time as a matrix with its axes as headers
+([value table](value_table.md#array-samples)).
 
 ## Measured scale
 

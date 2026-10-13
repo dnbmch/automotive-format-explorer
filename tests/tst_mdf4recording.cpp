@@ -73,7 +73,7 @@ void TestMdf4Recording::initTestCase() {
     QVERIFY2(_loaded.diagnostics.isEmpty(),
              qPrintable(_loaded.diagnostics.isEmpty() ? QString()
                                                       : _loaded.diagnostics.front().title));
-    _model = static_cast<SignalPlotModel*>(_loaded.session->centerPanelModel());
+    _model = qobject_cast<SignalPlotModel*>(_loaded.session->centerPanelModel());
 
     TreeModel* tree = _loaded.session->treeModel();
     const QModelIndex group = tree->index(0, 0, tree->index(0, 0));

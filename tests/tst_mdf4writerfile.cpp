@@ -63,7 +63,7 @@ void TestMdf4WriterFile::writerFileOpensAndPlots() {
     QVERIFY2(plottableKey != 0, "writer file contains no plottable channel");
 
     // The overview of the whole channel, then the exact samples of the view.
-    auto* model = static_cast<SignalPlotModel*>(result.session->centerPanelModel());
+    auto* model = qobject_cast<SignalPlotModel*>(result.session->centerPanelModel());
     result.session->selectNode(plottableKey);
     QTRY_VERIFY_WITH_TIMEOUT(model->plotState() == SignalPlotModel::Detail && !model->busy(),
                              5000);
@@ -93,7 +93,7 @@ void TestMdf4WriterFile::changedSourceAsksForReload() {
 
     QFile file(copy);
     QVERIFY(file.resize(file.size() - 1));
-    auto* model = static_cast<SignalPlotModel*>(result.session->centerPanelModel());
+    auto* model = qobject_cast<SignalPlotModel*>(result.session->centerPanelModel());
     result.session->selectNode(plottableKey);
     QTRY_VERIFY_WITH_TIMEOUT(model->plotState() == SignalPlotModel::Failed && !model->busy(),
                              5000);

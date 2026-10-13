@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QSignalSpy>
+#include <QStringListModel>
 #include <QTest>
 #include <QThread>
 #include <QThreadPool>
@@ -12,6 +13,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -45,6 +47,8 @@ public:
     bool gateOpen = true;    // load() blocks until the gate opens
     bool failLoad = false;
     bool honorsCancel = false;   // a blocked load also returns once cancelled
+    // Runs on the controller's thread at the end of each fake selection.
+    std::function<void()> onSelect;
 
     void openGate() { update([this] { gateOpen = true; }); }
     void startTeardown() { update([this] { _teardown = true; }); }
@@ -113,6 +117,12 @@ private:
     QThread* _modelThread = nullptr;
 };
 
+// A fake session's two center views: the table after selecting kTableKey, the
+// plot after any other selection and before the first.
+const QUrl kPlotView(QStringLiteral("qrc:/fake/PlotView.qml"));
+const QUrl kTableView(QStringLiteral("qrc:/fake/TableView.qml"));
+constexpr quint64 kTableKey = 2;
+
 class FakeSession final : public AdapterSessionBase {
 public:
     FakeSession(Probe& probe, const QString& path)
@@ -121,12 +131,29 @@ public:
           _probe(probe) {}
     ~FakeSession() override { _probe.sessionDestroyed(_tree_model.thread(), displayName()); }
 
+    QUrl centerPanelSource() const override { return _table ? kTableView : kPlotView; }
+    QAbstractItemModel* centerPanelModel() override {
+        return _table ? static_cast<QAbstractItemModel*>(&_table_model) : &_plot_model;
+    }
+    void moveModelsToThread(QThread* thread) override {
+        AdapterSessionBase::moveModelsToThread(thread);
+        _plot_model.moveToThread(thread);
+        _table_model.moveToThread(thread);
+    }
+
     void selectNode(quint64 key) override {
         _probe.note(QStringLiteral("select %1 %2").arg(displayName()).arg(key));
+        _table = key == kTableKey;
+        if (_probe.onSelect) {
+            _probe.onSelect();
+        }
     }
 
 private:
     Probe& _probe;
+    QStringListModel _plot_model;
+    QStringListModel _table_model;
+    bool _table = false;
 };
 
 class FakeAdapter final : public FormatAdapter {
@@ -289,6 +316,7 @@ private slots:
     void everyPublicActionInertAfterShutdown();
     void closeCurrentFromIndexNotification();
     void closeCurrentFromSessionNotification();
+    void centerPanelAnnouncedWhenItChanges();
     void selectionStaysInCurrentTab();
     void requestsDuringRowRemovalAreDeferred();
     void requestsAfterRowRemovalKeepTheirTabs();
@@ -918,6 +946,57 @@ void TestAppController::closeCurrentFromSessionNotification() {
                                                     QStringLiteral("session destroyed"),
                                                     QStringLiteral("session destroyed")}));
     QCOMPARE(probe.destroyed(), QStringList({C, B}));
+}
+
+// The center panel is announced when its tab, source or model changes: a
+// selection that switches the session's center view once, one that keeps it
+// never, a tab switch once, a nested switch from an observer once in all,
+// closing a tab before the current one never, and nothing once shut down, also
+// when the shutdown comes from inside the selection that switched the view.
+void TestAppController::centerPanelAnnouncedWhenItChanges() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QSignalSpy center(&controller, &AppController::centerPanelChanged);
+    QVERIFY(openTabs(controller, {A, B, C}));
+    QCOMPARE(center.count(), 3);
+    QCOMPARE(controller.centerPanelSource(), kPlotView);
+    center.clear();
+
+    controller.selectCurrentNode(kTableKey);
+    QCOMPARE(center.count(), 1);
+    QCOMPARE(controller.centerPanelSource(), kTableView);
+    QCOMPARE(controller.centerPanelModel(),
+             controller.tabModel()->tabAt(2)->session()->centerPanelModel());
+    controller.selectCurrentNode(kTableKey);
+    QCOMPARE(center.count(), 1);
+    controller.selectCurrentNode(1);
+    QCOMPARE(center.count(), 2);
+    QCOMPARE(controller.centerPanelSource(), kPlotView);
+
+    controller.setCurrentTabIndex(1);
+    QCOMPARE(center.count(), 3);
+
+    // An observer of the tab switch selects the table in the new tab: the
+    // nested selection announces it, and the switch has nothing left to say.
+    callOnce(&controller, &AppController::currentSessionChanged, [] { return true; },
+             [&controller] { controller.selectCurrentNode(kTableKey); });
+    controller.setCurrentTabIndex(0);
+    QCOMPARE(center.count(), 4);
+    QCOMPARE(controller.centerPanelSource(), kTableView);
+
+    controller.setCurrentTabIndex(2);
+    QCOMPARE(center.count(), 5);
+    controller.closeTab(0);
+    QCOMPARE(center.count(), 5);
+    QCOMPARE(currentTitle(controller), C);
+
+    probe.onSelect = [&controller] { controller.shutdown(); };
+    controller.selectCurrentNode(kTableKey);
+    QCOMPARE(controller.tabModel()->tabAt(1)->session()->centerPanelSource(), kTableView);
+    QCOMPARE(center.count(), 5);
+    controller.setCurrentTabIndex(0);
+    controller.closeTab(1);
+    QCOMPARE(center.count(), 5);
 }
 
 // Keys are session-local: the same key selects in the current tab's session only.

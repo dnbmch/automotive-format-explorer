@@ -338,7 +338,7 @@ ApplicationWindow {
                         }
                     }
 
-                    // --- Center panel (memory view or empty) ---
+                    // --- Center panel (the session's view, or empty) ---
                     Loader {
                         id: centerPanelLoader
                         SplitView.preferredWidth: hasCenterPanel ? 520 : 0
@@ -366,9 +366,11 @@ ApplicationWindow {
                             })
                         }
 
+                        // A tab switch, or a selection that switched the
+                        // session's view; closing an earlier tab is neither.
                         Connections {
                             target: AppController
-                            function onCurrentSessionChanged() {
+                            function onCenterPanelChanged() {
                                 centerPanelLoader.reload()
                             }
                         }

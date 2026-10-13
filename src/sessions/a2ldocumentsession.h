@@ -23,7 +23,7 @@ public:
     ~A2lDocumentSession() override;
 
     QUrl centerPanelSource() const override;
-    QAbstractListModel* centerPanelModel() override;
+    QAbstractItemModel* centerPanelModel() override;
     void selectNode(quint64 key) override;
     void moveModelsToThread(QThread* thread) override;
 

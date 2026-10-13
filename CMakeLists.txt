@@ -47,9 +47,11 @@ qt_add_library(explorer-core STATIC
     src/models/plotdata.cpp
     src/models/signalmapmodel.cpp
     src/models/signalplotmodel.cpp
+    src/models/tabledata.cpp
     src/models/tabmodel.cpp
     src/models/treefiltermodel.cpp
     src/models/treemodel.cpp
+    src/models/valuetablemodel.cpp
     src/sessions/adaptersessionbase.cpp
 )
 
@@ -74,6 +76,7 @@ qt_add_library(explorer-ldf-backend STATIC
 
 qt_add_library(explorer-mdf4-backend STATIC
     src/adapters/mdf4adapter.cpp
+    src/sessions/mdf4arrayread.cpp
     src/sessions/mdf4documentsession.cpp
     src/sessions/mdf4detailpresenter.cpp
 )
@@ -179,6 +182,7 @@ qt_add_qml_module(automotive-format-explorer
         qml/components/MemoryView.qml
         qml/components/SignalMapView.qml
         qml/components/SignalPlotView.qml
+        qml/components/ValueTableView.qml
 )
 
 qt_add_resources(automotive-format-explorer "icons"

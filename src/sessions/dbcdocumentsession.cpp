@@ -49,7 +49,7 @@ QUrl DbcDocumentSession::centerPanelSource() const {
     return {};
 }
 
-QAbstractListModel* DbcDocumentSession::centerPanelModel() {
+QAbstractItemModel* DbcDocumentSession::centerPanelModel() {
     return _signal_map_model.get();
 }
 

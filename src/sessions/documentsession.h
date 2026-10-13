@@ -10,7 +10,7 @@
 
 class TreeModel;
 class DetailModel;
-class QAbstractListModel;
+class QAbstractItemModel;
 
 class DocumentSession {
 public:
@@ -27,7 +27,7 @@ public:
     virtual void selectNode(quint64 key) = 0;
 
     virtual QUrl centerPanelSource() const { return {}; }
-    virtual QAbstractListModel* centerPanelModel() { return nullptr; }
+    virtual QAbstractItemModel* centerPanelModel() { return nullptr; }
 
     virtual void moveModelsToThread(QThread* thread) = 0;
 };

@@ -1,6 +1,7 @@
 #include "builtinformats.h"
 #include "core/appcontroller.h"
 #include "core/opensequence.h"
+#include "models/valuetablemodel.h"
 #include "ui/memorygriditem.h"
 #include "ui/signalgriditem.h"
 #include "ui/signalplotitem.h"
@@ -52,8 +53,10 @@ int main(int argc, char* argv[]) {
     qmlRegisterType<MemoryGridItem>("ExplorerApp", 1, 0, "MemoryGridItem");
     qmlRegisterType<SignalGridItem>("ExplorerApp", 1, 0, "SignalGridItem");
     qmlRegisterType<SignalPlotItem>("ExplorerApp", 1, 0, "SignalPlotItem");
-    // For its states in QML; a document session creates it.
+    // For their states in QML; a document session creates them.
     qmlRegisterUncreatableType<SignalPlotModel>("ExplorerApp", 1, 0, "SignalPlotModel",
+                                                QStringLiteral("Provided by a document session"));
+    qmlRegisterUncreatableType<ValueTableModel>("ExplorerApp", 1, 0, "ValueTableModel",
                                                 QStringLiteral("Provided by a document session"));
 
     AppController controller(builtInFormats());

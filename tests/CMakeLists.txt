@@ -64,6 +64,20 @@ explorer_add_test(tst_plotdata explorer-core)
 
 explorer_add_test(tst_signalplotmodel explorer-core)
 
+explorer_add_test(tst_valuetablemodel explorer-core)
+
+# The production value table view in a test-time ExplorerApp module, as for the
+# plot view: ValueTableView.qml and Theme.qml are copied from qml/components,
+# and the test registers the table model as main.cpp does.
+explorer_add_test(tst_valuetableview explorer-core Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+set(_tableview_module "${CMAKE_CURRENT_BINARY_DIR}/tableview_module/ExplorerApp")
+configure_file(${PROJECT_SOURCE_DIR}/qml/components/ValueTableView.qml ${_tableview_module}/ValueTableView.qml COPYONLY)
+configure_file(${PROJECT_SOURCE_DIR}/qml/components/Theme.qml ${_tableview_module}/Theme.qml COPYONLY)
+configure_file(tableview/qmldir ${_tableview_module}/qmldir COPYONLY)
+target_compile_definitions(tst_valuetableview PRIVATE
+    TABLEVIEW_IMPORT_PATH="${CMAKE_CURRENT_BINARY_DIR}/tableview_module")
+set_property(TEST tst_valuetableview APPEND PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 explorer_add_test(tst_documenttab explorer-core)
 
 # The production nav panel in a test-time ExplorerApp module: NavPanel.qml and
@@ -147,3 +161,29 @@ explorer_add_test(tst_mdf4writerfile
 set_tests_properties(tst_mdf4writerfile PROPERTIES SKIP_RETURN_CODE 77)
 set_property(TEST tst_mdf4writerfile APPEND PROPERTY ENVIRONMENT
     "MDF4_WRITER_SAMPLE=${PROJECT_SOURCE_DIR}/samples/demo_recording.mf4")
+
+# The value table over the ASAM MDF 4.2.0 examples through the production
+# adapter. The corpus is not redistributable: the executable exits 77 when
+# MDF4_EXAMPLES names no directory, so a missing corpus reports as Skipped.
+explorer_add_test(tst_mdf4tablecorpus
+    explorer-core
+    explorer-mdf4-backend
+    Qt6::Concurrent
+    protobuf::libprotobuf
+    mdf4parser::mdf4parser
+)
+set_tests_properties(tst_mdf4tablecorpus PROPERTIES SKIP_RETURN_CODE 77)
+set_property(TEST tst_mdf4tablecorpus APPEND PROPERTY ENVIRONMENT
+    "MDF4_EXAMPLES=${PROJECT_SOURCE_DIR}/../a2l-parser/docs/ASAM_2022_04_07/2022_04_07/Measurement & Calibration/ASAM_MDF_BS_V4-2-0/BaseStandard/Examples")
+
+# The array read's plan and worker against fake reader functions, and against
+# the same corpus; without it the corpus cases skip and the executable exits 77.
+explorer_add_test(tst_mdf4arrayread
+    explorer-core
+    explorer-mdf4-backend
+    protobuf::libprotobuf
+    mdf4parser::mdf4parser
+)
+set_tests_properties(tst_mdf4arrayread PROPERTIES SKIP_RETURN_CODE 77)
+set_property(TEST tst_mdf4arrayread APPEND PROPERTY ENVIRONMENT
+    "MDF4_EXAMPLES=${PROJECT_SOURCE_DIR}/../a2l-parser/docs/ASAM_2022_04_07/2022_04_07/Measurement & Calibration/ASAM_MDF_BS_V4-2-0/BaseStandard/Examples")

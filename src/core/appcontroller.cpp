@@ -33,7 +33,7 @@ QUrl AppController::centerPanelSource() {
     return _current_tab ? _current_tab->session()->centerPanelSource() : QUrl();
 }
 
-QAbstractListModel* AppController::centerPanelModel() {
+QAbstractItemModel* AppController::centerPanelModel() {
     return _current_tab ? _current_tab->session()->centerPanelModel() : nullptr;
 }
 
@@ -60,10 +60,11 @@ void AppController::makeCurrent(DocumentTab* tab) {
 }
 
 // Tells observers about the current tab as it stands: its row
-// (currentTabIndexChanged), then the tab itself (currentSessionChanged). Each is
-// sent only when it differs from what observers were last told, and never after
-// shutdown. An observer may switch, close or open tabs from either notification;
-// a nested change announces itself, and nothing stale follows it.
+// (currentTabIndexChanged), then the tab itself (currentSessionChanged), then
+// its center panel (centerPanelChanged). Each is sent only when it differs from
+// what observers were last told, and never after shutdown. An observer may
+// switch, close or open tabs from any notification; a nested change announces
+// itself, and nothing stale follows it.
 void AppController::announceCurrentTab() {
     if (_shut_down) {
         return;
@@ -80,6 +81,25 @@ void AppController::announceCurrentTab() {
         _announced_tab = _current_tab;
         emit currentSessionChanged();
     }
+    announceCenterPanel();
+}
+
+// The center panel is the current tab's session's view and model; a selection
+// may switch them without a tab change.
+void AppController::announceCenterPanel() {
+    if (_shut_down) {
+        return;
+    }
+    const QUrl source = centerPanelSource();
+    const QAbstractItemModel* model = centerPanelModel();
+    if (_current_tab == _announced_center_tab && source == _announced_center_source &&
+        model == _announced_center_model) {
+        return;
+    }
+    _announced_center_tab = _current_tab;
+    _announced_center_source = source;
+    _announced_center_model = model;
+    emit centerPanelChanged();
 }
 
 // The tab model's row insertion and removal notify observers synchronously.
@@ -257,6 +277,7 @@ void AppController::selectCurrentNode(qulonglong nodeKey) {
     }
 
     _current_tab->session()->selectNode(static_cast<quint64>(nodeKey));
+    announceCenterPanel();
 }
 
 void AppController::clearLastError() {

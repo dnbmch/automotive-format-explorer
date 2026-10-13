@@ -60,9 +60,9 @@ public:
     virtual bool hasDiagnostics() const = 0;          // true when any diagnostic (warning or error) exists
     virtual void selectNode(quint64 key) = 0;         // show the entity of the row with this key
 
-    // Optional center panel (memory view / signal map / blank)
+    // Optional center panel (memory view / signal map / plot or value table / blank)
     virtual QUrl centerPanelSource() const { return {}; }
-    virtual QAbstractListModel* centerPanelModel() { return nullptr; }
+    virtual QAbstractItemModel* centerPanelModel() { return nullptr; }
 
     virtual void moveModelsToThread(QThread* thread) = 0;
 };
@@ -108,8 +108,14 @@ If your format has nothing graphical to show in the middle column, leave `center
 | A2L | `qrc:/qt/qml/ExplorerApp/qml/components/MemoryView.qml` | `MemoryMapModel` |
 | DBC, LDF | `qrc:/qt/qml/ExplorerApp/qml/components/SignalMapView.qml` | `SignalMapModel` |
 | MDF4 | `qrc:/qt/qml/ExplorerApp/qml/components/SignalPlotView.qml` | `SignalPlotModel` |
+| MDF4, a text or array channel selected | `qrc:/qt/qml/ExplorerApp/qml/components/ValueTableView.qml` | `ValueTableModel` |
 
-The center views use `QQuickPaintedItem` C++ renderers. The signal grid is driven by
+A session that switches its center view on a selection, as MDF4 does, returns the
+current view and model from both functions; `AppController` announces the switch
+after `selectNode()` ([value table](../ref/value_table.md#center-switch)).
+
+The memory grid, the signal grid and the signal plot use `QQuickPaintedItem` C++
+renderers; the value table is a QML `TableView` over its model. The signal grid is driven by
 pre-computed per-bit arrays, the memory grid by byte queries over sorted object
 intervals ([rendering](architecture.md#rendering)); the signal plot consumes the format-neutral
 overview and exact windows of `src/models/plotdata.h`, which its builders make from

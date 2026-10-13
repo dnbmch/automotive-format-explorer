@@ -1,0 +1,3 @@
+module ExplorerApp
+singleton Theme 1.0 Theme.qml
+ValueTableView 1.0 ValueTableView.qml
