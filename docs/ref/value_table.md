@@ -38,10 +38,11 @@ and reads one array sample.
 ## Text pages
 
 - A page is 1,024 samples aligned on multiples of 1,024 (`textPageFirst(n) = n − n mod
-  1024`), read with one `scanText(g, c, first, 1024, control, visitor)` whose visitor
-  always continues; the reader clamps the request to the channel's samples. The rows
-  are the samples the read delivered, so an unsorted group's short read shows what
-  arrived.
+  1024`), read with one `scanText(g, c, first, rows, control, visitor)` for the page's
+  rows, its share of the stated samples, whose visitor always continues; the reader
+  clamps the request to the channel's samples and delivers no more rows than the
+  builder allocated. The rows are the samples the read delivered, so an unsorted
+  group's short read shows what arrived.
 - Row headers are absolute sample indices. The columns are Time and Text when the
   group's time axis is a master, the Time column named after it ("name [unit]", the
   plot's domain), and Text alone otherwise.
@@ -106,17 +107,23 @@ and reads one array sample.
 - `TextPageBuilder::reservation(rows) = sizeof(TextPageBuilder) + sizeof(TextPage) +
   rows × (8 B time + 4 B end offset + 1,024 B cell cap)`, for the page's share of the
   stated samples, at most 1,024, is admitted against the session's result allowance
-  before the read launches. The builder allocates the time and offset arrays for its
-  rows at construction, grows the text arena up to rows × 1,024 B and shrinks every
-  array when it finishes, so `TextPage::bytes()`, the structure and its capacities,
-  never exceeds the reservation; the completion replaces the reservation with it in
-  one step.
+  before the read launches. The builder allocates all three arrays at construction,
+  the text arena at rows × 1,024 B, and never reallocates or shrinks, so its live
+  storage is its reservation (`sizeof(TextPageBuilder)` covers the `make_shared` block
+  header) and every page of `rows`, delivered in full or short, holds `reservation(rows)
+  − sizeof(TextPageBuilder)` as `TextPage::bytes()`, the structure and its capacities;
+  the completion replaces the reservation with it in one step.
 - `mdf4array::reservation(plan) = sizeof(ArraySample) + 8 B × (rows × columns + 1 +
-  row labels + column labels)`, saturating, is admitted the same way. The reader
-  reserves each series for its clamped request before it reads, and the read's
-  vectors move into an `ArraySlice`, a smaller structure than `ArraySample` (a compile-time check
-  in the session), so `ArraySlice::bytes()`, the structure and its value and label
-  capacities, never exceeds the reservation; a note is not counted.
+  row labels + column labels)`, saturating, is admitted the same way. The plan refers
+  to a fixed axis's points in the document (`AxisSource::fixed`, a pointer; the task
+  keeps the metadata alive) and the read copies them once, into the result's labels.
+  The reader reserves each series for its clamped request before it reads, and the
+  read's vectors move into an `ArraySlice`, a smaller structure than `ArraySample` (a
+  compile-time check in the session), so `ArraySlice::bytes()`, the structure and its
+  value and label capacities, never exceeds the reservation; a note is not counted.
+- `tst_tablestorage` counts both builders' live heap through the executable's own
+  `operator new` against these reservations: a full page, a page of 700-Byte texts, a
+  short delivery and a 65,536-element sample on a fixed axis of as many points.
 - A page is retained like a plot result, keyed by its channel and first sample, an
   array slice by its channel, sample and element window: held while the table shows
   it, evicted least recently used when nothing holds it. Selecting the channel again

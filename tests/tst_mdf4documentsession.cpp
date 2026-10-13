@@ -953,7 +953,7 @@ void TestMdf4DocumentSession::textPageShown() {
     QCOMPARE(int(requests[0].lane), int(Scans::Request::Text));
     QCOMPARE(requests[0].channel, std::uint32_t(kText));
     QCOMPARE(requests[0].first, std::uint64_t(0));
-    QCOMPARE(requests[0].count, std::uint64_t(1024));
+    QCOMPARE(requests[0].count, std::uint64_t(4));
     const Mdf4DocumentSession::ResultBytes bytes = session->resultBytes();
     QCOMPARE(bytes.results, std::size_t(1));
     QCOMPARE(bytes.held, std::size_t(1));
@@ -979,7 +979,7 @@ void TestMdf4DocumentSession::textPagesAreBounded() {
     QCOMPARE(requests.size(), std::size_t(2));
     QCOMPARE(int(requests[1].lane), int(Scans::Request::Text));
     QCOMPARE(requests[1].first, std::uint64_t(2048));
-    QCOMPARE(requests[1].count, std::uint64_t(1024));
+    QCOMPARE(requests[1].count, std::uint64_t(952));
     QCOMPARE(table->tableState(), ValueTableModel::Shown);
     QCOMPARE(table->rowCount(), 952);
     QCOMPARE(table->headerData(0, Qt::Vertical).toString(), QStringLiteral("2048"));

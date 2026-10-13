@@ -779,8 +779,9 @@ void Mdf4DocumentSession::startPending() {
 }
 
 // The task owns copies of the source functions it reads with, and with them the
-// source, plus plain request values: it never reaches this session, its models
-// or its results. It builds its result from the read's chunks and hands it over
+// source, plus plain request values; an array sample's task also owns the
+// metadata its plan refers into. It never reaches this session, its models or
+// its results. It builds its result from the read's chunks and hands it over
 // only after an Ok outcome, when the reader has checked the source after the
 // traversal.
 void Mdf4DocumentSession::launch(Request request, std::uint64_t reserved) {
@@ -796,9 +797,10 @@ void Mdf4DocumentSession::launch(Request request, std::uint64_t reserved) {
     if (kind == Request::Kind::ArraySample) {
         // The sample's elements, then its axes' labels: every read of the
         // sample runs in this one task, so none overlaps another operation.
+        // `metadata` keeps alive the fixed axis points the plan refers to.
         _watcher.setFuture(QtConcurrent::run(
-            [readArray = _source.readArray, scan = _source.scan, plan = std::move(plan),
-             cancel](QPromise<Completion>& promise) {
+            [readArray = _source.readArray, scan = _source.scan, metadata = _metadata,
+             plan = std::move(plan), cancel](QPromise<Completion>& promise) {
                 const mdf4::Control control = readControl(promise, cancel.get());
                 mdf4array::ArraySample sample =
                     mdf4array::readArraySample(plan, readArray, scan, control);
@@ -814,15 +816,15 @@ void Mdf4DocumentSession::launch(Request request, std::uint64_t reserved) {
     }
 
     if (kind == Request::Kind::TextPage) {
-        // One bounded read of the page; the reader clamps it to the samples.
+        // One read of the page's rows, as many as the builder holds: the
+        // reader delivers no more, whatever it clamps the request to.
         _watcher.setFuture(QtConcurrent::run(
             [scanText = _source.scanText, channel, first, rows = pageRows(stated, first),
              cancel](QPromise<Completion>& promise) {
                 const mdf4::Control control = readControl(promise, cancel.get());
                 TextPageBuilder builder(first, rows);
                 Completion completion;
-                completion.scan = scanText(channel.first, channel.second, first,
-                                           kTextPageSamples, control,
+                completion.scan = scanText(channel.first, channel.second, first, rows, control,
                                            [&builder](const mdf4::TextChunk& chunk) {
                                                builder.add(chunk.time, chunk.text, chunk.size);
                                                return mdf4::Visit::Continue;

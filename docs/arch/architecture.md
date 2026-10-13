@@ -376,7 +376,9 @@ destroyed session.
 covers the retained results, cached or shown, and the reservation of the read in
 flight. A read's `PlotOverviewBuilder::reservation()`,
 `PlotWindowBuilder::reservation()`, `TextPageBuilder::reservation()` or
-`mdf4array::reservation()` is admitted before it launches; its completion replaces the reservation with the result's own
+`mdf4array::reservation()` is admitted before it launches; every builder allocates its
+result's storage at construction and never reallocates, so its live storage never
+exceeds its reservation; its completion replaces the reservation with the result's own
 `bytes()` in the same step, and a cancelled, refused or failed read releases it; a
 cancelled read's result goes first, so no result outlives its charge. Admission
 evicts the least recently used results nobody else holds. A result is held while the

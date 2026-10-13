@@ -41,7 +41,8 @@ enum class AxisPairing {
 struct AxisSource {
     enum class Kind { Index, Fixed, Channel };
     Kind kind = Kind::Index;
-    std::vector<double> fixed;  // Fixed: the dimension's axis_values
+    // Fixed: the dimension's axis_values in the document, `labels` of them.
+    const double* fixed = nullptr;
     // Channel: the axis channel, itself a one-dimensional array channel read
     // through readArray, never scan: its first N elements (ca_type 1) or its
     // N + 1 borders (ca_type 3, `intervals`, `leftOpen` from its own
@@ -75,7 +76,8 @@ struct ArrayPlan {
 
 // From the metadata and the source's axes only. `group` and `channel` name a
 // decodable array channel; each slice index is clamped to its dimension, a
-// missing one is 0.
+// missing one is 0. The plan refers into `document` (a fixed axis's points),
+// which must outlive it.
 ArrayPlan arrayPlan(const mdf4::File& document, const AxisFunction& axis, std::uint32_t group,
                     std::uint32_t channel, std::uint64_t sample,
                     const std::vector<std::uint64_t>& slice);

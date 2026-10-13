@@ -1,7 +1,5 @@
 #include "models/tabledata.h"
 
-#include <algorithm>
-
 namespace {
 
 // Marks a cut text; three UTF-8 Bytes.
@@ -24,11 +22,12 @@ std::uint64_t TextPage::bytes() const {
 }
 
 TextPageBuilder::TextPageBuilder(std::uint64_t first, std::uint64_t rows)
-    : _page(std::make_shared<TextPage>()),
-      _arena_limit(static_cast<std::size_t>(rows) * kTextCellBytes) {
+    : _page(std::make_shared<TextPage>()) {
+    const auto count = static_cast<std::size_t>(rows);
     _page->firstSample = first;
-    _page->time.reserve(static_cast<std::size_t>(rows));
-    _page->ends.reserve(static_cast<std::size_t>(rows));
+    _page->time.reserve(count);
+    _page->ends.reserve(count);
+    _page->utf8.reserve(count * kTextCellBytes);
 }
 
 std::uint64_t TextPageBuilder::reservation(std::uint64_t rows) {
@@ -50,10 +49,6 @@ void TextPageBuilder::add(const double* time, const std::string_view* text, std:
             kept = kept.substr(0, cut);
             marker = kCutMarker;
         }
-        const std::size_t needed = utf8.size() + kept.size() + marker.size();
-        if (needed > utf8.capacity()) {
-            utf8.reserve(std::min(std::max(needed, 2 * utf8.capacity()), _arena_limit));
-        }
         utf8.insert(utf8.end(), kept.begin(), kept.end());
         utf8.insert(utf8.end(), marker.begin(), marker.end());
         _page->time.push_back(time[i]);
@@ -63,9 +58,6 @@ void TextPageBuilder::add(const double* time, const std::string_view* text, std:
 
 TextPagePtr TextPageBuilder::finish(std::uint64_t invalidValues) {
     _page->invalidValues = invalidValues;
-    _page->time.shrink_to_fit();
-    _page->ends.shrink_to_fit();
-    _page->utf8.shrink_to_fit();
     return std::move(_page);
 }
 

@@ -187,3 +187,13 @@ explorer_add_test(tst_mdf4arrayread
 set_tests_properties(tst_mdf4arrayread PROPERTIES SKIP_RETURN_CODE 77)
 set_property(TEST tst_mdf4arrayread APPEND PROPERTY ENVIRONMENT
     "MDF4_EXAMPLES=${PROJECT_SOURCE_DIR}/../a2l-parser/docs/ASAM_2022_04_07/2022_04_07/Measurement & Calibration/ASAM_MDF_BS_V4-2-0/BaseStandard/Examples")
+
+# A table read's live heap against its reservation, counted by the
+# executable's own operator new. A plain main without Qt: explorer_add_test
+# gives it the Windows PATH.
+explorer_add_test(tst_tablestorage
+    explorer-core
+    explorer-mdf4-backend
+    mdf4parser::mdf4parser
+    protobuf::libprotobuf
+)

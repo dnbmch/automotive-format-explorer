@@ -43,12 +43,17 @@ using TextPagePtr = std::shared_ptr<const TextPage>;
 // Builds the page of at most `rows` samples from `first` out of the chunks of
 // one read, delivered in sample order. A text longer than kTextCellBytes keeps
 // its longest prefix that ends on a character boundary and leaves room for "…".
-// The time and offset arrays are allocated at construction; the text arena
-// grows up to rows × kTextCellBytes, and finish() shrinks it to the texts.
+// Construction allocates the time and offset arrays for `rows` and
+// kTextCellBytes of text arena per row, the most a cell takes, so nothing
+// reallocates; finish() hands the page over as built. For every page of
+// `rows`, delivered in full or short, page->bytes() + sizeof(TextPageBuilder)
+// == reservation(rows).
 class TextPageBuilder {
 public:
     TextPageBuilder(std::uint64_t first, std::uint64_t rows);
-    // What the builder and its page hold at most, before either exists.
+    // What the builder allocates, before it exists: the page's structure and
+    // arrays, and sizeof(TextPageBuilder), which covers the header of the
+    // make_shared block that holds the page.
     static std::uint64_t reservation(std::uint64_t rows);
 
     void add(const double* time, const std::string_view* text, std::size_t size);
@@ -57,7 +62,6 @@ public:
 
 private:
     std::shared_ptr<TextPage> _page;
-    std::size_t _arena_limit;  // rows × kTextCellBytes
 };
 
 // The labels along one axis of an array table: zero-based indices, one point

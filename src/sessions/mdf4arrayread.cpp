@@ -48,8 +48,8 @@ AxisSource axisSource(const mdf4::File& document, const AxisFunction& axis, std:
         }
     } else if (dimension.axis_values_size() > 0) {
         source.kind = AxisSource::Kind::Fixed;
-        source.fixed.assign(dimension.axis_values().begin(), dimension.axis_values().end());
-        source.labels = source.fixed.size();
+        source.fixed = dimension.axis_values().data();
+        source.labels = static_cast<std::uint64_t>(dimension.axis_values_size());
     }
     return source;
 }
@@ -72,7 +72,7 @@ bool label(const AxisSource& axis, std::uint64_t sample, double time, const Read
     }
     if (axis.kind == AxisSource::Kind::Fixed) {
         labels.kind = AxisLabels::Kind::Points;
-        labels.values = axis.fixed;
+        labels.values.assign(axis.fixed, axis.fixed + axis.labels);
         return true;
     }
     std::uint64_t index = sample;
