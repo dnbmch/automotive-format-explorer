@@ -51,7 +51,7 @@ mdf4::File makeDocument() {
     channel->set_sample_count(1'000'000);
     channel->set_cn_type(0);
     channel->set_decodable(false);
-    channel->set_not_decodable_reason("structure channel not supported");
+    channel->set_not_decodable_reason("structure parent not a fixed-length Byte array");
 
     mdf4::Conversion* conversion = channel->mutable_conversion();
     conversion->set_kind(mdf4::LINEAR);
@@ -173,6 +173,7 @@ private slots:
     void channelCardStatesValidityRule();
     void channelCardNamesStringType();
     void textChannelIsReadableNotPlottable();
+    void byteChannelIsReadableNotPlottable();
     void mlsdChannelNamesItsSizeChannel();
     void arrayChannelIsReadableNotPlottable();
     void arrayCardNamesEachAxis();
@@ -225,7 +226,7 @@ void TestMdf4DetailPresenter::channelCardExplainsPlotSupport() {
     QCOMPARE(fieldValue(details, QStringLiteral("Plot"), QStringLiteral("Plottable")),
              QStringLiteral("No"));
     QCOMPARE(fieldValue(details, QStringLiteral("Plot"), QStringLiteral("Unsupported Reason")),
-             QStringLiteral("structure channel not supported"));
+             QStringLiteral("structure parent not a fixed-length Byte array"));
 }
 
 void TestMdf4DetailPresenter::channelCardNamesBigEndianTypesAndFormulaConversions() {
@@ -410,6 +411,28 @@ void TestMdf4DetailPresenter::textChannelIsReadableNotPlottable() {
     const QList<DetailSection> number = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, SizeChannel));
     QCOMPARE(fieldValue(number, plot, QStringLiteral("Plottable")), QStringLiteral("Yes"));
     QVERIFY(fieldValue(number, plot, QStringLiteral("Values")).isEmpty());
+}
+
+// A Byte channel is readable, its values raw Bytes, and not plottable; its
+// data type is named.
+void TestMdf4DetailPresenter::byteChannelIsReadableNotPlottable() {
+    mdf4::File document = makeDocument();
+    mdf4::Channel* frame = document.mutable_groups(0)->add_channels();
+    frame->set_name("CAN_DataFrame");
+    frame->set_data_type(mdf4::BYTE_ARRAY);
+    frame->set_raw_data_type(10);
+    frame->set_bit_count(120);
+    frame->set_decodable(true);
+    frame->set_binary(true);
+    const Mdf4DetailPresenter presenter(document);
+    const QString plot = QStringLiteral("Plot");
+
+    const QList<DetailSection> details = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 1));
+    QCOMPARE(fieldValue(details, QStringLiteral("Bit Geometry"), QStringLiteral("Data Type")),
+             QStringLiteral("Byte array"));
+    QCOMPARE(fieldValue(details, plot, QStringLiteral("Values")), QStringLiteral("Raw Bytes"));
+    QCOMPARE(fieldValue(details, plot, QStringLiteral("Plottable")), QStringLiteral("No"));
+    QVERIFY(fieldValue(details, plot, QStringLiteral("Unsupported Reason")).isEmpty());
 }
 
 // A decodable MLSD channel names the channel of its group whose value is the

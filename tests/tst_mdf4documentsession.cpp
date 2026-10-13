@@ -165,6 +165,23 @@ mdf4::File makeTextDocument(std::uint64_t sampleCount = 4) {
     return document;
 }
 
+// makeDocument() with a Byte channel after the unsupported one in group 0: the
+// reader decodes it, and each of its samples is raw Bytes.
+constexpr int kBytes = Unsupported + 1;
+
+mdf4::File makeBytesDocument() {
+    mdf4::File document = makeDocument();
+    mdf4::Channel* frame = document.mutable_groups(0)->add_channels();
+    frame->set_name("CAN_DataFrame");
+    frame->set_sample_count(4);
+    frame->set_data_type(mdf4::BYTE_ARRAY);
+    frame->set_raw_data_type(10);
+    frame->set_bit_count(120);
+    frame->set_decodable(true);
+    frame->set_binary(true);
+    return document;
+}
+
 // makeDocument() with an array channel after the unsupported one in group 0: the
 // reader decodes it, and each of its samples is a whole array on index axes, by
 // default a 52 x 142 classification result.
@@ -775,6 +792,7 @@ private slots:
     void domainComesFromTheSourceAxis();
     void masterChannelIsAnAxisNotASignal();
     void textChannelIsAnOrdinaryTreeChannel();
+    void byteChannelIsListedNotPlotted();
     void textPageShown();
     void textPagesAreBounded();
     void textReservationBecomesThePageCharge();
@@ -920,6 +938,31 @@ void TestMdf4DocumentSession::textChannelIsAnOrdinaryTreeChannel() {
              static_cast<int>(SemanticKind::Entity));
     QCOMPARE(tree->data(row, TreeModel::IconKeyRole).toString(), QStringLiteral("channel"));
     QCOMPARE(tree->data(row, TreeModel::SubtitleRole).toString(), QStringLiteral("Text channel"));
+}
+
+// Readable but without a view yet: listed like any channel with its role, and
+// selecting it keeps the plot empty with a note, without a read.
+void TestMdf4DocumentSession::byteChannelIsListedNotPlotted() {
+    auto scans = std::make_shared<Scans>(false);
+    auto session = openSession(scans, makeBytesDocument());
+    TreeModel* tree = session->treeModel();
+    const QModelIndex group = tree->index(0, 0, tree->index(0, 0));
+    const QModelIndex row = tree->index(kBytes, 0, group);
+    QCOMPARE(tree->data(row, TreeModel::TitleRole).toString(), QStringLiteral("CAN_DataFrame"));
+    QCOMPARE(tree->data(row, TreeModel::SemanticKindRole).toInt(),
+             static_cast<int>(SemanticKind::Entity));
+    QCOMPARE(tree->data(row, TreeModel::IconKeyRole).toString(), QStringLiteral("channel"));
+    QCOMPARE(tree->data(row, TreeModel::SubtitleRole).toString(), QStringLiteral("Byte channel"));
+
+    SignalPlotModel* model = plotOf(*session);
+    session->selectNode(channelKey(*session, kBytes));
+    QVERIFY(!model->busy());
+    QVERIFY(!model->hasSamples());
+    QCOMPARE(model->plotState(), SignalPlotModel::Empty);
+    QCOMPARE(model->name(), QStringLiteral("CAN_DataFrame"));
+    QCOMPARE(model->message(), QStringLiteral("Byte channel — not plottable"));
+    QVERIFY(settle(*session));
+    QVERIFY(scans->channels().empty());
 }
 
 // The center turns to the table, which shows the channel's first page: one

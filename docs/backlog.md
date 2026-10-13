@@ -60,6 +60,23 @@ print-friendly view of it (`SignalMapView.qml`, `SignalGridItem`). Neither exist
 
 **Size:** S.
 
+### BL-V5: bus-logging frame table
+
+The reader lists a bus log's event structure (`CAN_DataFrame`) as a Byte channel
+with its members right after it (`Channel.member_of`, `bus_event`; the group's
+`bus_event`, `plain_bus_event`, `path_separator`, `source_bus_type`;
+[reader contract](../../mdf4-parser/docs/arch/reader.md#read-set)). The Explorer
+lists the structure as a "Byte channel" and keeps the plot empty with a note when
+it is selected; its members plot like any channel. Wanted: a frame table in place
+of the plot for a bus-event structure, a row per frame with its time and each
+member's value, the payload as hex, built like the value table
+([value table](../ref/value_table.md)) from `readBytes` of the parent and `read`
+of the members in one request, the members nested under the structure in the
+tree; later the attached database (not yet read, the reader's backlog) decoding
+the payload through the DBC parser.
+
+**Size:** M.
+
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant

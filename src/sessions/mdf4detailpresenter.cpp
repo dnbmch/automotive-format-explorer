@@ -30,6 +30,12 @@ QString dataTypeText(mdf4::DataType type) {
         return QStringLiteral("IEEE floating point (big-endian)");
     case mdf4::STRING:
         return QStringLiteral("String");
+    case mdf4::BYTE_ARRAY:
+        return QStringLiteral("Byte array");
+    case mdf4::MIME_SAMPLE:
+        return QStringLiteral("MIME sample");
+    case mdf4::MIME_STREAM:
+        return QStringLiteral("MIME stream");
     case mdf4::DATA_TYPE_OTHER:
         return QStringLiteral("Other / unsupported");
     case mdf4::DATA_TYPE_UNSPECIFIED:
@@ -436,7 +442,8 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
     // the size channel of its group.
     QList<DetailField> plot;
     plot.push_back({QStringLiteral("Plottable"),
-                    boolText(channel.decodable() && !channel.textual() && !channel.has_array())});
+                    boolText(channel.decodable() && !channel.textual() && !channel.binary() &&
+                             !channel.has_array())});
     if (!channel.decodable()) {
         addField(plot,
                  QStringLiteral("Unsupported Reason"),
@@ -444,6 +451,9 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
     }
     if (channel.textual()) {
         plot.push_back({QStringLiteral("Values"), QStringLiteral("Text (UTF-8)")});
+    }
+    if (channel.binary()) {
+        plot.push_back({QStringLiteral("Values"), QStringLiteral("Raw Bytes")});
     }
     if (channel.has_array()) {
         const quint64 elements = channel.array().element_count();
