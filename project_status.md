@@ -32,17 +32,19 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   tree, detail cards, time axes and every read. The tree is admitted against a
   384 MiB estimate before it is built. One read runs at a time with a single
   replaceable pending read; obsolete reads are cancelled and their results and
-  progress discarded. Completed overviews, windows, text pages and array slices
+  progress discarded. Completed overviews, windows, pages and array slices
   share one 256 MiB allowance per session with the read in flight's reservation,
   evicting only results nobody else holds and refusing, with the numbers, when held
   results leave no room or the request exceeds the whole allowance.
   Empty, short, refused, changed-file and failed scans read differently; the domain
   is the reader's time axis or the sample index; group masters are listed as axis
-  channels, not signals. Text and array channels are shown as value tables in place
-  of the plot: a text channel in pages of 1,024 samples, an array channel one sample
-  at a time with its axes as headers, paired with the array's samples by the spec's
-  rule, and a slice selector per outer dimension with more than one element; their
-  reads share the scheduler and the allowance. Closing a tab cancels its read and waits
+  channels, not signals. Text, Byte and array channels are shown as value tables in
+  place of the plot: a text or Byte channel in pages of 1,024 samples, a bus log's
+  structure as a frame table with a column per member and its members nested under
+  it in the tree, an array channel one sample at a time with its axes as headers,
+  paired with the array's samples by the spec's rule, and a slice selector per outer
+  dimension with more than one element; their reads share the scheduler and the
+  allowance. Closing a tab cancels its read and waits
   for the reader's next checkpoint.
 - Memory grid: sparse byte queries remove the 16 MiB coverage cap and support tested
   multi-GiB spans, with overlap hatching (bytes claimed by more than

@@ -10,16 +10,27 @@
 #include <optional>
 #include <vector>
 
+// One column of a page after its time column, as the producer names it.
+struct TableColumnHeader {
+    QString name;
+    bool numeric = false;  // a Values column
+};
+
 // What a producer says about the channel a table shows, whatever its values.
 struct TableHeader {
     QString name;
-    QString role;  // the tree's role text: "Text channel", or an array's type and shape
+    QString role;  // the tree's role text: "Text channel", "Byte channel", "Structure of N members", or an array's type and shape
     QString unit;
     std::uint64_t sampleCount = 0;  // as the source states it
-    // The time master's name and unit, empty without one: a text table's Time
+    // The notes' word for the rows: "Texts", "Frames", "Bytes"; an array's
+    // "Values".
+    QString values;
+    // The time master's name and unit, empty without one: a page's time
     // column, an array sample's time.
     QString timeName;
     QString timeUnit;
+    // Page: its columns after the time column, in the page's order.
+    std::vector<TableColumnHeader> columns;
     // Array: the dimension sizes, outer first, and the names of the row and
     // column axes.
     std::vector<std::uint64_t> dimensions;
@@ -35,12 +46,12 @@ enum class TableNote : std::uint8_t {
     Refused,  // a limit refused them
 };
 
-// Format-neutral model of the value table: a text channel's samples in pages of
-// kTextPageSamples (rows = the page's samples, columns Time and Text, or Text
-// alone), or one sample of an array channel (rows × columns = its slice, the
-// axis labels as headers). A producer installs the channel, then the page or
-// slice the view asks for through requestWanted. Every cell and header is a
-// DisplayRole string.
+// Format-neutral model of the value table: a channel's samples in pages of
+// kPageSamples (rows = the page's samples, columns the time against a time
+// master, then the header's columns), or one sample of an array channel (rows ×
+// columns = its slice, the axis labels as headers). A producer installs the
+// channel, then the page or slice the view asks for through requestWanted.
+// Every cell and header is a DisplayRole string.
 class ValueTableModel : public QAbstractTableModel {
     Q_OBJECT
 
@@ -57,7 +68,8 @@ class ValueTableModel : public QAbstractTableModel {
     Q_PROPERTY(bool hasNext READ hasNext NOTIFY contentChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(double progress READ progress NOTIFY busyChanged)
-    // Text.
+    // Page.
+    Q_PROPERTY(bool hasTimeColumn READ hasTimeColumn NOTIFY contentChanged)
     Q_PROPERTY(qulonglong firstRow READ firstRow NOTIFY contentChanged)
     Q_PROPERTY(QString rangeText READ rangeText NOTIFY contentChanged)
     Q_PROPERTY(qulonglong invalidCount READ invalidCount NOTIFY contentChanged)
@@ -68,7 +80,7 @@ class ValueTableModel : public QAbstractTableModel {
     Q_PROPERTY(QVariantList slice READ slice NOTIFY contentChanged)
 
 public:
-    enum Kind { Text, Array };
+    enum Kind { Page, Array };
     Q_ENUM(Kind)
 
     enum State {
@@ -97,13 +109,15 @@ public:
     QString countText() const;
     State tableState() const;
     QString message() const;
-    // "Sample" for text; "<row axis> \ <column axis>" for an array.
+    // "Sample" for a page; "<row axis> \ <column axis>" for an array.
     QString cornerText() const;
     bool hasPrevious() const;
     bool hasNext() const;
     bool busy() const;
     double progress() const;
 
+    // A page's first column is its time against a time master.
+    bool hasTimeColumn() const;
     qulonglong firstRow() const;
     // "Rows a–b of N" while rows are shown.
     QString rangeText() const;
@@ -115,14 +129,18 @@ public:
     QVariantList dimensions() const;
     QVariantList slice() const;
 
+    // Whether `column` holds numbers: a page's Values column, every array
+    // column; not the time column.
+    Q_INVOKABLE bool numericColumn(int column) const;
+
     // View requests. Each clamps, clears the rows of a new page, sample or
     // slice, and emits requestWanted; asking for what is shown or pending does
     // nothing, unless it failed or was refused.
     //
-    // The page holding `sample` (text), or that sample (array), clamped to
+    // The page holding `sample`, or that sample of an array, clamped to
     // [0, sampleCount − 1].
     Q_INVOKABLE void showSample(double sample);
-    // The next or previous page (text) or sample (array).
+    // The next or previous page, or an array's next or previous sample.
     Q_INVOKABLE void nextPage();
     Q_INVOKABLE void previousPage();
     // The index of outer dimension `dimension` of an array's slice, clamped to
@@ -135,23 +153,23 @@ public:
     //
     // No channel: the empty table.
     void clear();
-    // A text channel and its first page: null while it is read.
-    void setTextChannel(TableHeader header, TextPagePtr page = {});
+    // A channel shown in pages and its first page: null while it is read.
+    void setPageChannel(TableHeader header, TablePagePtr page = {});
     // An array channel and its sample 0 with every slice index 0: null while
     // it is read.
     void setArrayChannel(TableHeader header, ArraySlicePtr slice = {});
     // The wanted page or slice, or a note on why none shows.
-    void setTextPage(TextPagePtr page, TableNote note = TableNote::None, QString text = {});
+    void setPage(TablePagePtr page, TableNote note = TableNote::None, QString text = {});
     void setArraySlice(ArraySlicePtr slice, TableNote note = TableNote::None, QString text = {});
     void setBusy(bool busy);
     // Of the work in progress, from 0 to 1; negative when unknown.
     void setProgress(double fraction);
 
-    // What the view wants: a text page's first sample, or an array sample with
-    // the outer indices of its slice.
+    // What the view wants: a page's first sample, or an array sample with the
+    // outer indices of its slice.
     std::uint64_t wantedSample() const;
     const std::vector<std::uint64_t>& wantedSlice() const;
-    const TextPagePtr& page() const;
+    const TablePagePtr& page() const;
     const ArraySlicePtr& arraySlice() const;
 
     // A value or label: "" for NaN, "∞" and "−∞", else 7 significant digits.
@@ -171,11 +189,11 @@ private:
     // Everything one reset installs.
     struct Content {
         bool hasChannel = false;
-        Kind kind = Text;
+        Kind kind = Page;
         TableHeader header;
-        std::uint64_t wanted = 0;          // text: the page's first sample; array: the sample
+        std::uint64_t wanted = 0;          // page: its first sample; array: the sample
         std::vector<std::uint64_t> slice;  // array: the outer indices of the slice
-        TextPagePtr page;
+        TablePagePtr page;
         ArraySlicePtr array;
         TableNote note = TableNote::None;
         QString text;

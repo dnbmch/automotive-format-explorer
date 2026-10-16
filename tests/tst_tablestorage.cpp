@@ -1,12 +1,12 @@
 // A value-table read never holds more live heap than the reservation the
-// session admits for it: TextPageBuilder::reservation for a text page,
+// session admits for it: TablePageBuilder::reservation for a page,
 // mdf4array::reservation for an array sample. This executable's operator new
 // records each allocation's requested size by its pointer and hands out
 // malloc's pointer unchanged, so a shared library's delete of such a pointer
 // and a delete here of one a shared library allocated both free it. Each case
 // builds its inputs before its baseline and counts the Bytes live above it.
 // Qt-free: exits 0 when every case holds, 1 otherwise, printing every case's
-// numbers.
+// numbers, and the hex cut of a page's Byte cells.
 
 #include "models/tabledata.h"
 #include "sessions/mdf4arrayread.h"
@@ -130,26 +130,52 @@ int failures = 0;
 void report(const char* name, std::uint64_t reservation, std::uint64_t retained, std::uint64_t arrays,
             std::size_t baseline, bool page) {
     const std::uint64_t peak = heap::peak - baseline;
-    const bool exact = !page || retained + sizeof(TextPageBuilder) == reservation;
+    const bool exact = !page || retained + sizeof(TablePageBuilder) == reservation;
     const bool pass = arrays <= peak && peak <= reservation && exact;
     std::printf("%s %s: reservation %llu, retained %llu, peak %llu%s\n", pass ? "PASS" : "FAIL", name,
                 static_cast<unsigned long long>(reservation), static_cast<unsigned long long>(retained),
                 static_cast<unsigned long long>(peak),
-                exact ? "" : "; retained + sizeof(TextPageBuilder) is not the reservation");
+                exact ? "" : "; retained + sizeof(TablePageBuilder) is not the reservation");
     failures += pass ? 0 : 1;
 }
 
-// The page of `rows` from the first `size` texts: its live Bytes stay within
-// its reservation, which its retained Bytes and the builder make exactly.
-void textPage(const char* name, std::uint64_t rows, const double* times, const std::string_view* texts,
-              std::size_t size) {
+// The page of `rows` and `columns`, filled by `fill(builder)`: its live Bytes
+// stay within its reservation, which its retained Bytes and the builder make
+// exactly.
+template <typename Fill>
+void page(const char* name, std::uint64_t rows, const std::vector<TableColumnSpec>& columns, Fill fill) {
     const std::size_t baseline = heap::live;
     heap::peak = baseline;
-    TextPageBuilder builder(0, rows);
-    builder.add(times, texts, size);
-    const TextPagePtr page = builder.finish(0);
-    report(name, TextPageBuilder::reservation(rows), page->bytes(), page->bytes() - sizeof(TextPage), baseline,
-           true);
+    TablePageBuilder builder(0, rows, columns);
+    fill(builder);
+    const TablePagePtr page = builder.finish(0);
+    report(name, TablePageBuilder::reservation(rows, columns), page->bytes(),
+           page->bytes() - sizeof(TablePage), baseline, true);
+}
+
+// A Byte value whose text would pass its column's cap keeps its first
+// (cap - 3) / 3 Bytes and "…"; one within its cap stays whole.
+void hexCut() {
+    const std::string wide(400, '\x5A');
+    const std::string frame(15, '\xA5');
+    const std::string_view values[] = {wide, frame};
+    TablePageBuilder builder(0, 1, {{TableColumn::Kind::Text}, {TableColumn::Kind::Text, 45}});
+    builder.addBytes(0, &values[0], 1);
+    builder.addBytes(1, &values[1], 1);
+    const TablePagePtr page = builder.finish(0);
+    std::string kept = "5A";
+    for (int i = 1; i < 340; ++i) {
+        kept += " 5A";
+    }
+    const std::string_view cut = page->columns[0].textAt(0);
+    const std::string_view whole = page->columns[1].textAt(0);
+    const bool pass = cut.size() == 1022 && cut == kept + "…" && whole.size() == 44 &&
+                      whole.substr(0, 6) == "A5 A5 " && whole.substr(39) == "A5 A5";
+    std::printf("%s hex cut: a 400-Byte value under the 1 KiB cap keeps %llu Bytes of text, a 15-Byte value "
+                "under its 45-Byte cap %llu\n",
+                pass ? "PASS" : "FAIL", static_cast<unsigned long long>(cut.size()),
+                static_cast<unsigned long long>(whole.size()));
+    failures += pass ? 0 : 1;
 }
 
 // Sample 0 of `document`'s array, planned as the session plans it and owned
@@ -169,12 +195,24 @@ void arraySample(const mdf4::File& document, const mdf4array::AxisFunction& axis
 } // namespace
 
 int main() {
-    // The texts of one read, borrowed as the reader lends its chunk storage.
-    const std::string full(kTextCellBytes, 'a');
+    // The texts and values of one read, borrowed as the reader lends its chunk
+    // storage, and the columns of a text page and of a frame page: eight value
+    // columns, an 8-Byte MLSD payload at its 24-Byte cap and the 15-Byte
+    // structure at its 45-Byte cap.
+    const std::string full(kCellBytes, 'a');
     const std::string partial(700, 'b');
-    const std::vector<double> times(kTextPageSamples, 0.0);
-    const std::vector<std::string_view> fullTexts(kTextPageSamples, full);
-    const std::vector<std::string_view> partialTexts(kTextPageSamples, partial);
+    const std::vector<double> times(kPageSamples, 0.0);
+    const std::vector<std::string_view> fullTexts(kPageSamples, full);
+    const std::vector<std::string_view> partialTexts(kPageSamples, partial);
+    const std::vector<TableColumnSpec> text{{TableColumn::Kind::Text}};
+    std::vector<TableColumnSpec> frame(8, TableColumnSpec{TableColumn::Kind::Values});
+    frame.push_back({TableColumn::Kind::Text, 24});
+    frame.push_back({TableColumn::Kind::Text, 45});
+    const std::vector<double> values(kPageSamples, 7.0);
+    const std::string payload(8, '\x55');
+    const std::string structure(15, '\x3C');
+    const std::vector<std::string_view> payloads(kPageSamples, payload);
+    const std::vector<std::string_view> structures(kPageSamples, structure);
 
     // One group of one cycle; its array channel has one dimension of 65,536
     // elements on a fixed axis of as many points.
@@ -207,11 +245,35 @@ int main() {
     };
     const mdf4array::ScanFunction unusedScan;
 
-    textPage("full page: 1,024 texts of 1,024 Bytes", kTextPageSamples, times.data(), fullTexts.data(),
-             fullTexts.size());
-    textPage("growth: 1,024 texts of 700 Bytes", kTextPageSamples, times.data(), partialTexts.data(),
-             partialTexts.size());
-    textPage("short delivery: 3 texts into 1,024 rows", kTextPageSamples, times.data(), fullTexts.data(), 3);
+    page("full page: 1,024 texts of 1,024 Bytes", kPageSamples, text, [&](TablePageBuilder& builder) {
+        builder.addTime(times.data(), fullTexts.size());
+        builder.addText(0, fullTexts.data(), fullTexts.size());
+    });
+    page("growth: 1,024 texts of 700 Bytes", kPageSamples, text, [&](TablePageBuilder& builder) {
+        builder.addTime(times.data(), partialTexts.size());
+        builder.addText(0, partialTexts.data(), partialTexts.size());
+    });
+    page("short delivery: 3 texts into 1,024 rows", kPageSamples, text, [&](TablePageBuilder& builder) {
+        builder.addTime(times.data(), 3);
+        builder.addText(0, fullTexts.data(), 3);
+    });
+    page("frame page: 1,024 rows, 8 value columns, an 8-Byte MLSD hex column and a 15-Byte structure column",
+         kPageSamples, frame, [&](TablePageBuilder& builder) {
+             builder.addTime(times.data(), times.size());
+             for (std::size_t column = 0; column < 8; ++column) {
+                 builder.addValues(column, values.data(), values.size());
+             }
+             builder.addBytes(8, payloads.data(), payloads.size());
+             builder.addBytes(9, structures.data(), structures.size());
+         });
+    page("cleared column: the payload column emptied after its read failed", kPageSamples, frame,
+         [&](TablePageBuilder& builder) {
+             builder.addTime(times.data(), times.size());
+             builder.addValues(0, values.data(), values.size());
+             builder.addBytes(8, payloads.data(), payloads.size());
+             builder.clearColumn(8);
+         });
+    hexCut();
     arraySample(document, axis, readArray, unusedScan);
     return failures == 0 ? 0 : 1;
 }

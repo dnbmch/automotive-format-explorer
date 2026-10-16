@@ -60,20 +60,15 @@ print-friendly view of it (`SignalMapView.qml`, `SignalGridItem`). Neither exist
 
 **Size:** S.
 
-### BL-V5: bus-logging frame table
+### BL-V6: frame payload decoded against the attached database
 
-The reader lists a bus log's event structure (`CAN_DataFrame`) as a Byte channel
-with its members right after it (`Channel.member_of`, `bus_event`; the group's
-`bus_event`, `plain_bus_event`, `path_separator`, `source_bus_type`;
-[reader contract](../../mdf4-parser/docs/arch/reader.md#read-set)). The Explorer
-lists the structure as a "Byte channel" and keeps the plot empty with a note when
-it is selected; its members plot like any channel. Wanted: a frame table in place
-of the plot for a bus-event structure, a row per frame with its time and each
-member's value, the payload as hex, built like the value table
-([value table](../ref/value_table.md)) from `readBytes` of the parent and `read`
-of the members in one request, the members nested under the structure in the
-tree; later the attached database (not yet read, the reader's backlog) decoding
-the payload through the DBC parser.
+A bus log's frame table shows each frame's payload (`DataBytes`) and the
+structure's own Bytes as hex ([value table](../ref/value_table.md#pages)). A bus
+log may attach the database that describes its frames (a DBC for CAN), which the
+structure references through `cn_at_reference` (MDF Bus Logging AS §4.3). Wanted:
+the payload decoded into the attached database's signals through the DBC parser,
+beside the hex. Trigger: the reader reads a structure's attachment references
+([mdf4-parser backlog](../../mdf4-parser/docs/backlog.md#a-structures-attachment-references-are-not-read)).
 
 **Size:** M.
 

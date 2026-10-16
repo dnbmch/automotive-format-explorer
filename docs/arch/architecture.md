@@ -275,9 +275,9 @@ limits and the load's cancellation flag, so shutdown during a large MDF4 opening
 stops it (see [Opening files and shutdown](#opening-files-and-shutdown)). The
 session's tree, detail presenter, time axes and every read use that reader: the
 session holds its metadata through a `std::shared_ptr<const mdf4::File>` aliasing
-the reader, and an `Mdf4Source` of four functions bound to it in the reader's
-shapes: `scan`, `scanText`, `readArray` and `axis`. Any of them keeps the reader
-alive; there is no second metadata copy and no path-based read. A file that cannot
+the reader, and an `Mdf4Source` of five functions bound to it in the reader's
+shapes: `scan`, `scanText`, `readArray`, `axis` and `scanBytes`. Any of them keeps
+the reader alive; there is no second metadata copy and no path-based read. A file that cannot
 be opened, or whose opening a reader limit refused or the flag cancelled, still opens
 as a session showing its diagnostics (a refusal or a cancellation is one DROPPED
 diagnostic), and its reads fail. The reader's own limits, outcomes, traversal and
@@ -297,7 +297,12 @@ alone, with its details, and one error diagnostic, "Channel tree not shown", giv
 counts, the estimate and the allowance; no row stands for part of the tree. 384 MiB
 covers the tree of any file the reader's 1 GiB opening allowance admits with realistic
 channel text: about 873 k channels at 1,230 B of opening charge each, a tree of about
-367 MiB.
+367 MiB. A compact structure's direct members (`Channel.member_of`), which the walk
+lists right after their parent, are rows under the parent's row, titled by the rest of
+their name after the parent's name and the group's path separator ("." when the group
+states none); the detail panel keeps the full name. The rows, keys and paths are
+those of the flat walk, so the estimate holds; a Byte channel's role ("Byte
+channel", or "Structure of N members") is estimated at 36 B.
 
 **Result sets.** Selecting a plottable channel scans its whole metadata range once
 into an overview; the overview decides the domain of its result set. The plot then
@@ -307,18 +312,20 @@ Both are built on the worker from the scan's chunks
 ([signal plot](../ref/signal_plot.md)). The domain's name and unit are those of the
 time master `Reader::axis()` resolved at opening, local or remote; a group without
 one plots against the sample index. The session resolves no master itself. Selecting
-a decodable text or array channel turns the center to the value table instead, which
-reads a text channel in pages of 1,024 samples, one `scanText()` each, and an array
-channel one sample at a time: `mdf4array::readArraySample()` reads the sample's
-element window and its axes' labels in one task, the plan for it made on the GUI
-thread from the metadata ([value table](../ref/value_table.md)).
+a decodable text, Byte or array channel turns the center to the value table instead,
+which reads a text or Byte channel in pages of 1,024 samples and an array channel one
+sample at a time. `mdf4page::readPage()` reads a page's own lane, `scanText()` or
+`scanBytes()`, then a structure's member lanes, one read each, in one task;
+`mdf4array::readArraySample()` reads an array sample's element window and its axes'
+labels in one task. Each plan is made on the GUI thread from the metadata
+([value table](../ref/value_table.md)).
 
-**Scheduling.** A session runs one read at a time, a plot scan, a table page or an
-array sample with every axis read it needs, so the reader is never used
-concurrently. It keeps the read in flight (channel; overview, window with its range
-and result set, text page with its first sample, or array sample with its plan;
-cancellation flag and reserved bytes) and at most one pending read, the latest
-wanted:
+**Scheduling.** A session runs one read at a time, a plot scan, a table page with
+every lane it reads or an array sample with every axis read it needs, so the reader
+is never used concurrently. It keeps the read in flight (channel; overview, window
+with its range and result set, page with its first sample and plan, or array sample
+with its plan; cancellation flag and reserved bytes) and at most one pending read,
+the latest wanted:
 
 - Selecting a channel with a cached overview shows it at once, and the plot's detail
   request follows. Otherwise an overview in flight for that channel is kept; else the
@@ -327,8 +334,8 @@ wanted:
   whose range covers it; otherwise the window the plot names becomes the pending scan
   and a window in flight is cancelled. A view with more samples than one window holds
   keeps the overview and cancels windows.
-- Selecting a text or array channel, or the table asking for another page, sample
-  or slice (`ValueTableModel::requestWanted`), shows a cached result at once;
+- Selecting a text, Byte or array channel, or the table asking for another page,
+  sample or slice (`ValueTableModel::requestWanted`), shows a cached result at once;
   otherwise the same read in flight is kept; else the new one becomes the pending
   read and the read in flight is cancelled.
 - Selecting a master, an unsupported channel or a row that is no channel drops the
@@ -346,7 +353,9 @@ The task captures copies of the source functions it reads with, plain request va
 and, for an array sample, the metadata its plan refers into, never the session, a
 model or a result. It hands over its result only after
 the read returned Ok, which the reader reports after checking the source once more,
-so no chunk of a cancelled, refused or failed read reaches the plot or the table.
+so no chunk of a cancelled, refused or failed read reaches the plot or the table. A
+page's member lane that fails or is refused leaves its column empty, and the page's
+note says so; a cancelled one, or one that finds the file changed, ends the page.
 Each launch creates one cancellation flag, shared by the read in flight and its task,
 which passes it to the reader as `Control::cancel`; cancelling sets that flag and
 nothing else, and a completion whose flag is set is obsolete however far its read
@@ -376,7 +385,8 @@ destroyed session.
 **Storage.** One allowance per session, `Mdf4SessionLimits::resultBytes` (256 MiB),
 covers the retained results, cached or shown, and the reservation of the read in
 flight. A read's `PlotOverviewBuilder::reservation()`,
-`PlotWindowBuilder::reservation()`, `TextPageBuilder::reservation()` or
+`PlotWindowBuilder::reservation()`, `mdf4page::reservation()` (the
+`TablePageBuilder::reservation()` of the page's columns) or
 `mdf4array::reservation()` is admitted before it launches; every builder allocates its
 result's storage once and never reallocates, so its live storage never exceeds its
 reservation; its completion replaces the reservation with the result's own
@@ -388,8 +398,8 @@ result set, and a cached window holds that overview too, so a window goes before
 overview. When held results leave no room, the read is refused and the plot or the
 table says how much it needed and how much is held; no result is exempt from the
 allowance. An overview is found by its channel; a window by its channel, its result
-set (and with it the domain) and whether it covers the view; a text page by its
-channel and first sample; an array slice by its channel, sample and element window.
+set (and with it the domain) and whether it covers the view; a page by its channel
+and first sample; an array slice by its channel, sample and element window.
 256 MiB holds about a thousand 4,096-bin overviews of
 256 KiB each; an evicted one is scanned again when wanted.
 
@@ -490,13 +500,13 @@ src/
                 formatid, diagnostics
   models/       treemodel, treefiltermodel, detailmodel, tabmodel, memorymapmodel,
                 signalmapmodel, plotdata (overview, window and their builders),
-                signalplotmodel, tabledata (text page and its builder, array slice),
+                signalplotmodel, tabledata (page, its columns and builder, array slice),
                 valuetablemodel
   sessions/     documentsession (interface), adaptersessionbase, presentertext
                 (shared text/detail helpers), a2l/dbc/ldf/mdf4 sessions and
                 detail presenters (a2l splits ifdata helpers into
-                a2ldetailpresenter_ifdata.cpp), mdf4arrayread (an array sample's
-                plan and read)
+                a2ldetailpresenter_ifdata.cpp), mdf4pageread (a page's plan and
+                read), mdf4arrayread (an array sample's plan and read)
   adapters/     formatadapter (load interface) and the a2l/dbc/ldf/mdf4 adapters
   ui/           memorygriditem, signalgriditem, signalplotitem (painted renderers),
                 gridpalette (shared palette, shade and highlight-flash helpers)
@@ -514,7 +524,7 @@ Each format's detail rendering lives in its own presenter class, which also decl
 
 - `AppController` owns its `FormatList` (and through it every adapter), the pending load, and `TabModel` with its `DocumentTab`s; each tab owns its session and its filter proxy, destroyed first. A pending load is joined before any of them is destroyed.
 - Each `DocumentSession` owns its tree and detail models, its presenter and its center-panel models. QML holds non-owning references; each painted item tracks its model's lifetime (see [Rendering](#rendering)).
-- Plot and table results are immutable and shared: an MDF4 session's cache and its plot or table model hold the same overview, window or text page, and each view holds only what it shows: the plot drops a window once the view leaves it, and the view the center leaves is cleared; an array slice holds the vectors its read moved in. The session accounts every result it retains and the reservation of its read in flight against one allowance, and evicts only results nobody else holds ([MDF4 reads](#mdf4-reads)).
+- Plot and table results are immutable and shared: an MDF4 session's cache and its plot or table model hold the same overview, window or page, and each view holds only what it shows: the plot drops a window once the view leaves it, and the view the center leaves is cleared; an array slice holds the vectors its read moved in. The session accounts every result it retains and the reservation of its read in flight against one allowance, and evicts only results nobody else holds ([MDF4 reads](#mdf4-reads)).
 - Closing a tab takes it out of the `TabModel`, announces the new current tab, and then destroys the tab with its session, filter and models, and every key from that document. The UI has already bound the new current tab's models by then.
 
 ## See Also
@@ -522,5 +532,5 @@ Each format's detail rendering lives in its own presenter class, which also decl
 - [../ref/memory_view.md](../ref/memory_view.md) — memory grid visual + interaction spec
 - [../ref/signal_map.md](../ref/signal_map.md) — signal grid visual + interaction spec
 - [../ref/signal_plot.md](../ref/signal_plot.md) — time-series plot data seam and interaction spec
-- [../ref/value_table.md](../ref/value_table.md) — value table: center switch, text pages, accounting, states
+- [../ref/value_table.md](../ref/value_table.md) — value table: center switch, pages, accounting, states
 - [../backlog.md](../backlog.md) — known issues / planned changes

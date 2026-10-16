@@ -5,6 +5,7 @@
 #include "sessions/adaptersessionbase.h"
 #include "sessions/mdf4arrayread.h"
 #include "sessions/mdf4detailpresenter.h"
+#include "sessions/mdf4pageread.h"
 
 #pragma push_macro("signals")
 #undef signals
@@ -18,6 +19,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -40,7 +42,7 @@ struct Mdf4SessionLimits {
 // The operations of one opened source, in the reader's shapes. Each read runs
 // on a worker thread, never concurrently with another read of the same
 // session; the axis is the one the source resolved at opening. Every function
-// keeps the source alive; Mdf4Adapter::load() binds all four to one
+// keeps the source alive; Mdf4Adapter::load() binds all five to one
 // mdf4::Reader.
 struct Mdf4Source {
     using ScanFunction = std::function<mdf4::ScanResult(
@@ -53,17 +55,21 @@ struct Mdf4Source {
         std::uint32_t group, std::uint32_t channel, std::uint64_t first, std::uint64_t count,
         const mdf4::ElementWindow& elements, const mdf4::Control& control)>;
     using AxisFunction = std::function<mdf4::Axis(std::uint32_t group)>;
+    using ScanBytesFunction = std::function<mdf4::ScanResult(
+        std::uint32_t group, std::uint32_t channel, std::uint64_t first, std::uint64_t count,
+        const mdf4::Control& control, const mdf4::BytesVisitor& visitor)>;
 
     ScanFunction scan;
     ScanTextFunction scanText;
     ReadArrayFunction readArray;
     AxisFunction axis;
+    ScanBytesFunction scanBytes;
 };
 
 // One MDF4 document. The metadata and every read come from one opened source;
 // the session runs at most one read at a time against it. Its center view is
-// the signal plot, or the value table while a decodable text or array channel
-// is selected.
+// the signal plot, or the value table while a decodable text, Byte or array
+// channel is selected.
 class Mdf4DocumentSession final : public AdapterSessionBase {
 public:
     // What the session holds for the plot and the table: finished results,
@@ -109,16 +115,17 @@ private:
     enum class Center : std::uint8_t { Plot, Table };
 
     // A read the session wants: a channel's overview, an exact window of the
-    // result set that overview began, which it holds, a page of a text channel,
-    // or one sample of an array channel.
+    // result set that overview began, which it holds, a page of a text or Byte
+    // channel, or one sample of an array channel.
     struct Request {
-        enum class Kind : std::uint8_t { Overview, Window, TextPage, ArraySample };
+        enum class Kind : std::uint8_t { Overview, Window, Page, ArraySample };
         Kind kind = Kind::Overview;
         ChannelKey channel;
         PlotOverviewPtr set;        // Window: the overview of its result set
         PlotWindowRequest window;   // Window
-        std::uint64_t first = 0;    // TextPage: the page's first sample; ArraySample: the sample
+        std::uint64_t first = 0;    // Page: the page's first sample; ArraySample: the sample
         mdf4array::ArrayPlan plan;  // ArraySample: its slice, element window and axes
+        mdf4page::PagePlan page;    // Page: its rows and lanes
 
         // Of a table read: the same page, or the same sample and element
         // window, of the same channel.
@@ -139,29 +146,31 @@ private:
     };
 
     // What a read returns to the GUI thread: the plot's result or the table's.
-    // An array sample's outcome and samples read come in `scan`.
+    // An array sample's outcome and samples read come in `scan`, a page's note
+    // on its member columns in `note`.
     struct Completion {
         mdf4::ScanResult scan;
         PlotOverviewPtr overview;
         PlotWindowPtr window;
         PlotBuild build = PlotBuild::Continue;  // the window builder's final state
-        TextPagePtr page;
+        TablePagePtr page;
         ArraySlicePtr slice;
+        std::string note;
     };
 
     // A finished result, keyed by its request: an overview by its channel; a
     // window by its channel, result set (and with it the domain) and sample
-    // range, holding its window and the overview of its result set; a text page
-    // by its channel and first sample; an array slice by its channel, sample and
+    // range, holding its window and the overview of its result set; a page by
+    // its channel and first sample; an array slice by its channel, sample and
     // element window.
     struct Retained {
         Request::Kind kind = Request::Kind::Overview;
         ChannelKey channel;
         PlotOverviewPtr overview;
         PlotWindowPtr window;
-        TextPagePtr page;
+        TablePagePtr page;
         ArraySlicePtr slice;
-        std::uint64_t first = 0;       // TextPage: the first sample; ArraySample: the sample
+        std::uint64_t first = 0;       // Page: the first sample; ArraySample: the sample
         mdf4::ElementWindow elements;  // ArraySample
         std::uint64_t bytes = 0;
         std::uint64_t lastUse = 0;
@@ -179,8 +188,9 @@ private:
     PlotHeader header(ChannelKey key) const;
     TableHeader tableHeader(ChannelKey key) const;
     std::uint64_t statedCount(ChannelKey key) const;
-    // The table read of `key` showing `sample`: the page holding it (text), or
-    // that sample's `slice` (array), planned from the metadata.
+    // The table read of `key` showing `sample`: the page holding it (text or
+    // Byte channel), or that sample's `slice` (array), planned from the
+    // metadata.
     Request tableRequest(ChannelKey key, std::uint64_t sample,
                          const std::vector<std::uint64_t>& slice) const;
 

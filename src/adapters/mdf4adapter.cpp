@@ -62,7 +62,12 @@ LoadResult Mdf4Adapter::load(const QString& path, const std::atomic<bool>& cance
                      const mdf4::Control& control) {
                 return reader->readArray(group, channel, first, count, elements, control);
             },
-            [reader](std::uint32_t group) { return reader->axis(group); }},
+            [reader](std::uint32_t group) { return reader->axis(group); },
+            [reader](std::uint32_t group, std::uint32_t channel, std::uint64_t first,
+                     std::uint64_t count, const mdf4::Control& control,
+                     const mdf4::BytesVisitor& visitor) {
+                return reader->scanBytes(group, channel, first, count, control, visitor);
+            }},
         diagnostics);
     return LoadResult{std::move(session), diagnostics, openingError};
 }

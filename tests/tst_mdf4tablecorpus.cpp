@@ -6,7 +6,9 @@
 //
 //   MDF4_EXAMPLES=<.../BaseStandard/Examples> ./build/tst_mdf4tablecorpus
 //
-// The array expectations are those of mdf4-parser's tests/corpus_array.cpp.
+// The array expectations are those of mdf4-parser's tests/corpus_array.cpp, the
+// bus-logging ones those of its tests/corpus_bus.cpp, an independent asammdf
+// dump.
 
 #include "adapters/mdf4adapter.h"
 #include "models/treemodel.h"
@@ -19,6 +21,7 @@
 #include <QTest>
 
 #include <atomic>
+#include <initializer_list>
 
 namespace {
 
@@ -63,6 +66,8 @@ private slots:
     void classificationResult();
     void fixedAxisAndChannelAxisBeforeItsFirstSample();
     void slicesOfARealArray();
+    void canFramesSortedByBus();
+    void canFramesSortedById();
 
 private:
     // Opens `file`, selects its channel and waits until the table settles.
@@ -181,6 +186,89 @@ void TestMdf4TableCorpus::slicesOfARealArray() {
     QCOMPARE(table->sample(), qulonglong(4));
     QCOMPARE(table->slice(), QVariantList{qulonglong(1)});
     QCOMPARE(cell(*table, 2, 3), QStringLiteral("1.234"));
+}
+
+// Vector's CAN log sorted by bus: 1,457 frames of the 15-Byte structure
+// CAN_DataFrame and its nine members, titled without the parent's name although
+// the group states no separator. The structure's Bytes: ID little-endian at its
+// start (record Byte 8), Flags at 12, DLC at 13, DataLength at 14, the payload
+// from 15. The first frame carries ID 100 and the payload 64 00 00 00 at
+// 0.019968196 s, the last ID 18 and 00 01 00 00 at 7.960498196 s.
+void TestMdf4TableCorpus::canFramesSortedByBus() {
+    ValueTableModel* table = show("BusLogging/CAN/Vector_CAN_DataFrame_Sort_Bus.MF4", 0, 1);
+    QVERIFY(table);
+    QCOMPARE(table->tableState(), ValueTableModel::Shown);
+    QCOMPARE(table->role(), QStringLiteral("Structure of 9 members"));
+    const QStringList headers{"t [s]", "BusChannel", "DataBytes", "DLC", "Flags", "ID",
+                              "IDE", "SingleWire", "WakeUp", "DataLength", "Bytes"};
+    QCOMPARE(table->columnCount(), int(headers.size()));
+    for (int column = 0; column < int(headers.size()); ++column) {
+        QCOMPARE(columnHeader(*table, column), headers[column]);
+    }
+    QCOMPARE(cell(*table, 0, 0), QStringLiteral("0.019968196"));
+    QCOMPARE(cell(*table, 0, 1), QStringLiteral("1"));
+    QCOMPARE(cell(*table, 0, 2), QStringLiteral("64 00 00 00"));
+    QCOMPARE(cell(*table, 0, 3), QStringLiteral("4"));
+    QCOMPARE(cell(*table, 0, 5), QStringLiteral("100"));
+    QCOMPARE(cell(*table, 0, 9), QStringLiteral("4"));
+    const QString bytes = cell(*table, 0, 10);
+    QCOMPARE(bytes.size(), qsizetype(44));
+    QVERIFY2(bytes.startsWith(QStringLiteral("64 00 00 00")) &&
+                 bytes.mid(15).startsWith(QStringLiteral("04 04 64 00 00 00")),
+             qPrintable(bytes));
+    QCOMPARE(bytes, QStringLiteral("64 00 00 00 00 04 04 64 00 00 00 00 00 00 00"));
+    QCOMPARE(table->rangeText(), QStringLiteral("Rows 0–1,023 of 1,457"));
+
+    table->nextPage();
+    QVERIFY(settled(table));
+    QCOMPARE(table->tableState(), ValueTableModel::Shown);
+    QCOMPARE(rowHeader(*table, 432), QStringLiteral("1456"));
+    QCOMPARE(cell(*table, 432, 5), QStringLiteral("18"));
+    QCOMPARE(cell(*table, 432, 2), QStringLiteral("00 01 00 00"));
+    QCOMPARE(cell(*table, 432, 0), QStringLiteral("7.960498196"));
+    QCOMPARE(table->rangeText(), QStringLiteral("Rows 1,024–1,456 of 1,457"));
+}
+
+// The same log sorted by ID: the first group holds ID 100's 795 frames, one
+// page, its members in the file's order, ID and BusChannel virtual. The tree
+// lists the nine members under the structure without its name and the group's
+// separator.
+void TestMdf4TableCorpus::canFramesSortedById() {
+    ValueTableModel* table = show("BusLogging/CAN/Vector_CAN_DataFrame_Sort_ID.MF4", 0, 1);
+    QVERIFY(table);
+    QCOMPARE(table->tableState(), ValueTableModel::Shown);
+    QCOMPARE(table->role(), QStringLiteral("Structure of 9 members"));
+    const QStringList members{"DataLength", "WakeUp", "SingleWire", "IDE", "ID",
+                              "Flags",      "DLC",    "DataBytes",  "BusChannel"};
+    QCOMPARE(table->columnCount(), int(members.size()) + 2);
+    QCOMPARE(columnHeader(*table, 0), QStringLiteral("t [s]"));
+    for (int member = 0; member < int(members.size()); ++member) {
+        QCOMPARE(columnHeader(*table, member + 1), members[member]);
+    }
+    QCOMPARE(columnHeader(*table, 10), QStringLiteral("Bytes"));
+    QCOMPARE(table->rowCount(), 795);
+    for (const int row : {0, 794}) {
+        QCOMPARE(cell(*table, row, 5), QStringLiteral("100"));
+        QCOMPARE(cell(*table, row, 9), QStringLiteral("1"));
+    }
+    QCOMPARE(cell(*table, 0, 0), QStringLiteral("0.019968196"));
+    QCOMPARE(cell(*table, 0, 8), QStringLiteral("64 00 00 00"));
+    QCOMPARE(cell(*table, 0, 10), QStringLiteral("64 00 00 00 00 04 04 64 00 00 00 00 00 00 00"));
+    QCOMPARE(cell(*table, 794, 0), QStringLiteral("7.960354196"));
+    QCOMPARE(cell(*table, 794, 8), QStringLiteral("54 03 00 00"));
+    QCOMPARE(table->rangeText(), QStringLiteral("Rows 0–794 of 795"));
+    QVERIFY(!table->hasNext());
+
+    TreeModel* tree = _loaded.session->treeModel();
+    const QModelIndex group = tree->index(0, 0, tree->index(0, 0));
+    QCOMPARE(tree->rowCount(group), 2);
+    const QModelIndex frame = tree->index(1, 0, group);
+    QCOMPARE(tree->data(frame, TreeModel::TitleRole).toString(), QStringLiteral("CAN_DataFrame"));
+    QCOMPARE(tree->rowCount(frame), int(members.size()));
+    for (int member = 0; member < int(members.size()); ++member) {
+        QCOMPARE(tree->data(tree->index(member, 0, frame), TreeModel::TitleRole).toString(),
+                 members[member]);
+    }
 }
 
 int main(int argc, char* argv[]) {

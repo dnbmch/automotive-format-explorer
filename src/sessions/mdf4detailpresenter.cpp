@@ -128,6 +128,33 @@ QString syncTypeText(quint32 type) {
     }
 }
 
+// A source's bus type, si_bus_type as written (ASAM MDF 4.2.0 BS p.81).
+QString busTypeText(quint32 type) {
+    switch (type) {
+    case 0:
+        return QStringLiteral("None");
+    case 1:
+        return QStringLiteral("Other");
+    case 2:
+        return QStringLiteral("CAN");
+    case 3:
+        return QStringLiteral("LIN");
+    case 4:
+        return QStringLiteral("MOST");
+    case 5:
+        return QStringLiteral("FlexRay");
+    case 6:
+        return QStringLiteral("K-Line");
+    case 7:
+        return QStringLiteral("Ethernet");
+    case 8:
+        return QStringLiteral("USB");
+    default:
+        return type >= 128 ? QStringLiteral("Vendor-defined (%1)").arg(type)
+                           : QStringLiteral("Reserved (%1)").arg(type);
+    }
+}
+
 QString masterTypeText(const mdf4::Channel& channel) {
     if (!channel.is_master()) {
         return QStringLiteral("Not a master");
@@ -331,6 +358,21 @@ QList<DetailSection> Mdf4DetailPresenter::groupDetails(const Mdf4Path& path) con
                     {QStringLiteral("Invalidation Bytes"), integerText(group.inval_bytes())},
                 });
 
+    // A bus log's group: its bus-event flags as written, the separator of its
+    // composed names and its acquisition source's bus.
+    if (group.bus_event() || group.source_bus_type() != 0 || !group.path_separator().empty()) {
+        pushSection(sections,
+                    QStringLiteral("Bus"),
+                    {
+                        {QStringLiteral("Bus Events"), boolText(group.bus_event())},
+                        {QStringLiteral("Plain Bus Events"), boolText(group.plain_bus_event())},
+                        {QStringLiteral("Path Separator"), group.path_separator().empty()
+                                                               ? QStringLiteral("none")
+                                                               : text(group.path_separator())},
+                        {QStringLiteral("Source Bus"), busTypeText(group.source_bus_type())},
+                    });
+    }
+
     QList<DetailField> master;
     master.push_back({QStringLiteral("Remote Master"), boolText(group.remote_master())});
     if (group.remote_master()) {
@@ -360,6 +402,14 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
     addField(identity, QStringLiteral("Unit"), text(channel.unit()));
     addField(identity, QStringLiteral("Source"), text(channel.source_name()));
     addField(identity, QStringLiteral("Source Path"), text(channel.source_path()));
+    // A compact structure's member names its parent; its own Name stays whole.
+    if (channel.has_member_of()) {
+        const int parentIndex = static_cast<int>(channel.member_of());
+        const mdf4::Channel& parent = group.channels(parentIndex);
+        identity.push_back({QStringLiteral("Member Of"),
+                            parent.name().empty() ? QStringLiteral("Channel %1").arg(parentIndex + 1)
+                                                  : text(parent.name())});
+    }
     pushSection(sections, QStringLiteral("Channel"), std::move(identity));
 
     pushSection(sections,
@@ -370,6 +420,16 @@ QList<DetailSection> Mdf4DetailPresenter::channelDetails(const Mdf4Path& path) c
                     {QStringLiteral("Sync Type"), syncTypeText(channel.sync_type())},
                     {QStringLiteral("Channel Type"), integerText(channel.cn_type())},
                 });
+
+    // A bus log's channel: its bus-event flag and its source's bus.
+    if (channel.bus_event() || channel.source_bus_type() != 0) {
+        pushSection(sections,
+                    QStringLiteral("Bus"),
+                    {
+                        {QStringLiteral("Bus Event"), boolText(channel.bus_event())},
+                        {QStringLiteral("Source Bus"), busTypeText(channel.source_bus_type())},
+                    });
+    }
 
     pushSection(sections,
                 QStringLiteral("Bit Geometry"),

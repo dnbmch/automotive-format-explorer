@@ -6,6 +6,7 @@
 #include "plotscan.h"
 #include "sessions/mdf4arrayread.h"
 #include "sessions/mdf4documentsession.h"
+#include "sessions/mdf4pageread.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -31,6 +32,7 @@
 #include <mutex>
 #include <new>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -182,6 +184,58 @@ mdf4::File makeBytesDocument() {
     return document;
 }
 
+// makeDocument() with a bus log's structure after the unsupported channel in
+// group 0, whose path separator is ".": the 15-Byte Byte channel CAN_DataFrame,
+// its members ID (numeric), DataBytes (MLSD, 8 Bytes reserved), Note (text),
+// Matrix (an array) and Odd (not decodable), then a signal of the group.
+enum FrameChannel : int { kFrame = Unsupported + 1, kId, kDataBytes, kNote, kMatrix, kOdd, kBrake };
+
+mdf4::File makeFrameDocument(std::uint64_t sampleCount = 4) {
+    mdf4::File document = makeDocument(sampleCount);
+    mdf4::ChannelGroup* group = document.mutable_groups(0);
+    group->set_path_separator(".");
+    const auto add = [group, sampleCount](const char* name, bool member) {
+        mdf4::Channel* channel = group->add_channels();
+        channel->set_name(name);
+        channel->set_sample_count(sampleCount);
+        channel->set_decodable(true);
+        if (member) {
+            channel->set_member_of(kFrame);
+        }
+        return channel;
+    };
+    mdf4::Channel* frame = add("CAN_DataFrame", false);
+    frame->set_data_type(mdf4::BYTE_ARRAY);
+    frame->set_raw_data_type(10);
+    frame->set_bit_count(120);
+    frame->set_binary(true);
+    mdf4::Channel* id = add("CAN_DataFrame.ID", true);
+    id->set_data_type(mdf4::UINT_LE);
+    id->set_bit_count(32);
+    mdf4::Channel* payload = add("CAN_DataFrame.DataBytes", true);
+    payload->set_cn_type(5);
+    payload->set_data_type(mdf4::BYTE_ARRAY);
+    payload->set_raw_data_type(10);
+    payload->set_bit_count(64);
+    payload->set_binary(true);
+    mdf4::Channel* note = add("CAN_DataFrame.Note", true);
+    note->set_data_type(mdf4::STRING);
+    note->set_raw_data_type(7);
+    note->set_textual(true);
+    mdf4::ChannelArray* matrix = add("CAN_DataFrame.Matrix", true)->mutable_array();
+    matrix->add_dimensions()->set_size(2);
+    matrix->add_dimensions()->set_size(3);
+    matrix->set_element_count(6);
+    mdf4::Channel* odd = add("CAN_DataFrame.Odd", true);
+    odd->set_decodable(false);
+    odd->set_not_decodable_reason("complex number data type");
+    mdf4::Channel* brake = add("BrakePressure", false);
+    brake->set_unit("bar");
+    brake->set_data_type(mdf4::FLOAT_LE);
+    brake->set_bit_count(64);
+    return document;
+}
+
 // makeDocument() with an array channel after the unsupported one in group 0: the
 // reader decodes it, and each of its samples is a whole array on index axes, by
 // default a 52 x 142 classification result.
@@ -303,8 +357,10 @@ mdf4::ScanResult finished(mdf4::Status status, const char* message, std::string 
 // The test's view of the session's reads, shared with the source's functions so
 // no completion timing can leave either side dangling. Every channel holds
 // `count` samples. A value scan delivers coordinate i and value 100 * (c + 1) + i
-// of channel c, a text scan text "text i" at time i, an array read element k of
-// sample s as 1000 s + k at time s. Each read is logged, delivers its clamped
+// of channel c, a text scan text "text i" at time i, a Byte scan the Bytes
+// {c, i, 0x10 + i, 0x20 + i} at time i, an MLSD channel's cut to (i % 4) + 1 of
+// them, an array read element k of sample s as 1000 s + k at time s. Each read
+// is logged, delivers its clamped
 // request in chunks, checks the cancel flag before each chunk, and when gated
 // blocks before its first chunk until the test releases it or the session
 // cancels it. Waits are bounded only as deadlock guards and record a timeout.
@@ -333,7 +389,7 @@ class Scans {
 
 public:
     struct Request {
-        enum Lane { Values, Text, Array };
+        enum Lane { Values, Text, Array, Bytes };
         Lane lane = Values;
         std::uint32_t group = 0;
         std::uint32_t channel = 0;
@@ -353,6 +409,9 @@ public:
         };
     // A finished outcome in place of the samples.
     std::function<std::optional<mdf4::ScanResult>(const Request&)> outcome;
+    // When at least 0, `outcome` is consulted after this many chunks were
+    // delivered instead of before the first.
+    int failAfterChunks = -1;
     // The source ends after this many samples: Ok and Short.
     std::uint64_t available = std::numeric_limits<std::uint64_t>::max();
     std::size_t chunk = 4096;
@@ -369,7 +428,7 @@ public:
     std::uint64_t elementCount = 52 * 142;
     std::vector<std::uint64_t> invalidElements;
 
-    // Worker side: the source's three read lanes.
+    // Worker side: the source's four read lanes.
     mdf4::ScanResult scan(const Request& request, const mdf4::Control& control,
                           const mdf4::Visitor& visitor) {
         std::vector<double> time;
@@ -399,6 +458,29 @@ public:
                 views[i] = texts[i];
             }
             return visitor(mdf4::TextChunk{first, time.data(), views.data(), size});
+        });
+    }
+
+    mdf4::ScanResult scanBytes(const Request& request, bool mlsd, const mdf4::Control& control,
+                               const mdf4::BytesVisitor& visitor) {
+        const auto byte = [](std::uint64_t value) { return static_cast<char>(value & 0xFF); };
+        std::vector<double> time;
+        std::vector<std::string> values;
+        std::vector<std::string_view> views;
+        return run(request, control, [&](std::uint64_t first, std::size_t size) {
+            time.resize(size);
+            values.resize(size);
+            views.resize(size);
+            for (std::size_t i = 0; i < size; ++i) {
+                const std::uint64_t index = first + i;
+                time[i] = static_cast<double>(index);
+                values[i] = {byte(request.channel), byte(index), byte(0x10 + index), byte(0x20 + index)};
+                if (mlsd) {
+                    values[i].resize(static_cast<std::size_t>(index % 4 + 1));
+                }
+                views[i] = values[i];
+            }
+            return visitor(mdf4::BytesChunk{first, time.data(), views.data(), size});
         });
     }
 
@@ -506,11 +588,12 @@ private:
     mdf4::ScanResult deliver(const Request& request, const mdf4::Control& control,
                              Cancelled cancelled, Send send) {
         mdf4::ScanResult result;
-        if (outcome) {
+        if (outcome && failAfterChunks < 0) {
             if (std::optional<mdf4::ScanResult> given = outcome(request)) {
                 return *given;
             }
         }
+        int delivered = 0;
         result.firstSample = std::min(request.first, _count);
         result.sampleCount = std::min(request.count, _count - result.firstSample);
         const std::uint64_t end = std::min(result.firstSample + result.sampleCount,
@@ -545,6 +628,11 @@ private:
             }
             first += size;
             result.samplesRead = first - result.firstSample;
+            if (outcome && ++delivered == failAfterChunks) {
+                if (std::optional<mdf4::ScanResult> given = outcome(request)) {
+                    return *given;
+                }
+            }
             std::this_thread::sleep_for(chunkTime);
         }
         result.outcome.status = mdf4::Status::Ok;
@@ -588,6 +676,16 @@ std::unique_ptr<Mdf4DocumentSession> openSession(
     Mdf4Source::AxisFunction axis = timeMaster) {
     auto source = std::make_shared<Source>(scans);
     using Request = Scans::Request;
+    // The document's MLSD Byte channels: their values keep their valid Bytes.
+    std::set<std::pair<std::uint32_t, std::uint32_t>> mlsd;
+    for (int g = 0; g < document.groups_size(); ++g) {
+        for (int c = 0; c < document.groups(g).channels_size(); ++c) {
+            const mdf4::Channel& channel = document.groups(g).channels(c);
+            if (channel.binary() && channel.cn_type() == 5) {
+                mlsd.emplace(g, c);
+            }
+        }
+    }
     return std::make_unique<Mdf4DocumentSession>(
         QStringLiteral("test.mf4"),
         QStringLiteral("test.mf4"),
@@ -611,7 +709,13 @@ std::unique_ptr<Mdf4DocumentSession> openSession(
                 return source->scans().readArray(
                     {Request::Array, group, channel, first, count, elements}, control);
             },
-            std::move(axis)},
+            std::move(axis),
+            [source, mlsd](std::uint32_t group, std::uint32_t channel, std::uint64_t first,
+                           std::uint64_t count, const mdf4::Control& control,
+                           const mdf4::BytesVisitor& visitor) {
+                return source->scans().scanBytes({Request::Bytes, group, channel, first, count},
+                                                 mlsd.count({group, channel}) > 0, control, visitor);
+            }},
         QList<DiagnosticMessage>{}, limits);
 }
 
@@ -650,6 +754,14 @@ quint64 channelKey(Mdf4DocumentSession& session, int channelIndex, int groupInde
     TreeModel* tree = session.treeModel();
     const QModelIndex group = tree->index(groupIndex, 0, tree->index(0, 0));
     return tree->data(tree->index(channelIndex, 0, group), TreeModel::NodeKeyRole).toULongLong();
+}
+
+// The row of the first group's row `parent` at `row`: a structure's member.
+quint64 memberKey(Mdf4DocumentSession& session, int parent, int row) {
+    TreeModel* tree = session.treeModel();
+    const QModelIndex group = tree->index(0, 0, tree->index(0, 0));
+    return tree->data(tree->index(row, 0, tree->index(parent, 0, group)), TreeModel::NodeKeyRole)
+        .toULongLong();
 }
 
 quint64 groupKey(Mdf4DocumentSession& session) {
@@ -792,10 +904,16 @@ private slots:
     void domainComesFromTheSourceAxis();
     void masterChannelIsAnAxisNotASignal();
     void textChannelIsAnOrdinaryTreeChannel();
-    void byteChannelIsListedNotPlotted();
+    void byteChannelShowsItsBytes();
+    void structureMembersNestUnderTheirParent();
+    void frameTableShown();
+    void memberKeepsItsOwnView();
+    void failedMemberLeavesItsColumnEmpty();
+    void masterTypedMemberIsAValueChannel();
     void textPageShown();
     void textPagesAreBounded();
     void textReservationBecomesThePageCharge();
+    void pageReservationBecomesThePageCharge();
     void numericSelectionCancelsTheTextRead();
     void textPageRefusedByTheAllowance();
     void cachedTextPageNeedsNoRead();
@@ -940,9 +1058,10 @@ void TestMdf4DocumentSession::textChannelIsAnOrdinaryTreeChannel() {
     QCOMPARE(tree->data(row, TreeModel::SubtitleRole).toString(), QStringLiteral("Text channel"));
 }
 
-// Readable but without a view yet: listed like any channel with its role, and
-// selecting it keeps the plot empty with a note, without a read.
-void TestMdf4DocumentSession::byteChannelIsListedNotPlotted() {
+// Readable, so listed like any channel with its role; selecting it turns the
+// center to the table, a page of its samples' times and Bytes from one Byte
+// read.
+void TestMdf4DocumentSession::byteChannelShowsItsBytes() {
     auto scans = std::make_shared<Scans>(false);
     auto session = openSession(scans, makeBytesDocument());
     TreeModel* tree = session->treeModel();
@@ -954,15 +1073,273 @@ void TestMdf4DocumentSession::byteChannelIsListedNotPlotted() {
     QCOMPARE(tree->data(row, TreeModel::IconKeyRole).toString(), QStringLiteral("channel"));
     QCOMPARE(tree->data(row, TreeModel::SubtitleRole).toString(), QStringLiteral("Byte channel"));
 
-    SignalPlotModel* model = plotOf(*session);
     session->selectNode(channelKey(*session, kBytes));
-    QVERIFY(!model->busy());
-    QVERIFY(!model->hasSamples());
-    QCOMPARE(model->plotState(), SignalPlotModel::Empty);
-    QCOMPARE(model->name(), QStringLiteral("CAN_DataFrame"));
-    QCOMPARE(model->message(), QStringLiteral("Byte channel — not plottable"));
+    QVERIFY(centerIs(*session, "ValueTableView.qml"));
+    ValueTableModel* table = tableOf(*session);
+    QVERIFY(table);
+    QCOMPARE(table->message(), QStringLiteral("Reading bytes…"));
     QVERIFY(settle(*session));
-    QVERIFY(scans->channels().empty());
+    QCOMPARE(table->kind(), ValueTableModel::Page);
+    QCOMPARE(table->tableState(), ValueTableModel::Shown);
+    QCOMPARE(table->role(), QStringLiteral("Byte channel"));
+    QVERIFY(table->hasTimeColumn());
+    QCOMPARE(table->columnCount(), 2);
+    QCOMPARE(table->headerData(0, Qt::Horizontal).toString(), QStringLiteral("Acquisition time [ms]"));
+    QCOMPARE(table->headerData(1, Qt::Horizontal).toString(), QStringLiteral("Bytes"));
+    QVERIFY(!table->numericColumn(1));
+    QCOMPARE(table->data(table->index(1, 0)).toString(), QStringLiteral("1"));
+    QCOMPARE(table->data(table->index(1, 1)).toString(), QStringLiteral("05 01 11 21"));
+    const std::vector<Scans::Request> requests = scans->requests();
+    QCOMPARE(requests.size(), std::size_t(1));
+    QCOMPARE(int(requests[0].lane), int(Scans::Request::Bytes));
+    QCOMPARE(requests[0].channel, std::uint32_t(kBytes));
+    QCOMPARE(requests[0].first, std::uint64_t(0));
+    QCOMPARE(requests[0].count, std::uint64_t(4));
+}
+
+// A structure's direct members are listed under it, titled without the
+// parent's name and the group's separator, each with its own role, icon and
+// kind; the structure's role counts them, the next channel of the group is
+// listed under the group again, and a member's details keep its full name.
+void TestMdf4DocumentSession::structureMembersNestUnderTheirParent() {
+    auto scans = std::make_shared<Scans>(false);
+    auto session = openSession(scans, makeFrameDocument());
+    TreeModel* tree = session->treeModel();
+    const QModelIndex group = tree->index(0, 0, tree->index(0, 0));
+    QCOMPARE(tree->rowCount(group), kFrame + 2);
+    const QModelIndex frame = tree->index(kFrame, 0, group);
+    QCOMPARE(tree->data(frame, TreeModel::TitleRole).toString(), QStringLiteral("CAN_DataFrame"));
+    QCOMPARE(tree->data(frame, TreeModel::SubtitleRole).toString(),
+             QStringLiteral("Structure of 5 members"));
+    QCOMPARE(tree->data(frame, TreeModel::IconKeyRole).toString(), QStringLiteral("channel"));
+
+    struct Member {
+        const char* title;
+        const char* subtitle;
+        SemanticKind kind;
+        const char* icon;
+    };
+    const Member members[] = {
+        {"ID", "", SemanticKind::Entity, "channel"},
+        {"DataBytes", "Byte channel", SemanticKind::Entity, "channel"},
+        {"Note", "Text channel", SemanticKind::Entity, "channel"},
+        {"Matrix", "Array 2 × 3", SemanticKind::Entity, "channel"},
+        {"Odd", "Not plottable", SemanticKind::Diagnostic, "channel-unsupported"},
+    };
+    QCOMPARE(tree->rowCount(frame), int(std::size(members)));
+    for (int row = 0; row < int(std::size(members)); ++row) {
+        const QModelIndex member = tree->index(row, 0, frame);
+        QCOMPARE(tree->data(member, TreeModel::TitleRole).toString(),
+                 QString::fromUtf8(members[row].title));
+        QCOMPARE(tree->data(member, TreeModel::SubtitleRole).toString(),
+                 QString::fromUtf8(members[row].subtitle));
+        QCOMPARE(tree->data(member, TreeModel::SemanticKindRole).toInt(),
+                 static_cast<int>(members[row].kind));
+        QCOMPARE(tree->data(member, TreeModel::IconKeyRole).toString(),
+                 QString::fromUtf8(members[row].icon));
+        QCOMPARE(tree->rowCount(member), 0);
+    }
+    const QModelIndex brake = tree->index(kFrame + 1, 0, group);
+    QCOMPARE(tree->data(brake, TreeModel::TitleRole).toString(), QStringLiteral("BrakePressure"));
+    QCOMPARE(tree->rowCount(brake), 0);
+
+    session->selectNode(memberKey(*session, kFrame, 0));
+    QCOMPARE(detailName(session->detailModel()), QStringLiteral("CAN_DataFrame.ID"));
+    QVERIFY(settle(*session));
+}
+
+// Selecting the structure turns the center to its frame table: the time, a
+// column per direct member that has one, then the structure's own Bytes. The
+// page's lanes are read in order in one task, the structure's own first, each
+// over the page's rows: the one reservation stands throughout and nothing
+// reaches the table between them. The page is held while shown.
+void TestMdf4DocumentSession::frameTableShown() {
+    auto scans = std::make_shared<Scans>();
+    auto session = openSession(scans, makeFrameDocument());
+    session->selectNode(channelKey(*session, kFrame));
+    QVERIFY(centerIs(*session, "ValueTableView.qml"));
+    ValueTableModel* table = tableOf(*session);
+    QVERIFY(table);
+    QCOMPARE(table->kind(), ValueTableModel::Page);
+    QCOMPARE(table->role(), QStringLiteral("Structure of 5 members"));
+    QCOMPARE(table->message(), QStringLiteral("Reading frames…"));
+    QVERIFY(table->hasTimeColumn());
+    const QStringList headers{QStringLiteral("Acquisition time [ms]"), QStringLiteral("ID"),
+                              QStringLiteral("DataBytes"), QStringLiteral("Note"),
+                              QStringLiteral("Bytes")};
+    QCOMPARE(table->columnCount(), int(headers.size()));
+    for (int column = 0; column < int(headers.size()); ++column) {
+        QCOMPARE(table->headerData(column, Qt::Horizontal).toString(), headers[column]);
+        QCOMPARE(table->numericColumn(column), column == 1);
+    }
+
+    QVERIFY(scans->waitForScans(1));
+    const std::uint64_t reserved = session->resultBytes().reserved;
+    for (int read = 2; read <= 4; ++read) {
+        scans->release();
+        QVERIFY(scans->waitForScans(read));
+        QCOMPARE(session->resultBytes().reserved, reserved);
+        QCOMPARE(table->tableState(), ValueTableModel::Pending);
+    }
+    scans->release();
+    QVERIFY(settle(*session));
+    const std::vector<Scans::Request> requests = scans->requests();
+    const std::pair<int, int> lanes[] = {{Scans::Request::Bytes, kFrame},
+                                         {Scans::Request::Values, kId},
+                                         {Scans::Request::Bytes, kDataBytes},
+                                         {Scans::Request::Text, kNote}};
+    QCOMPARE(requests.size(), std::size(lanes));
+    for (std::size_t read = 0; read < requests.size(); ++read) {
+        QCOMPARE(int(requests[read].lane), lanes[read].first);
+        QCOMPARE(requests[read].channel, std::uint32_t(lanes[read].second));
+        QCOMPARE(requests[read].first, std::uint64_t(0));
+        QCOMPARE(requests[read].count, std::uint64_t(4));
+        QCOMPARE(requests[read].returnedBefore, read);
+    }
+    QCOMPARE(scans->maxConcurrent(), 1);
+
+    QCOMPARE(table->tableState(), ValueTableModel::Shown);
+    QCOMPARE(table->rowCount(), 4);
+    QCOMPARE(table->headerData(1, Qt::Vertical).toString(), QStringLiteral("1"));
+    QCOMPARE(table->data(table->index(1, 0)).toString(), QStringLiteral("1"));
+    QCOMPARE(table->data(table->index(1, 1)).toString(), QStringLiteral("701"));
+    QCOMPARE(table->data(table->index(1, 2)).toString(), QStringLiteral("07 01"));
+    QCOMPARE(table->data(table->index(1, 3)).toString(), QStringLiteral("text 1"));
+    QCOMPARE(table->data(table->index(1, 4)).toString(), QStringLiteral("05 01 11 21"));
+    QCOMPARE(table->rangeText(), QStringLiteral("Rows 0–3 of 4"));
+    QVERIFY(table->message().isEmpty());
+    const Mdf4DocumentSession::ResultBytes bytes = session->resultBytes();
+    QCOMPARE(bytes.results, std::size_t(1));
+    QCOMPARE(bytes.held, std::size_t(1));
+    QCOMPARE(bytes.retained, table->page()->bytes());
+    QVERIFY(!scans->timedOut());
+}
+
+// A member keeps the view of its kind: ID plots, an overview scan of its own
+// index; DataBytes shows a page of its own Bytes, an MLSD channel's valid ones.
+void TestMdf4DocumentSession::memberKeepsItsOwnView() {
+    auto scans = std::make_shared<Scans>(false);
+    auto session = openSession(scans, makeFrameDocument());
+    SignalPlotModel* plot = plotOf(*session);
+    session->selectNode(memberKey(*session, kFrame, 0));
+    QVERIFY(centerIs(*session, "SignalPlotView.qml"));
+    QVERIFY(settle(*session));
+    QVERIFY(showsExact(plot, "CAN_DataFrame.ID", 700.0));
+    std::vector<Scans::Request> requests = scans->requests();
+    QCOMPARE(int(requests.front().lane), int(Scans::Request::Values));
+    QCOMPARE(requests.front().channel, std::uint32_t(kId));
+    QCOMPARE(requests.front().first, std::uint64_t(0));
+    QCOMPARE(requests.front().count, std::uint64_t(4));
+
+    session->selectNode(memberKey(*session, kFrame, 1));
+    QVERIFY(centerIs(*session, "ValueTableView.qml"));
+    ValueTableModel* table = tableOf(*session);
+    QVERIFY(table);
+    QVERIFY(settle(*session));
+    QCOMPARE(table->tableState(), ValueTableModel::Shown);
+    QCOMPARE(table->role(), QStringLiteral("Byte channel"));
+    QCOMPARE(table->columnCount(), 2);
+    QCOMPARE(table->headerData(1, Qt::Horizontal).toString(), QStringLiteral("Bytes"));
+    QCOMPARE(table->data(table->index(0, 1)).toString(), QStringLiteral("07"));
+    QCOMPARE(table->data(table->index(3, 1)).toString(), QStringLiteral("07 03 13 23"));
+    requests = scans->requests();
+    QCOMPARE(int(requests.back().lane), int(Scans::Request::Bytes));
+    QCOMPARE(requests.back().channel, std::uint32_t(kDataBytes));
+}
+
+// A member read that fails after a chunk it delivered leaves its whole column
+// empty, the reader's chunks being provisional until a read ends Ok, and says
+// why, the page shown and kept; a member read that finds the file changed
+// fails the page, and the lanes after it are not read.
+void TestMdf4DocumentSession::failedMemberLeavesItsColumnEmpty() {
+    auto scans = std::make_shared<Scans>(false);
+    scans->chunk = 1;
+    scans->failAfterChunks = 1;
+    scans->outcome = [](const Scans::Request& request) -> std::optional<mdf4::ScanResult> {
+        if (request.lane == Scans::Request::Text && request.channel == std::uint32_t(kNote)) {
+            return finished(mdf4::Status::Error, "block cannot be read", "DG[0]/CG[0]/CN[8]");
+        }
+        return std::nullopt;
+    };
+    auto session = openSession(scans, makeFrameDocument());
+    session->selectNode(channelKey(*session, kFrame));
+    ValueTableModel* table = tableOf(*session);
+    QVERIFY(table);
+    QVERIFY(settle(*session));
+    QCOMPARE(table->tableState(), ValueTableModel::Shown);
+    QCOMPARE(table->message(),
+             QStringLiteral("Note could not be read: block cannot be read (DG[0]/CG[0]/CN[8])"));
+    QCOMPARE(table->rowCount(), 4);
+    for (int row = 0; row < 4; ++row) {
+        QCOMPARE(table->data(table->index(row, 3)).toString(), QString());
+    }
+    QCOMPARE(table->data(table->index(2, 1)).toString(), QStringLiteral("702"));
+    QCOMPARE(table->data(table->index(2, 4)).toString(), QStringLiteral("05 02 12 22"));
+    QCOMPARE(session->resultBytes().results, std::size_t(1));
+
+    auto changed = std::make_shared<Scans>(false);
+    changed->outcome = [](const Scans::Request& request) -> std::optional<mdf4::ScanResult> {
+        if (request.lane == Scans::Request::Values && request.channel == std::uint32_t(kId)) {
+            return finished(mdf4::Status::SourceChanged, "source file changed since it was opened");
+        }
+        return std::nullopt;
+    };
+    auto other = openSession(changed, makeFrameDocument());
+    other->selectNode(channelKey(*other, kFrame));
+    ValueTableModel* failed = tableOf(*other);
+    QVERIFY(failed);
+    QVERIFY(settle(*other));
+    QCOMPARE(failed->tableState(), ValueTableModel::Failed);
+    QCOMPARE(failed->message(), QStringLiteral("Frames could not be read: the file changed since it "
+                                               "was opened; reopen it"));
+    QCOMPARE(failed->rowCount(), 0);
+    QCOMPARE(other->resultBytes().results, std::size_t(0));
+    QCOMPARE(changed->requests().size(), std::size_t(2));
+}
+
+// A master-typed member is never its group's axis (the reader reads it as a
+// value channel): listed under its structure without a role, plotted when
+// selected, and a value column of the frame table.
+void TestMdf4DocumentSession::masterTypedMemberIsAValueChannel() {
+    mdf4::File document = makeFrameDocument();
+    mdf4::Channel* stamp = document.mutable_groups(0)->add_channels();
+    stamp->set_name("CAN_DataFrame.Timestamp");
+    stamp->set_unit("s");
+    stamp->set_sample_count(4);
+    stamp->set_is_master(true);
+    stamp->set_sync_type(1);
+    stamp->set_cn_type(2);
+    stamp->set_decodable(true);
+    stamp->set_member_of(kFrame);
+    const int kStamp = document.groups(0).channels_size() - 1;
+    auto scans = std::make_shared<Scans>(false);
+    auto session = openSession(scans, std::move(document));
+    TreeModel* tree = session->treeModel();
+    const QModelIndex frame = tree->index(kFrame, 0, tree->index(0, 0, tree->index(0, 0)));
+    QCOMPARE(tree->data(frame, TreeModel::SubtitleRole).toString(),
+             QStringLiteral("Structure of 6 members"));
+    const QModelIndex row = tree->index(5, 0, frame);
+    QCOMPARE(tree->data(row, TreeModel::TitleRole).toString(), QStringLiteral("Timestamp"));
+    QCOMPARE(tree->data(row, TreeModel::SubtitleRole).toString(), QStringLiteral("s"));
+    QCOMPARE(tree->data(row, TreeModel::SemanticKindRole).toInt(),
+             static_cast<int>(SemanticKind::Entity));
+
+    SignalPlotModel* plot = plotOf(*session);
+    session->selectNode(memberKey(*session, kFrame, 5));
+    QVERIFY(centerIs(*session, "SignalPlotView.qml"));
+    QVERIFY(settle(*session));
+    QVERIFY(showsExact(plot, "CAN_DataFrame.Timestamp", 100.0 * (kStamp + 1)));
+
+    session->selectNode(channelKey(*session, kFrame));
+    ValueTableModel* table = tableOf(*session);
+    QVERIFY(table);
+    QVERIFY(settle(*session));
+    QCOMPARE(table->tableState(), ValueTableModel::Shown);
+    QCOMPARE(table->columnCount(), 6);
+    QCOMPARE(table->headerData(4, Qt::Horizontal).toString(), QStringLiteral("Timestamp"));
+    QVERIFY(table->numericColumn(4));
+    QCOMPARE(table->data(table->index(1, 4)).toString(),
+             QString::number(100.0 * (kStamp + 1) + 1.0));
 }
 
 // The center turns to the table, which shows the channel's first page: one
@@ -1038,7 +1415,7 @@ void TestMdf4DocumentSession::textReservationBecomesThePageCharge() {
     session->selectNode(channelKey(*session, kText));
     QVERIFY(scans->waitForScans(1));
     Mdf4DocumentSession::ResultBytes bytes = session->resultBytes();
-    QCOMPARE(bytes.reserved, TextPageBuilder::reservation(1024));
+    QCOMPARE(bytes.reserved, TablePageBuilder::reservation(1024, {{TableColumn::Kind::Text}}));
     QCOMPARE(bytes.retained, std::uint64_t(0));
 
     scans->release();
@@ -1048,7 +1425,42 @@ void TestMdf4DocumentSession::textReservationBecomesThePageCharge() {
     bytes = session->resultBytes();
     QCOMPARE(bytes.reserved, std::uint64_t(0));
     QCOMPARE(bytes.retained, table->page()->bytes());
-    QVERIFY(bytes.retained <= TextPageBuilder::reservation(1024));
+    QVERIFY(bytes.retained <= TablePageBuilder::reservation(1024, {{TableColumn::Kind::Text}}));
+    QVERIFY(!scans->timedOut());
+}
+
+// A frame page's reservation, the time and every lane's column at its cap, is
+// admitted before its first read launches; the completion turns it into the
+// page's own charge, which with the builder makes the reservation exactly.
+void TestMdf4DocumentSession::pageReservationBecomesThePageCharge() {
+    auto scans = std::make_shared<Scans>(true, 3000);
+    auto session = openSession(scans, makeFrameDocument(3000));
+    session->selectNode(channelKey(*session, kFrame));
+    QVERIFY(scans->waitForScans(1));
+    // The caps, stated apart from the plan: the 120-bit structure's 45
+    // characters of hex, the MLSD payload's 24 for its 8 Bytes, a text's 1,024;
+    // the reservation is the structures, the slots and the rows at those caps.
+    const mdf4page::PagePlan plan = mdf4page::pagePlan(makeFrameDocument(3000), 0, kFrame, 0);
+    QCOMPARE(plan.cellBytes, std::size_t(45));
+    QCOMPARE(plan.members.size(), std::size_t(3));
+    QCOMPARE(plan.members[1].cellBytes, std::size_t(24));
+    QCOMPARE(plan.members[2].cellBytes, std::size_t(1024));
+    const std::uint64_t reservation = mdf4page::reservation(plan);
+    QCOMPARE(reservation, sizeof(TablePageBuilder) + sizeof(TablePage) + 4 * sizeof(TableColumn) +
+                              1024 * (8 + 8 + (4 + 24) + (4 + 1024) + (4 + 45)));
+    Mdf4DocumentSession::ResultBytes bytes = session->resultBytes();
+    QCOMPARE(bytes.reserved, reservation);
+    QCOMPARE(bytes.retained, std::uint64_t(0));
+
+    scans->openGate();
+    QVERIFY(settle(*session));
+    ValueTableModel* table = tableOf(*session);
+    QVERIFY(table && table->page());
+    QCOMPARE(table->rowCount(), 1024);
+    bytes = session->resultBytes();
+    QCOMPARE(bytes.reserved, std::uint64_t(0));
+    QCOMPARE(bytes.retained, table->page()->bytes());
+    QCOMPARE(bytes.retained + sizeof(TablePageBuilder), reservation);
     QVERIFY(!scans->timedOut());
 }
 
@@ -1095,7 +1507,7 @@ void TestMdf4DocumentSession::numericSelectionCancelsTheTextRead() {
 void TestMdf4DocumentSession::textPageRefusedByTheAllowance() {
     auto scans = std::make_shared<Scans>(false, 3000);
     const Mdf4SessionLimits limits{Mdf4SessionLimits{}.treeBytes,
-                                   TextPageBuilder::reservation(1024) - 1};
+                                   TablePageBuilder::reservation(1024, {{TableColumn::Kind::Text}}) - 1};
     auto session = openSession(scans, makeTextDocument(3000), limits);
     session->selectNode(channelKey(*session, kText));
     ValueTableModel* table = tableOf(*session);
@@ -1168,22 +1580,27 @@ void TestMdf4DocumentSession::shutdownDuringTextRead() {
 }
 
 void TestMdf4DocumentSession::closeCancelsTheTableRead_data() {
-    QTest::addColumn<bool>("array");
-    QTest::newRow("text page") << false;
-    QTest::newRow("array sample") << true;
+    QTest::addColumn<int>("lane");
+    QTest::newRow("text page") << int(Scans::Request::Text);
+    QTest::newRow("array sample") << int(Scans::Request::Array);
+    QTest::newRow("frames") << int(Scans::Request::Bytes);
 }
 
 // Closing while a page or an array sample is read cancels the read and waits
-// for it; the source goes once the read's task let go of it. A sample's
-// reservation is admitted before its read launches.
+// for it; the source goes once the read's task let go of it, and a frame page
+// reads no member after its cancelled first lane. A sample's reservation is
+// admitted before its read launches.
 void TestMdf4DocumentSession::closeCancelsTheTableRead() {
-    QFETCH(bool, array);
+    QFETCH(int, lane);
+    const bool array = lane == Scans::Request::Array;
+    const bool frames = lane == Scans::Request::Bytes;
     auto scans = std::make_shared<Scans>();
-    auto session = openSession(scans, array ? makeArrayDocument() : makeTextDocument());
-    session->selectNode(channelKey(*session, array ? kArray : kText));
+    auto session = openSession(scans, array    ? makeArrayDocument()
+                                      : frames ? makeFrameDocument()
+                                               : makeTextDocument());
+    session->selectNode(channelKey(*session, array ? kArray : frames ? kFrame : kText));
     QVERIFY(scans->waitForScans(1));
-    QCOMPARE(int(scans->requests().front().lane),
-             int(array ? Scans::Request::Array : Scans::Request::Text));
+    QCOMPARE(int(scans->requests().front().lane), lane);
     if (array) {
         QCOMPARE(session->resultBytes().reserved,
                  mdf4array::reservation(
@@ -1192,8 +1609,9 @@ void TestMdf4DocumentSession::closeCancelsTheTableRead() {
 
     session.reset();
     QVERIFY(scans->waitForEvent(QStringLiteral("source released")));
-    QCOMPARE(scans->events(), (QStringList{QStringLiteral("scan %1 returned").arg(kText),
-                                           QStringLiteral("source released")}));
+    QCOMPARE(scans->events(),
+             (QStringList{QStringLiteral("scan %1 returned").arg(array ? kArray : frames ? kFrame : kText),
+                          QStringLiteral("source released")}));
     QVERIFY(QThreadPool::globalInstance()->waitForDone(10000));
     QCoreApplication::processEvents();
     QCOMPARE(scans->requests().size(), std::size_t(1));
@@ -1201,32 +1619,37 @@ void TestMdf4DocumentSession::closeCancelsTheTableRead() {
 }
 
 void TestMdf4DocumentSession::reentryFromTableNotifications_data() {
+    QTest::addColumn<bool>("frames");
     QTest::addColumn<bool>("arrival");
     QTest::addColumn<bool>("pre");
     QTest::addColumn<bool>("close");
-    for (const bool arrival : {false, true}) {
-        for (const bool pre : {true, false}) {
-            for (const bool close : {false, true}) {
-                QTest::addRow("%s, %s, %s", arrival ? "page arrives" : "channel selected",
-                              pre ? "pre-reset" : "reset", close ? "close" : "select Engine")
-                    << arrival << pre << close;
+    for (const bool frames : {false, true}) {
+        for (const bool arrival : {false, true}) {
+            for (const bool pre : {true, false}) {
+                for (const bool close : {false, true}) {
+                    QTest::addRow("%s, %s, %s, %s", frames ? "frames" : "texts",
+                                  arrival ? "page arrives" : "channel selected",
+                                  pre ? "pre-reset" : "reset", close ? "close" : "select Engine")
+                        << frames << arrival << pre << close;
+                }
             }
         }
     }
 }
 
 // An observer of the table's reset selects Engine or closes the session from
-// inside it, when a selection shows the text channel or when a page arrives:
-// Engine ends shown and the table empty, or the session stops there and nothing
-// touches it afterwards.
+// inside it, when a selection shows the text channel or the structure, or when
+// a page arrives: Engine ends shown and the table empty, or the session stops
+// there and nothing touches it afterwards.
 void TestMdf4DocumentSession::reentryFromTableNotifications() {
+    QFETCH(bool, frames);
     QFETCH(bool, arrival);
     QFETCH(bool, pre);
     QFETCH(bool, close);
     auto scans = std::make_shared<Scans>(false, 3000);
-    auto session = openSession(scans, makeTextDocument(3000));
+    auto session = openSession(scans, frames ? makeFrameDocument(3000) : makeTextDocument(3000));
     SignalPlotModel* plot = plotOf(*session);
-    const quint64 text = channelKey(*session, kText);
+    const quint64 text = channelKey(*session, frames ? kFrame : kText);
     const quint64 engine = channelKey(*session, Engine);
     session->selectNode(text);
     ValueTableModel* table = tableOf(*session);
@@ -1263,7 +1686,8 @@ void TestMdf4DocumentSession::reentryFromTableNotifications() {
         QVERIFY(QThreadPool::globalInstance()->waitForDone(10000));
         QCoreApplication::processEvents();
         QCOMPARE(scans->events().last(), QStringLiteral("source released"));
-        QCOMPARE(scans->requests().size(), std::size_t(arrival ? 2 : 1));
+        // A page is one read, a frame page one per lane.
+        QCOMPARE(scans->requests().size(), std::size_t((arrival ? 2 : 1) * (frames ? 4 : 1)));
     } else {
         QVERIFY(settle(*session));
         QVERIFY(session->centerPanelModel() == plot);

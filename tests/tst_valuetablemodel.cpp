@@ -1,6 +1,6 @@
-// The value table's model: the text of its cells and headers, the text page's
-// cell cap, the requests a view makes, and observers that act from inside its
-// notifications.
+// The value table's model: the text of its cells and headers, a page's columns
+// and its text cells' cap, the requests a view makes, and observers that act
+// from inside its notifications.
 
 #include "models/tabledata.h"
 #include "models/valuetablemodel.h"
@@ -25,15 +25,17 @@ namespace {
 constexpr double kInf = std::numeric_limits<double>::infinity();
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 
-// The page of `texts` from `first`, row i at time `times[i]` or i.
-TextPagePtr pageOf(std::uint64_t first, const std::vector<std::string>& texts,
-                   std::vector<double> times = {}, std::uint64_t invalid = 0) {
+// The page of `texts` from `first`, row i at time `times[i]` or i: a text
+// channel's, one Text column.
+TablePagePtr pageOf(std::uint64_t first, const std::vector<std::string>& texts,
+                    std::vector<double> times = {}, std::uint64_t invalid = 0) {
     std::vector<std::string_view> views(texts.begin(), texts.end());
     for (std::size_t i = times.size(); i < texts.size(); ++i) {
         times.push_back(static_cast<double>(i));
     }
-    TextPageBuilder builder(first, texts.size());
-    builder.add(times.data(), views.data(), views.size());
+    TablePageBuilder builder(first, texts.size(), {{TableColumn::Kind::Text}});
+    builder.addTime(times.data(), views.size());
+    builder.addText(0, views.data(), views.size());
     return builder.finish(invalid);
 }
 
@@ -42,6 +44,8 @@ TableHeader textHeader(std::uint64_t count, bool timed = true) {
     header.name = QStringLiteral("DriverMessage");
     header.role = QStringLiteral("Text channel");
     header.sampleCount = count;
+    header.values = QStringLiteral("Texts");
+    header.columns = {{QStringLiteral("Text"), false}};
     if (timed) {
         header.timeName = QStringLiteral("Time");
         header.timeUnit = QStringLiteral("s");
@@ -56,6 +60,7 @@ TableHeader arrayHeader(std::vector<std::uint64_t> dimensions, std::uint64_t cou
     header.role = QStringLiteral("Classification result");
     header.unit = QStringLiteral("s");
     header.sampleCount = count;
+    header.values = QStringLiteral("Values");
     if (timed) {
         header.timeName = QStringLiteral("t");
         header.timeUnit = QStringLiteral("s");
@@ -130,6 +135,7 @@ private slots:
     void textCellCutOnCharacterBoundary();
     void textPageRowsAndColumns();
     void textWithoutTimeAxisAndEmpty();
+    void pageColumns();
     void showSampleClamps();
     void arraySampleAndSlice();
     void observerMayDestroyModel_data();
@@ -190,15 +196,15 @@ void TestValueTableModel::textCellCutOnCharacterBoundary() {
     // 1,020 Bytes, then a three-Byte character across the cut, then two more.
     const std::string longText = std::string(1020, 'a') + "€" + "ab";
     QCOMPARE(longText.size(), std::size_t(1025));
-    const std::string capText(kTextCellBytes, 'b');
-    const TextPagePtr page = pageOf(0, {longText, capText, "short"});
-    QCOMPARE(std::string(page->text(0)), std::string(1020, 'a') + "…");
-    QCOMPARE(std::string(page->text(1)), capText);
-    QCOMPARE(std::string(page->text(2)), std::string("short"));
-    QVERIFY(page->bytes() <= TextPageBuilder::reservation(3));
+    const std::string capText(kCellBytes, 'b');
+    const TablePagePtr page = pageOf(0, {longText, capText, "short"});
+    QCOMPARE(std::string(page->columns[0].textAt(0)), std::string(1020, 'a') + "…");
+    QCOMPARE(std::string(page->columns[0].textAt(1)), capText);
+    QCOMPARE(std::string(page->columns[0].textAt(2)), std::string("short"));
+    QVERIFY(page->bytes() <= TablePageBuilder::reservation(3, {{TableColumn::Kind::Text}}));
 
     ValueTableModel model;
-    model.setTextChannel(textHeader(3), page);
+    model.setPageChannel(textHeader(3), page);
     QCOMPARE(cell(model, 0, 1), QString(1020, QLatin1Char('a')) + QStringLiteral("…"));
     QCOMPARE(cell(model, 1, 1).size(), qsizetype(1024));
 }
@@ -208,14 +214,14 @@ void TestValueTableModel::textCellCutOnCharacterBoundary() {
 void TestValueTableModel::textPageRowsAndColumns() {
     ValueTableModel model;
     QSignalSpy wanted(&model, &ValueTableModel::requestWanted);
-    model.setTextChannel(textHeader(3000));
+    model.setPageChannel(textHeader(3000));
     QCOMPARE(model.tableState(), ValueTableModel::Pending);
     QCOMPARE(model.message(), QStringLiteral("Reading texts…"));
     QCOMPARE(model.rowCount(), 0);
     QCOMPARE(model.columnCount(), 2);
     QCOMPARE(header(model, 0, Qt::Horizontal), QStringLiteral("Time [s]"));
     QCOMPARE(header(model, 1, Qt::Horizontal), QStringLiteral("Text"));
-    QCOMPARE(model.kind(), ValueTableModel::Text);
+    QCOMPARE(model.kind(), ValueTableModel::Page);
     QCOMPARE(model.countText(), QStringLiteral("3,000 samples"));
     QCOMPARE(model.cornerText(), QStringLiteral("Sample"));
     QVERIFY(model.rangeText().isEmpty());
@@ -223,8 +229,8 @@ void TestValueTableModel::textPageRowsAndColumns() {
     model.showSample(2100);
     QCOMPARE(wanted.count(), 1);
     QCOMPARE(model.firstRow(), qulonglong(2048));
-    model.setTextPage(pageOf(2048, {"1 Rekorder mit Aufzeichnung gestartet", "", "Messung gestoppt"},
-                             {0.000480912, 4.700965438, 13.452942673}, 1));
+    model.setPage(pageOf(2048, {"1 Rekorder mit Aufzeichnung gestartet", "", "Messung gestoppt"},
+                         {0.000480912, 4.700965438, 13.452942673}, 1));
     QCOMPARE(wanted.count(), 1);
     QCOMPARE(model.tableState(), ValueTableModel::Shown);
     QVERIFY(model.message().isEmpty());
@@ -245,14 +251,14 @@ void TestValueTableModel::textPageRowsAndColumns() {
 // samples says so.
 void TestValueTableModel::textWithoutTimeAxisAndEmpty() {
     ValueTableModel model;
-    model.setTextChannel(textHeader(3, false), pageOf(0, {"a", "b", "c"}));
+    model.setPageChannel(textHeader(3, false), pageOf(0, {"a", "b", "c"}));
     QCOMPARE(model.columnCount(), 1);
     QCOMPARE(header(model, 0, Qt::Horizontal), QStringLiteral("Text"));
     QCOMPARE(cell(model, 2, 0), QStringLiteral("c"));
     QVERIFY(!model.hasPrevious());
     QVERIFY(!model.hasNext());
 
-    model.setTextChannel(textHeader(0), pageOf(0, {}));
+    model.setPageChannel(textHeader(0), pageOf(0, {}));
     QCOMPARE(model.tableState(), ValueTableModel::Empty);
     QCOMPARE(model.message(), QStringLiteral("No samples recorded"));
     QCOMPARE(model.countText(), QStringLiteral("0 samples"));
@@ -263,12 +269,95 @@ void TestValueTableModel::textWithoutTimeAxisAndEmpty() {
     QCOMPARE(model.columnCount(), 0);
 }
 
+// A page of the time, a Values column, a Text column and the channel's own
+// column: a value or text per cell, an empty one past a short member column,
+// headers by name, numbers right-aligned, and the notes in the page's word. An
+// array has no time column and numbers in every column.
+void TestValueTableModel::pageColumns() {
+    TableHeader frames;
+    frames.name = QStringLiteral("CAN_DataFrame");
+    frames.role = QStringLiteral("Structure of 3 members");
+    frames.sampleCount = 3;
+    frames.values = QStringLiteral("Frames");
+    frames.timeName = QStringLiteral("t");
+    frames.timeUnit = QStringLiteral("s");
+    frames.columns = {{QStringLiteral("ID"), true},
+                      {QStringLiteral("Note"), false},
+                      {QStringLiteral("Bytes"), false}};
+
+    ValueTableModel model;
+    model.setPageChannel(frames);
+    QCOMPARE(model.kind(), ValueTableModel::Page);
+    QCOMPARE(model.tableState(), ValueTableModel::Pending);
+    QCOMPARE(model.message(), QStringLiteral("Reading frames…"));
+    QVERIFY(model.hasTimeColumn());
+    QCOMPARE(model.columnCount(), 4);
+    QCOMPARE(header(model, 0, Qt::Horizontal), QStringLiteral("t [s]"));
+    QCOMPARE(header(model, 1, Qt::Horizontal), QStringLiteral("ID"));
+    QCOMPARE(header(model, 2, Qt::Horizontal), QStringLiteral("Note"));
+    QCOMPARE(header(model, 3, Qt::Horizontal), QStringLiteral("Bytes"));
+    for (int column = -1; column <= 4; ++column) {
+        QCOMPARE(model.numericColumn(column), column == 1);
+    }
+
+    // ID for every row, Note for two of three, the structure's own Bytes for
+    // every row but an invalid one.
+    TablePageBuilder builder(0, 3, {{TableColumn::Kind::Values},
+                                    {TableColumn::Kind::Text},
+                                    {TableColumn::Kind::Text, 45}});
+    const double times[] = {0.5, 1.5, 2.5};
+    const double ids[] = {100.0, kNaN, 102.0};
+    const std::string_view notes[] = {"first", "second"};
+    const std::string_view bytes[] = {std::string_view("\x64\0\0\0", 4), {}, std::string_view("\xFF\x01", 2)};
+    builder.addTime(times, 3);
+    builder.addValues(0, ids, 3);
+    builder.addText(1, notes, 2);
+    builder.addBytes(2, bytes, 3);
+    model.setPage(builder.finish(1), TableNote::None, QStringLiteral("Note could not be read: test"));
+    QCOMPARE(model.tableState(), ValueTableModel::Shown);
+    QCOMPARE(model.message(), QStringLiteral("Note could not be read: test"));
+    QCOMPARE(model.rowCount(), 3);
+    QCOMPARE(cell(model, 0, 0), QStringLiteral("0.5"));
+    QCOMPARE(cell(model, 0, 1), QStringLiteral("100"));
+    QCOMPARE(cell(model, 1, 1), QString());
+    QCOMPARE(cell(model, 1, 2), QStringLiteral("second"));
+    QCOMPARE(cell(model, 2, 2), QString());
+    QCOMPARE(cell(model, 0, 3), QStringLiteral("64 00 00 00"));
+    QCOMPARE(cell(model, 1, 3), QString());
+    QCOMPARE(cell(model, 2, 3), QStringLiteral("FF 01"));
+    QCOMPARE(header(model, 2, Qt::Vertical), QStringLiteral("2"));
+    QCOMPARE(model.cornerText(), QStringLiteral("Sample"));
+    QCOMPARE(model.rangeText(), QStringLiteral("Rows 0–2 of 3"));
+    QCOMPARE(model.invalidCount(), qulonglong(1));
+
+    // Without a time master the members lead.
+    frames.timeName.clear();
+    frames.timeUnit.clear();
+    model.setPageChannel(frames);
+    QVERIFY(!model.hasTimeColumn());
+    QCOMPARE(model.columnCount(), 3);
+    QCOMPARE(header(model, 0, Qt::Horizontal), QStringLiteral("ID"));
+    QVERIFY(model.numericColumn(0));
+    QVERIFY(!model.numericColumn(2));
+
+    model.setPage({}, TableNote::Failed);
+    QCOMPARE(model.message(), QStringLiteral("Frames could not be read"));
+    model.setPage({}, TableNote::Refused);
+    QCOMPARE(model.message(), QStringLiteral("Frames exceed the viewer's limits"));
+
+    model.setArrayChannel(arrayHeader({2, 3}), sliceOf(2, 3, {1.0, 2.0, 3.0, 4.0, 5.0, 6.0}));
+    QVERIFY(!model.hasTimeColumn());
+    QVERIFY(model.numericColumn(0));
+    QVERIFY(model.numericColumn(2));
+    QVERIFY(!model.numericColumn(3));
+}
+
 // A view's request clamps to the channel's samples, asks once per new page or
 // sample, and asks again for what failed or was refused.
 void TestValueTableModel::showSampleClamps() {
     ValueTableModel model;
     QSignalSpy wanted(&model, &ValueTableModel::requestWanted);
-    model.setTextChannel(textHeader(3000));
+    model.setPageChannel(textHeader(3000));
     QCOMPARE(wanted.count(), 0);
 
     model.showSample(5000);
@@ -374,7 +463,7 @@ void TestValueTableModel::observerMayDestroyModel() {
     QFETCH(bool, request);
     alignas(ValueTableModel) unsigned char storage[sizeof(ValueTableModel)];
     auto* model = new (storage) ValueTableModel;
-    model->setTextChannel(textHeader(3000));
+    model->setPageChannel(textHeader(3000));
     callOnce(model, notification, [&storage, model] {
         model->~ValueTableModel();
         std::memset(storage, 0xA5, sizeof storage);
@@ -384,7 +473,7 @@ void TestValueTableModel::observerMayDestroyModel() {
     } else if (request) {
         model->showSample(2500);
     } else {
-        model->setTextPage(pageOf(0, {"zero"}));
+        model->setPage(pageOf(0, {"zero"}));
     }
     QVERIFY(std::all_of(std::begin(storage), std::end(storage),
                         [](unsigned char byte) { return byte == 0xA5; }));
@@ -404,11 +493,11 @@ void TestValueTableModel::observerMayInstallAgain_data() {
 void TestValueTableModel::observerMayInstallAgain() {
     QFETCH(int, notification);
     ValueTableModel model;
-    model.setTextChannel(textHeader(2));
+    model.setPageChannel(textHeader(2));
     QSignalSpy aboutToReset(&model, &QAbstractItemModel::modelAboutToBeReset);
     QSignalSpy reset(&model, &QAbstractItemModel::modelReset);
-    callOnce(&model, notification, [&model] { model.setTextPage(pageOf(0, {"new", "newer"})); });
-    model.setTextPage(pageOf(0, {"old"}));
+    callOnce(&model, notification, [&model] { model.setPage(pageOf(0, {"new", "newer"})); });
+    model.setPage(pageOf(0, {"old"}));
 
     QCOMPARE(model.rowCount(), 2);
     QCOMPARE(cell(model, 1, 1), QStringLiteral("newer"));

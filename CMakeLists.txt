@@ -79,6 +79,7 @@ qt_add_library(explorer-mdf4-backend STATIC
     src/sessions/mdf4arrayread.cpp
     src/sessions/mdf4documentsession.cpp
     src/sessions/mdf4detailpresenter.cpp
+    src/sessions/mdf4pageread.cpp
 )
 
 # The application's format list: the one place concrete adapters are constructed.

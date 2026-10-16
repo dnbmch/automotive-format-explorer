@@ -41,7 +41,7 @@ int ValueTableModel::rowCount(const QModelIndex& parent) const {
     if (parent.isValid()) {
         return 0;
     }
-    if (_content.kind == Text) {
+    if (_content.kind == Page) {
         return _content.page ? static_cast<int>(_content.page->rows()) : 0;
     }
     return _content.array ? static_cast<int>(_content.array->rows) : 0;
@@ -51,8 +51,9 @@ int ValueTableModel::columnCount(const QModelIndex& parent) const {
     if (parent.isValid() || !_content.hasChannel) {
         return 0;
     }
-    if (_content.kind == Text) {
-        return _content.header.timeName.isEmpty() ? 1 : 2;
+    if (_content.kind == Page) {
+        return (_content.header.timeName.isEmpty() ? 0 : 1) +
+               static_cast<int>(_content.header.columns.size());
     }
     return _content.array ? static_cast<int>(_content.array->columns) : 0;
 }
@@ -63,12 +64,21 @@ QVariant ValueTableModel::data(const QModelIndex& index, int role) const {
     }
     const auto row = static_cast<std::size_t>(index.row());
     const auto column = static_cast<std::size_t>(index.column());
-    if (_content.kind == Text) {
-        const TextPage& page = *_content.page;
-        if (column == 0 && !_content.header.timeName.isEmpty()) {
+    if (_content.kind == Page) {
+        const TablePage& page = *_content.page;
+        const bool timed = !_content.header.timeName.isEmpty();
+        if (column == 0 && timed) {
             return timeCell(page.time[row]);
         }
-        const std::string_view text = page.text(row);
+        // A member column may end before the page's rows.
+        const TableColumn& cells = page.columns[column - (timed ? 1 : 0)];
+        if (cells.kind == TableColumn::Kind::Values) {
+            return row < cells.values.size() ? valueText(cells.values[row]) : QString();
+        }
+        if (row >= cells.ends.size()) {
+            return QString();
+        }
+        const std::string_view text = cells.textAt(row);
         return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
     }
     const ArraySlice& slice = *_content.array;
@@ -84,7 +94,7 @@ QVariant ValueTableModel::headerData(int section, Qt::Orientation orientation, i
         if (section >= rowCount()) {
             return {};
         }
-        return _content.kind == Text
+        return _content.kind == Page
             ? QString::number(static_cast<qulonglong>(_content.page->firstSample + index))
             : labelText(_content.array->rowAxis, index);
     }
@@ -95,12 +105,13 @@ QVariant ValueTableModel::headerData(int section, Qt::Orientation orientation, i
         return labelText(_content.array->columnAxis, index);
     }
     const TableHeader& header = _content.header;
-    if (section == 0 && !header.timeName.isEmpty()) {
+    const bool timed = !header.timeName.isEmpty();
+    if (section == 0 && timed) {
         return header.timeUnit.isEmpty()
             ? header.timeName
             : QStringLiteral("%1 [%2]").arg(header.timeName, header.timeUnit);
     }
-    return QStringLiteral("Text");
+    return header.columns[index - (timed ? 1 : 0)].name;
 }
 
 ValueTableModel::Kind ValueTableModel::kind() const { return _content.kind; }
@@ -122,20 +133,21 @@ ValueTableModel::State ValueTableModel::tableState() const {
     return stateOf(_content);
 }
 
+// Notes name the rows by the header's word.
 QString ValueTableModel::message() const {
     const Content& content = _content;
-    const bool text = content.kind == Text;
+    const QString& values = content.header.values;
     switch (stateOf(content)) {
     case NoChannel:
         return {};
     case Pending:
-        return text ? QStringLiteral("Reading texts…") : QStringLiteral("Reading values…");
+        return QStringLiteral("Reading %1…").arg(values.toLower());
     case Shown: {
         QStringList notes;
         if (!content.text.isEmpty()) {
             notes << content.text;
         }
-        if (!text) {
+        if (content.kind == Array) {
             for (const TableAxis* axis : {&content.array->rowAxis, &content.array->columnAxis}) {
                 if (!axis->note.empty()) {
                     notes << QString::fromStdString(axis->note);
@@ -156,14 +168,12 @@ QString ValueTableModel::message() const {
         if (!content.text.isEmpty()) {
             return content.text;
         }
-        return text ? QStringLiteral("Texts could not be read")
-                    : QStringLiteral("Values could not be read");
+        return QStringLiteral("%1 could not be read").arg(values);
     case Refused:
         if (!content.text.isEmpty()) {
             return content.text;
         }
-        return text ? QStringLiteral("Texts exceed the viewer's limits")
-                    : QStringLiteral("Values exceed the viewer's limits");
+        return QStringLiteral("%1 exceed the viewer's limits").arg(values);
     }
     return {};
 }
@@ -172,7 +182,7 @@ QString ValueTableModel::cornerText() const {
     if (!_content.hasChannel) {
         return {};
     }
-    if (_content.kind == Text) {
+    if (_content.kind == Page) {
         return QStringLiteral("Sample");
     }
     const TableHeader& header = _content.header;
@@ -186,7 +196,7 @@ bool ValueTableModel::hasPrevious() const {
 }
 
 bool ValueTableModel::hasNext() const {
-    const std::uint64_t step = _content.kind == Text ? kTextPageSamples : 1;
+    const std::uint64_t step = _content.kind == Page ? kPageSamples : 1;
     const std::uint64_t count = _content.header.sampleCount;
     return _content.hasChannel && count > _content.wanted && count - _content.wanted > step;
 }
@@ -194,20 +204,24 @@ bool ValueTableModel::hasNext() const {
 bool ValueTableModel::busy() const { return _busy; }
 double ValueTableModel::progress() const { return _progress; }
 
+bool ValueTableModel::hasTimeColumn() const {
+    return _content.hasChannel && _content.kind == Page && !_content.header.timeName.isEmpty();
+}
+
 qulonglong ValueTableModel::firstRow() const { return _content.wanted; }
 
 QString ValueTableModel::rangeText() const {
-    if (_content.kind != Text || stateOf(_content) != Shown) {
+    if (_content.kind != Page || stateOf(_content) != Shown) {
         return {};
     }
-    const TextPage& page = *_content.page;
+    const TablePage& page = *_content.page;
     return QStringLiteral("Rows %1–%2 of %3")
         .arg(countOf(page.firstSample), countOf(page.firstSample + (page.rows() - 1)),
              countOf(_content.header.sampleCount));
 }
 
 qulonglong ValueTableModel::invalidCount() const {
-    return _content.kind == Text && _content.page ? _content.page->invalidValues : 0;
+    return _content.kind == Page && _content.page ? _content.page->invalidValues : 0;
 }
 
 qulonglong ValueTableModel::sample() const { return _content.wanted; }
@@ -238,6 +252,20 @@ QVariantList ValueTableModel::slice() const {
     return indices;
 }
 
+bool ValueTableModel::numericColumn(int column) const {
+    if (column < 0 || column >= columnCount()) {
+        return false;
+    }
+    if (_content.kind == Array) {
+        return true;
+    }
+    const bool timed = !_content.header.timeName.isEmpty();
+    if (column == 0 && timed) {
+        return false;
+    }
+    return _content.header.columns[static_cast<std::size_t>(column - (timed ? 1 : 0))].numeric;
+}
+
 // The user's number: below zero, or none, is the first sample; past the 64-bit
 // range, the last.
 void ValueTableModel::showSample(double sample) {
@@ -249,12 +277,12 @@ void ValueTableModel::showSample(double sample) {
 
 void ValueTableModel::nextPage() {
     const Content& now = latest();
-    showPosition(now.wanted + (now.kind == Text ? kTextPageSamples : 1));
+    showPosition(now.wanted + (now.kind == Page ? kPageSamples : 1));
 }
 
 void ValueTableModel::previousPage() {
     const Content& now = latest();
-    const std::uint64_t step = now.kind == Text ? kTextPageSamples : 1;
+    const std::uint64_t step = now.kind == Page ? kPageSamples : 1;
     showPosition(now.wanted > step ? now.wanted - step : 0);
 }
 
@@ -281,7 +309,7 @@ void ValueTableModel::showPosition(std::uint64_t position) {
     }
     const std::uint64_t count = now.header.sampleCount;
     position = std::min(position, count > 0 ? count - 1 : 0);
-    request(now.kind == Text ? textPageFirst(position) : position, now.slice);
+    request(now.kind == Page ? pageFirst(position) : position, now.slice);
 }
 
 void ValueTableModel::request(std::uint64_t wanted, std::vector<std::uint64_t> slice) {
@@ -308,10 +336,10 @@ void ValueTableModel::clear() {
     install(Content{});
 }
 
-void ValueTableModel::setTextChannel(TableHeader header, TextPagePtr page) {
+void ValueTableModel::setPageChannel(TableHeader header, TablePagePtr page) {
     Content next;
     next.hasChannel = true;
-    next.kind = Text;
+    next.kind = Page;
     next.header = std::move(header);
     next.page = std::move(page);
     install(std::move(next));
@@ -327,7 +355,7 @@ void ValueTableModel::setArrayChannel(TableHeader header, ArraySlicePtr slice) {
     install(std::move(next));
 }
 
-void ValueTableModel::setTextPage(TextPagePtr page, TableNote note, QString text) {
+void ValueTableModel::setPage(TablePagePtr page, TableNote note, QString text) {
     Content next = latest();
     next.page = std::move(page);
     next.note = note;
@@ -361,7 +389,7 @@ void ValueTableModel::setProgress(double fraction) {
 
 std::uint64_t ValueTableModel::wantedSample() const { return latest().wanted; }
 const std::vector<std::uint64_t>& ValueTableModel::wantedSlice() const { return latest().slice; }
-const TextPagePtr& ValueTableModel::page() const { return _content.page; }
+const TablePagePtr& ValueTableModel::page() const { return _content.page; }
 const ArraySlicePtr& ValueTableModel::arraySlice() const { return _content.array; }
 
 QString ValueTableModel::valueText(double value) {
@@ -391,7 +419,7 @@ ValueTableModel::State ValueTableModel::stateOf(const Content& content) {
     case TableNote::Refused: return Refused;
     case TableNote::None: break;
     }
-    if (content.kind == Text && content.page) {
+    if (content.kind == Page && content.page) {
         return content.page->rows() > 0 ? Shown : Empty;
     }
     if (content.kind == Array && content.array) {

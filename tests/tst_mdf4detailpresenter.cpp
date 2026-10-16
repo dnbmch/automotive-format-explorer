@@ -174,6 +174,8 @@ private slots:
     void channelCardNamesStringType();
     void textChannelIsReadableNotPlottable();
     void byteChannelIsReadableNotPlottable();
+    void channelCardNamesItsStructureAndBus();
+    void groupCardNamesBusEvents();
     void mlsdChannelNamesItsSizeChannel();
     void arrayChannelIsReadableNotPlottable();
     void arrayCardNamesEachAxis();
@@ -433,6 +435,95 @@ void TestMdf4DetailPresenter::byteChannelIsReadableNotPlottable() {
     QCOMPARE(fieldValue(details, plot, QStringLiteral("Values")), QStringLiteral("Raw Bytes"));
     QCOMPARE(fieldValue(details, plot, QStringLiteral("Plottable")), QStringLiteral("No"));
     QVERIFY(fieldValue(details, plot, QStringLiteral("Unsupported Reason")).isEmpty());
+}
+
+// A bus log's structure and its member: the member names its parent after its
+// source path, and a Bus card after Samples states the bus-event flag and the
+// source's bus type, by name, vendor-defined from 128, else reserved. A channel
+// with neither has no Bus card.
+void TestMdf4DetailPresenter::channelCardNamesItsStructureAndBus() {
+    mdf4::File document = makeDocument();
+    mdf4::ChannelGroup* group = document.mutable_groups(0);
+    mdf4::Channel* frame = group->add_channels();
+    frame->set_name("CAN_DataFrame");
+    frame->set_source_path("CAN_7_5");
+    frame->set_data_type(mdf4::BYTE_ARRAY);
+    frame->set_bit_count(120);
+    frame->set_decodable(true);
+    frame->set_binary(true);
+    frame->set_bus_event(true);
+    frame->set_source_bus_type(2);
+    mdf4::Channel* id = group->add_channels();
+    id->set_name("CAN_DataFrame.ID");
+    id->set_decodable(true);
+    id->set_member_of(1);
+    id->set_bus_event(true);
+    group->add_channels()->set_source_bus_type(128);
+    group->add_channels()->set_source_bus_type(9);
+    const Mdf4DetailPresenter presenter(document);
+    const QString channel = QStringLiteral("Channel");
+    const QString bus = QStringLiteral("Bus");
+
+    const QList<DetailSection> parent = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 1));
+    QCOMPARE(fieldValue(parent, bus, QStringLiteral("Bus Event")), QStringLiteral("Yes"));
+    QCOMPARE(fieldValue(parent, bus, QStringLiteral("Source Bus")), QStringLiteral("CAN"));
+    QVERIFY(fieldValue(parent, channel, QStringLiteral("Member Of")).isEmpty());
+    QStringList titles;
+    for (const DetailSection& section : parent) {
+        titles << section.title;
+    }
+    QCOMPARE(titles.indexOf(bus), titles.indexOf(QStringLiteral("Samples")) + 1);
+
+    const QList<DetailSection> member = presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 2));
+    QCOMPARE(member.front().fields.back().key, QStringLiteral("Member Of"));
+    QCOMPARE(fieldValue(member, channel, QStringLiteral("Member Of")), QStringLiteral("CAN_DataFrame"));
+    QCOMPARE(fieldValue(member, bus, QStringLiteral("Bus Event")), QStringLiteral("Yes"));
+    QCOMPARE(fieldValue(member, bus, QStringLiteral("Source Bus")), QStringLiteral("None"));
+
+    QCOMPARE(fieldValue(presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 3)), bus,
+                        QStringLiteral("Source Bus")),
+             QStringLiteral("Vendor-defined (128)"));
+    QCOMPARE(fieldValue(presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 4)), bus,
+                        QStringLiteral("Source Bus")),
+             QStringLiteral("Reserved (9)"));
+    QVERIFY(fieldValue(presenter.buildDetails(pathFor(Mdf4EntityKind::Channel, 0, 0)), bus,
+                       QStringLiteral("Bus Event"))
+                .isEmpty());
+}
+
+// A bus log's group: a Bus card after Recording with its bus-event flags, the
+// path separator of its composed names ("none" when it states none) and its
+// source's bus type. A group with none of them has no Bus card.
+void TestMdf4DetailPresenter::groupCardNamesBusEvents() {
+    mdf4::File document = makeDocument();
+    mdf4::ChannelGroup* frames = document.add_groups();
+    frames->set_name("CAN_DataFrame_100");
+    frames->set_bus_event(true);
+    frames->set_plain_bus_event(true);
+    frames->set_path_separator(".");
+    frames->set_source_bus_type(2);
+    document.add_groups()->set_bus_event(true);
+    const Mdf4DetailPresenter presenter(document);
+    const QString bus = QStringLiteral("Bus");
+
+    const QList<DetailSection> details = presenter.buildDetails(pathFor(Mdf4EntityKind::ChannelGroup, 1));
+    QCOMPARE(fieldValue(details, bus, QStringLiteral("Bus Events")), QStringLiteral("Yes"));
+    QCOMPARE(fieldValue(details, bus, QStringLiteral("Plain Bus Events")), QStringLiteral("Yes"));
+    QCOMPARE(fieldValue(details, bus, QStringLiteral("Path Separator")), QStringLiteral("."));
+    QCOMPARE(fieldValue(details, bus, QStringLiteral("Source Bus")), QStringLiteral("CAN"));
+    QStringList titles;
+    for (const DetailSection& section : details) {
+        titles << section.title;
+    }
+    QCOMPARE(titles.indexOf(bus), titles.indexOf(QStringLiteral("Recording")) + 1);
+
+    const QList<DetailSection> bare = presenter.buildDetails(pathFor(Mdf4EntityKind::ChannelGroup, 2));
+    QCOMPARE(fieldValue(bare, bus, QStringLiteral("Plain Bus Events")), QStringLiteral("No"));
+    QCOMPARE(fieldValue(bare, bus, QStringLiteral("Path Separator")), QStringLiteral("none"));
+    QCOMPARE(fieldValue(bare, bus, QStringLiteral("Source Bus")), QStringLiteral("None"));
+    QVERIFY(fieldValue(presenter.buildDetails(pathFor(Mdf4EntityKind::ChannelGroup, 0)), bus,
+                       QStringLiteral("Bus Events"))
+                .isEmpty());
 }
 
 // A decodable MLSD channel names the channel of its group whose value is the

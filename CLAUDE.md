@@ -139,7 +139,7 @@ No external consumers: every contract we own — proto, API, schema, file format
 - `src/core/` — `AppController` (QML singleton owning the format list, the one pending load and the tabs), `DocumentTab`, format ids, tree items, diagnostics
 - `src/builtinformats.cpp` — the one list of format id, suffixes and adapter; the only place a concrete adapter is built
 - `src/adapters/` — one `FormatAdapter` per format: loads a file on a worker thread, returns a `DocumentSession`
-- `src/sessions/` — per format a session over `AdapterSessionBase` and a detail presenter; the session holds its document (MDF4: shared with its retained reader) and owns its tree, detail and center-panel models; `mdf4arrayread` is the MDF4 session's Qt-free array-sample read (plan, reservation, axis labels)
+- `src/sessions/` — per format a session over `AdapterSessionBase` and a detail presenter; the session holds its document (MDF4: shared with its retained reader) and owns its tree, detail and center-panel models; `mdf4pageread` and `mdf4arrayread` are the MDF4 session's Qt-free page and array-sample reads (plan, reservation, lanes or axis labels)
 - `src/models/` — tree, filter, detail and tab models, the memory map, signal map, signal plot and value table models, the format-neutral plot and table data
 - `src/ui/` — `QQuickPaintedItem` renderers: memory grid, signal grid, signal plot
 

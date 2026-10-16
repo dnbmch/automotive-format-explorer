@@ -8,61 +8,94 @@
 #include <string_view>
 #include <vector>
 
-// Format-neutral value-table data. A producer's worker builds a text page from
-// the text chunks of one bounded read, or an array slice from one sample of an
-// array channel; the table installs it immutable and shared, so a producer's
-// cache and the table hold one copy.
+// Format-neutral value-table data. A producer's worker builds a page from the
+// chunks of one bounded read per column, or an array slice from one sample of
+// an array channel; the table installs it immutable and shared, so a
+// producer's cache and the table hold one copy.
 
-// A text table moves in pages of this many samples, aligned on its multiples.
-constexpr std::uint64_t kTextPageSamples = 1024;
-// A cell keeps at most this many UTF-8 Bytes of its text, its cut marker included.
-constexpr std::size_t kTextCellBytes = 1024;
+// A page holds this many samples, aligned on its multiples.
+constexpr std::uint64_t kPageSamples = 1024;
+// A text cell keeps at most this many UTF-8 Bytes of its text, its cut marker
+// included.
+constexpr std::size_t kCellBytes = 1024;
 
 // The first sample of the page that holds `sample`.
-constexpr std::uint64_t textPageFirst(std::uint64_t sample) {
-    return sample - sample % kTextPageSamples;
+constexpr std::uint64_t pageFirst(std::uint64_t sample) {
+    return sample - sample % kPageSamples;
 }
 
-// Consecutive samples of a text channel, a time and a UTF-8 text each. An
-// invalid sample is an empty text.
-struct TextPage {
-    std::uint64_t firstSample = 0;    // absolute index of row 0
-    std::uint64_t invalidValues = 0;  // of the rows, those the producer delivered invalid
-    std::vector<double> time;
-    std::vector<std::uint32_t> ends;  // each row's end offset in `utf8`
-    std::vector<char> utf8;           // the rows' texts, one after another
+// One column of a page: a value per row, or a UTF-8 text per row. A column may
+// hold fewer rows than its page; its cells past its end are empty.
+struct TableColumn {
+    enum class Kind : std::uint8_t { Values, Text };
+    Kind kind = Kind::Values;
+    std::size_t cellBytes = 0;        // Text: the most one cell holds, its cut marker included
+    std::vector<double> values;       // Values: one per row, NaN where invalid
+    std::vector<std::uint32_t> ends;  // Text: each row's end offset in `text`
+    std::vector<char> text;           // Text: the rows' texts, one after another
 
-    std::size_t rows() const { return time.size(); }
-    std::string_view text(std::size_t row) const;
-    // The structure and its array capacities: what the page retains.
+    std::string_view textAt(std::size_t row) const;
+    // The structure and its array capacities.
     std::uint64_t bytes() const;
 };
 
-using TextPagePtr = std::shared_ptr<const TextPage>;
+// Consecutive samples of a channel: a time each and the page's columns.
+struct TablePage {
+    std::uint64_t firstSample = 0;    // absolute index of row 0
+    std::uint64_t invalidValues = 0;  // of the rows, those the producer's own lane delivered invalid
+    std::vector<double> time;
+    std::vector<TableColumn> columns;
+
+    std::size_t rows() const { return time.size(); }
+    // The structure, its columns' slots and their capacities: what the page
+    // retains.
+    std::uint64_t bytes() const;
+};
+
+using TablePagePtr = std::shared_ptr<const TablePage>;
+
+// What a producer asks of one column: its kind and, for a Text column, its
+// cell cap in Bytes, its cut marker included.
+struct TableColumnSpec {
+    TableColumn::Kind kind = TableColumn::Kind::Values;
+    std::size_t cellBytes = kCellBytes;
+};
 
 // Builds the page of at most `rows` samples from `first` out of the chunks of
-// one read, delivered in sample order. A text longer than kTextCellBytes keeps
-// its longest prefix that ends on a character boundary and leaves room for "…".
-// Construction allocates the time and offset arrays for `rows` and
-// kTextCellBytes of text arena per row, the most a cell takes, so nothing
-// reallocates; finish() hands the page over as built. For every page of
-// `rows`, delivered in full or short, page->bytes() + sizeof(TextPageBuilder)
-// == reservation(rows).
-class TextPageBuilder {
+// one read per column, each delivered in sample order. Construction allocates
+// the time for `rows` and per column its values for `rows`, or its offsets for
+// `rows` and its text at `rows` × its cell cap, the most its cells take, so
+// nothing reallocates; finish() hands the page over as built. For every page
+// of `rows`, delivered in full or short, page->bytes() +
+// sizeof(TablePageBuilder) == reservation(rows, columns).
+class TablePageBuilder {
 public:
-    TextPageBuilder(std::uint64_t first, std::uint64_t rows);
-    // What the builder allocates, before it exists: the page's structure and
-    // arrays, and sizeof(TextPageBuilder), which covers the 16-Byte header of the
-    // make_shared block that holds the page on libstdc++ (tst_tablestorage measures
-    // it; a runtime with a larger header exceeds the reservation by the difference).
-    static std::uint64_t reservation(std::uint64_t rows);
+    TablePageBuilder(std::uint64_t first, std::uint64_t rows, const std::vector<TableColumnSpec>& columns);
+    // What the builder allocates, before it exists: the page's structure, its
+    // column slots and arrays, and sizeof(TablePageBuilder), which covers the
+    // 16-Byte header of the make_shared block that holds the page on libstdc++
+    // (tst_tablestorage measures it; a runtime with a larger header exceeds the
+    // reservation by the difference).
+    static std::uint64_t reservation(std::uint64_t rows, const std::vector<TableColumnSpec>& columns);
 
-    void add(const double* time, const std::string_view* text, std::size_t size);
-    // After the read succeeded, with the producer's count of invalid samples.
-    TextPagePtr finish(std::uint64_t invalidValues);
+    void addTime(const double* time, std::size_t size);
+    void addValues(std::size_t column, const double* values, std::size_t size);
+    // A text longer than the column's cap keeps its longest prefix that ends on
+    // a character boundary and leaves room for "…".
+    void addText(std::size_t column, const std::string_view* texts, std::size_t size);
+    // Each value as two uppercase hex digits per Byte, separated by spaces; a
+    // value whose text would pass the column's cap keeps its first (cap − 3) / 3
+    // Bytes and ends with "…". An empty value is an empty cell.
+    void addBytes(std::size_t column, const std::string_view* values, std::size_t size);
+    // Forgets a column's cells, as of a read that did not end Ok; its storage
+    // stays allocated.
+    void clearColumn(std::size_t column);
+    // After the reads succeeded, with the count of invalid samples of the
+    // producer's own lane.
+    TablePagePtr finish(std::uint64_t invalidValues);
 
 private:
-    std::shared_ptr<TextPage> _page;
+    std::shared_ptr<TablePage> _page;
 };
 
 // The labels along one axis of an array table: zero-based indices, one point

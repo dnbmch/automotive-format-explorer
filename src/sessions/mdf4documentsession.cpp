@@ -31,21 +31,47 @@ QString channelTitle(const mdf4::Channel& channel, int index) {
         : text(channel.name());
 }
 
+QString countText(std::uint64_t count, const char* noun) {
+    return QStringLiteral("%1 %2%3")
+        .arg(static_cast<qulonglong>(count))
+        .arg(QLatin1String(noun), count == 1 ? QString() : QStringLiteral("s"));
+}
+
+// The channels of `group` whose member_of is `channel`: a structure's direct
+// members.
+std::uint64_t memberCount(const mdf4::ChannelGroup& group, std::uint32_t channel) {
+    std::uint64_t members = 0;
+    for (const mdf4::Channel& member : group.channels()) {
+        if (member.has_member_of() && member.member_of() == channel) {
+            ++members;
+        }
+    }
+    return members;
+}
+
+// A master-typed member of a compact structure is never its group's axis (MDF
+// Bus Logging AS §4.2.4; the reader reads it as a value channel), so only a
+// master outside a structure is the axis.
+bool isAxis(const mdf4::Channel& channel) {
+    return channel.is_master() && !channel.has_member_of();
+}
+
 // A master carries the group's domain, so it is described by what it is rather
 // than offered as a signal: decoding it returns its own samples in both time
 // and value, which plots as a 45-degree line. A text channel's samples are text,
-// a Byte channel's raw Bytes and an array channel's sample is a whole array, so
-// their roles say so, the array's as its type and shape. A plottable channel has
-// no role.
-QString channelRole(const mdf4::Channel& channel) {
-    if (channel.is_master()) {
+// a Byte channel's raw Bytes, a structure's Bytes beside its `members` direct
+// members, and an array channel's sample is a whole array, so their roles say
+// so, the array's as its type and shape. A plottable channel has no role.
+QString channelRole(const mdf4::Channel& channel, std::uint64_t members) {
+    if (isAxis(channel)) {
         return QStringLiteral("Master channel");
     }
     if (channel.textual()) {
         return QStringLiteral("Text channel");
     }
     if (channel.binary()) {
-        return QStringLiteral("Byte channel");
+        return members == 0 ? QStringLiteral("Byte channel")
+                            : QStringLiteral("Structure of %1").arg(countText(members, "member"));
     }
     if (channel.has_array()) {
         return QStringLiteral("%1 %2").arg(arrayTypeText(channel.array().ca_type()),
@@ -57,19 +83,13 @@ QString channelRole(const mdf4::Channel& channel) {
     return {};
 }
 
-QString channelSubtitle(const mdf4::Channel& channel) {
+QString channelSubtitle(const mdf4::Channel& channel, std::uint64_t members) {
     const QString unit = text(channel.unit());
-    const QString role = channelRole(channel);
+    const QString role = channelRole(channel, members);
     if (role.isEmpty()) {
         return unit;
     }
     return unit.isEmpty() ? role : QStringLiteral("%1  ·  %2").arg(unit, role);
-}
-
-QString countText(std::uint64_t count, const char* noun) {
-    return QStringLiteral("%1 %2%3")
-        .arg(static_cast<qulonglong>(count))
-        .arg(QLatin1String(noun), count == 1 ? QString() : QStringLiteral("s"));
 }
 
 // Rounded up, so a size never reads smaller than it is.
@@ -80,8 +100,8 @@ QString sizeText(std::uint64_t bytes) {
 }
 
 // Why a finished read shows nothing, in the plot's terms. `what` names the
-// values: the channel's samples, the exact ones of a view, or texts. Cancelled
-// work shows nothing at all and never gets here.
+// values: the channel's samples, the exact ones of a view, or a table's rows.
+// Cancelled work shows nothing at all and never gets here.
 std::pair<PlotNote, QString> noteFor(const mdf4::ScanResult& scan, PlotBuild build,
                                      const QString& what) {
     const mdf4::Outcome& outcome = scan.outcome;
@@ -122,12 +142,6 @@ TableNote tableNote(PlotNote note) {
     return note == PlotNote::Refused ? TableNote::Refused : TableNote::Failed;
 }
 
-// The samples of a text page from `first`: its share of the stated count, which
-// the reader clamps every request to.
-std::uint64_t pageRows(std::uint64_t stated, std::uint64_t first) {
-    return first < stated ? std::min(kTextPageSamples, stated - first) : 0;
-}
-
 // The name of dimension `d`'s axis: its axis channel, titled as the tree titles
 // it, else the dimension as the detail panel's Array card counts it.
 QString axisName(const mdf4::File& document, const mdf4::ChannelArray& array, int d) {
@@ -135,9 +149,8 @@ QString axisName(const mdf4::File& document, const mdf4::ChannelArray& array, in
     if (!dimension.axis_from_channel()) {
         return QStringLiteral("Axis %1").arg(d + 1);
     }
-    const int channel = static_cast<int>(dimension.axis_channel());
-    return channelTitle(
-        document.groups(static_cast<int>(dimension.axis_group())).channels(channel), channel);
+    return text(mdf4page::channelTitle(document.groups(static_cast<int>(dimension.axis_group())),
+                                       static_cast<int>(dimension.axis_channel())));
 }
 
 TableAxis tableAxis(mdf4array::AxisLabels&& labels) {
@@ -348,24 +361,35 @@ PlotHeader Mdf4DocumentSession::header(ChannelKey key) const {
     return result;
 }
 
-// The time is the time master's: a text table's Time column, an array sample's
-// time. A group without one shows its samples by their indices alone. An array
-// names the axes of its rows and columns, its last two dimensions, or of its
-// rows alone when it has one.
+// The time is the time master's: a page's time column, an array sample's time.
+// A group without one shows its samples by their indices alone. A page's
+// columns are its plan's lanes, so the header and the read agree on their
+// order. An array names the axes of its rows and columns, its last two
+// dimensions, or of its rows alone when it has one.
 TableHeader Mdf4DocumentSession::tableHeader(ChannelKey key) const {
-    const mdf4::Channel& channel = _metadata->groups(static_cast<int>(key.first))
-                                       .channels(static_cast<int>(key.second));
+    const mdf4::ChannelGroup& group = _metadata->groups(static_cast<int>(key.first));
+    const mdf4::Channel& channel = group.channels(static_cast<int>(key.second));
     const PlotHeader plot = header(key);
     TableHeader result;
     result.name = plot.name;
-    result.role = channelRole(channel);
+    result.role = channelRole(channel, memberCount(group, key.second));
     result.unit = plot.unit;
     result.sampleCount = statedCount(key);
     if (_source.axis(key.first).kind == mdf4::AxisKind::Master) {
         result.timeName = plot.domainName;
         result.timeUnit = plot.domainUnit;
     }
-    if (channel.has_array()) {
+    if (!channel.has_array()) {
+        const mdf4page::PagePlan plan = mdf4page::pagePlan(*_metadata, key.first, key.second, 0);
+        result.values = QString::fromLatin1(plan.values);
+        for (const mdf4page::Lane& lane : plan.members) {
+            result.columns.push_back({text(lane.name), lane.kind == mdf4page::Lane::Kind::Values});
+        }
+        result.columns.push_back({plan.kind == mdf4page::Lane::Kind::Text ? QStringLiteral("Text")
+                                                                          : QStringLiteral("Bytes"),
+                                  false});
+    } else {
+        result.values = QStringLiteral("Values");
         const mdf4::ChannelArray& array = channel.array();
         for (const mdf4::ArrayDimension& dimension : array.dimensions()) {
             result.dimensions.push_back(dimension.size());
@@ -386,7 +410,9 @@ Mdf4DocumentSession::Request Mdf4DocumentSession::tableRequest(
     const mdf4::Channel& channel = _metadata->groups(static_cast<int>(key.first))
                                        .channels(static_cast<int>(key.second));
     if (!channel.has_array()) {
-        return Request{Request::Kind::TextPage, key, nullptr, {}, textPageFirst(sample)};
+        Request request{Request::Kind::Page, key, nullptr, {}, pageFirst(sample)};
+        request.page = mdf4page::pagePlan(*_metadata, key.first, key.second, request.first);
+        return request;
     }
     Request request{Request::Kind::ArraySample, key, nullptr, {}, sample};
     request.plan = mdf4array::arrayPlan(*_metadata, _source.axis, key.first, key.second, sample,
@@ -411,15 +437,15 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t sele
                          static_cast<std::uint32_t>(path.channelIndex)};
     const mdf4::Channel& channel =
         _metadata->groups(path.groupIndex).channels(path.channelIndex);
-    if (!channel.is_master() && channel.decodable() && (channel.textual() || channel.has_array())) {
+    if (!isAxis(channel) && channel.decodable() &&
+        (channel.textual() || channel.binary() || channel.has_array())) {
         selectTable(key, selection);
         return;
     }
     QPointer<SignalPlotModel> model(_plot_model.get());
 
-    // A master is the group's own domain, not a signal against it; a Byte
-    // channel is readable but has no view yet.
-    if (channel.is_master() || !channel.decodable() || channel.binary()) {
+    // A master is the group's own domain, not a signal against it.
+    if (isAxis(channel) || !channel.decodable()) {
         _selected.reset();
         _pending.reset();
         cancelActive();
@@ -427,9 +453,8 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t sele
             return;
         }
         model->setSignal(header(key), {}, PlotNote::Empty,
-                         channel.is_master() ? QStringLiteral("Master channel — this group's time axis")
-                         : channel.binary()  ? QStringLiteral("Byte channel — not plottable")
-                                             : QStringLiteral("This channel type is not plottable"));
+                         isAxis(channel) ? QStringLiteral("Master channel — this group's time axis")
+                                         : QStringLiteral("This channel type is not plottable"));
         if (model && selection == _selections) {
             updateBusy();
         }
@@ -474,15 +499,15 @@ void Mdf4DocumentSession::selectChannel(const Mdf4Path& path, std::uint64_t sele
     }
 }
 
-// A decodable text or array channel: the table shows the text channel's first
-// page, or the array's sample 0 with every slice index 0, from the cache at
-// once, from the read already in flight for it, or from a new read.
+// A decodable text, Byte or array channel: the table shows the first page, or
+// the array's sample 0 with every slice index 0, from the cache at once, from
+// the read already in flight for it, or from a new read.
 void Mdf4DocumentSession::selectTable(ChannelKey key, std::uint64_t selection) {
     Request wanted = tableRequest(key, 0, {});
     const bool array = wanted.kind == Request::Kind::ArraySample;
     _selected = key;
     _center = Center::Table;
-    TextPagePtr page;
+    TablePagePtr page;
     ArraySlicePtr slice;
     if (Retained* cached = retainedTable(wanted)) {
         cached->lastUse = ++_clock;
@@ -504,7 +529,7 @@ void Mdf4DocumentSession::selectTable(ChannelKey key, std::uint64_t selection) {
     if (array) {
         _table_model->setArrayChannel(tableHeader(key), std::move(slice));
     } else {
-        _table_model->setTextChannel(tableHeader(key), std::move(page));
+        _table_model->setPageChannel(tableHeader(key), std::move(page));
     }
     if (!model || selection != _selections) {
         return;
@@ -590,14 +615,14 @@ void Mdf4DocumentSession::onTableWanted() {
     QPointer<ValueTableModel> table(_table_model.get());
     if (Retained* cached = retainedTable(wanted)) {
         cached->lastUse = ++_clock;
-        const TextPagePtr page = cached->page;
+        const TablePagePtr page = cached->page;
         const ArraySlicePtr slice = cached->slice;
         _pending.reset();
         cancelActive();
         if (wanted.kind == Request::Kind::ArraySample) {
             table->setArraySlice(slice);
         } else {
-            table->setTextPage(page);
+            table->setPage(page);
         }
         if (table) {
             updateBusy();
@@ -645,7 +670,7 @@ void Mdf4DocumentSession::onScanFinished() {
                         {}, completion.window->bytes(), ++_clock});
             }
             break;
-        case Request::Kind::TextPage:
+        case Request::Kind::Page:
             if (completion.page) {
                 retain({request.kind, request.channel, {}, {}, completion.page, {}, request.first,
                         {}, completion.page->bytes(), ++_clock});
@@ -679,13 +704,13 @@ void Mdf4DocumentSession::onScanFinished() {
                 model->setWindow({}, note, text);
             }
             break;
-        case Request::Kind::TextPage:
+        case Request::Kind::Page:
             if (completion.page) {
-                _table_model->setTextPage(completion.page);
+                _table_model->setPage(completion.page, TableNote::None, text(completion.note));
             } else {
-                const auto [note, text] =
-                    noteFor(completion.scan, completion.build, QStringLiteral("Texts"));
-                _table_model->setTextPage({}, tableNote(note), text);
+                const auto [note, text] = noteFor(completion.scan, completion.build,
+                                                  QString::fromLatin1(request.page.values));
+                _table_model->setPage({}, tableNote(note), text);
             }
             break;
         case Request::Kind::ArraySample:
@@ -718,7 +743,7 @@ void Mdf4DocumentSession::onProgress(int permille) {
     }
     _active->progress = permille / 1000.0;
     const Request::Kind kind = _active->request.kind;
-    if (kind == Request::Kind::TextPage || kind == Request::Kind::ArraySample) {
+    if (kind == Request::Kind::Page || kind == Request::Kind::ArraySample) {
         _table_model->setProgress(_active->progress);
     } else {
         _plot_model->setProgress(_active->progress);
@@ -748,9 +773,9 @@ void Mdf4DocumentSession::startPending() {
         bytes = PlotWindowBuilder::reservation(request.window);
         what = QStringLiteral("Exact samples");
         break;
-    case Request::Kind::TextPage:
-        bytes = TextPageBuilder::reservation(pageRows(statedCount(request.channel), request.first));
-        what = QStringLiteral("Texts");
+    case Request::Kind::Page:
+        bytes = mdf4page::reservation(request.page);
+        what = QString::fromLatin1(request.page.values);
         break;
     case Request::Kind::ArraySample:
         bytes = mdf4array::reservation(request.plan);
@@ -774,8 +799,8 @@ void Mdf4DocumentSession::startPending() {
     case Request::Kind::Window:
         _plot_model->setWindow({}, PlotNote::Refused, text);
         break;
-    case Request::Kind::TextPage:
-        _table_model->setTextPage({}, TableNote::Refused, text);
+    case Request::Kind::Page:
+        _table_model->setPage({}, TableNote::Refused, text);
         break;
     case Request::Kind::ArraySample:
         _table_model->setArraySlice({}, TableNote::Refused, text);
@@ -794,9 +819,9 @@ void Mdf4DocumentSession::launch(Request request, std::uint64_t reserved) {
     const Request::Kind kind = request.kind;
     const ChannelKey channel = request.channel;
     const PlotWindowRequest cover = request.window;
-    const std::uint64_t first = request.first;
     const std::uint64_t stated = statedCount(channel);
     mdf4array::ArrayPlan plan = request.plan;
+    mdf4page::PagePlan page = request.page;
     _active = Active{std::move(request), cancel, reserved, -1.0};
 
     if (kind == Request::Kind::ArraySample) {
@@ -820,23 +845,20 @@ void Mdf4DocumentSession::launch(Request request, std::uint64_t reserved) {
         return;
     }
 
-    if (kind == Request::Kind::TextPage) {
-        // One read of the page's rows, as many as the builder holds: the
-        // reader delivers no more, whatever it clamps the request to.
+    if (kind == Request::Kind::Page) {
+        // The page's own lane, then each member's, in this one task, each read
+        // of the page's rows, as many as the builder holds: the reader delivers
+        // no more, whatever it clamps the request to.
         _watcher.setFuture(QtConcurrent::run(
-            [scanText = _source.scanText, channel, first, rows = pageRows(stated, first),
-             cancel](QPromise<Completion>& promise) {
+            [scan = _source.scan, scanText = _source.scanText, scanBytes = _source.scanBytes,
+             page = std::move(page), cancel](QPromise<Completion>& promise) {
                 const mdf4::Control control = readControl(promise, cancel.get());
-                TextPageBuilder builder(first, rows);
+                mdf4page::PageResult result =
+                    mdf4page::readPage(page, scan, scanText, scanBytes, control);
                 Completion completion;
-                completion.scan = scanText(channel.first, channel.second, first, rows, control,
-                                           [&builder](const mdf4::TextChunk& chunk) {
-                                               builder.add(chunk.time, chunk.text, chunk.size);
-                                               return mdf4::Visit::Continue;
-                                           });
-                if (completion.scan.outcome.status == mdf4::Status::Ok) {
-                    completion.page = builder.finish(completion.scan.invalidValues);
-                }
+                completion.scan = std::move(result.scan);
+                completion.page = std::move(result.page);
+                completion.note = std::move(result.note);
                 promise.addResult(std::move(completion));
             }));
         return;
@@ -941,7 +963,7 @@ bool Mdf4DocumentSession::Retained::held() const {
         return overview.use_count() > 1;
     case Request::Kind::Window:
         return window.use_count() > 1;
-    case Request::Kind::TextPage:
+    case Request::Kind::Page:
         return page.use_count() > 1;
     case Request::Kind::ArraySample:
         return slice.use_count() > 1;
@@ -970,8 +992,8 @@ Mdf4DocumentSession::Retained* Mdf4DocumentSession::retainedWindow(ChannelKey ke
     return nullptr;
 }
 
-// A text page by its channel and first sample; an array slice by its channel,
-// sample and element window. A text read has no element window: both sides
+// A page by its channel and first sample; an array slice by its channel,
+// sample and element window. A page read has no element window: both sides
 // carry the default.
 Mdf4DocumentSession::Retained* Mdf4DocumentSession::retainedTable(const Request& wanted) {
     for (Retained& entry : _retained) {
@@ -1003,8 +1025,10 @@ std::uint64_t Mdf4DocumentSession::treeBytes(const mdf4::File& document) {
         for (const mdf4::Channel& channel : group.channels()) {
             ++rows;
             // The name or "Channel <n>", then the unit and an axis, text or
-            // unplottable role, or an array's: 28 for the separator and type, 24
-            // for each printed size with its " × ", and 24 for " … (<count>
+            // unplottable role, a Byte channel's or a structure's ("Structure
+            // of <count> members", the count within the opening allowance's
+            // channels), or an array's: 28 for the separator and type, 24 for
+            // each printed size with its " × ", and 24 for " … (<count>
             // dimensions)", whose count may take ten digits because the first
             // size has no " × ".
             std::uint64_t role = 0;
@@ -1012,7 +1036,9 @@ std::uint64_t Mdf4DocumentSession::treeBytes(const mdf4::File& document) {
                 const int dimensions = channel.array().dimensions_size();
                 role = 28 + 24 * static_cast<std::uint64_t>(std::min(dimensions, kArrayDimensionsShown)) +
                        (dimensions > kArrayDimensionsShown ? 24 : 0);
-            } else if (channel.is_master() || channel.textual() || channel.binary() || !channel.decodable()) {
+            } else if (channel.binary()) {
+                role = 36;
+            } else if (isAxis(channel) || channel.textual() || !channel.decodable()) {
                 role = 20;
             }
             textBytes += (channel.name().empty() ? 18 : channel.name().size()) +
@@ -1067,18 +1093,29 @@ void Mdf4DocumentSession::buildTree() {
             SemanticKind::Section,
             Mdf4Path{Mdf4EntityKind::ChannelGroup, groupIndex, -1});
 
+        // A structure's member follows its parent in the walk and is listed
+        // under it, by the rest of its name; each channel's row and its count
+        // of direct members, by channel index.
+        std::vector<TreeItem*> items(static_cast<std::size_t>(group.channels_size()), nullptr);
+        std::vector<std::uint64_t> members(items.size(), 0);
+        for (const mdf4::Channel& channel : group.channels()) {
+            if (channel.has_member_of()) {
+                ++members[channel.member_of()];
+            }
+        }
         for (int channelIndex = 0; channelIndex < group.channels_size(); ++channelIndex) {
             const auto& channel = group.channels(channelIndex);
             SemanticKind semanticKind = SemanticKind::Entity;
-            if (channel.is_master()) {
+            if (isAxis(channel)) {
                 semanticKind = SemanticKind::Attribute;
             } else if (!channel.decodable()) {
                 semanticKind = SemanticKind::Diagnostic;
             }
-            appendEntity(
-                groupItem,
-                channelTitle(channel, channelIndex),
-                channelSubtitle(channel),
+            const auto index = static_cast<std::size_t>(channelIndex);
+            items[index] = appendEntity(
+                channel.has_member_of() ? items[channel.member_of()] : groupItem,
+                text(mdf4page::channelTitle(group, channelIndex)),
+                channelSubtitle(channel, members[index]),
                 channel.decodable() ? QStringLiteral("channel")
                                     : QStringLiteral("channel-unsupported"),
                 semanticKind,

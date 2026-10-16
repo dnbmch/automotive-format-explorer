@@ -1,5 +1,54 @@
 # automotive-format-explorer — handoff
 
+## 2026-10-17 — Byte channels and bus-logging structures show pages; members nest — OPEN
+
+Selecting a decodable Byte channel turns the center to the value table, a page of
+its samples' times and raw Bytes as hex; a compact structure's parent, such as a
+CAN log's `CAN_DataFrame`, adds a column per direct member (a number, a text or hex)
+before its own Bytes, read lane by lane in one task over the page's rows
+([value table](ref/value_table.md#pages)). The text page is the one-column case of
+that page (`TablePage`, `TablePageBuilder`, `mdf4page`). A structure's members are
+rows under its row, titled by the rest of their name after the parent's name and
+the group's separator; the detail panel keeps the full name and gains the
+bus-logging cards (Member Of, Bus Event, Source Bus; the group's Bus Events, Plain
+Bus Events, Path Separator, Source Bus). A master-typed member is a value channel,
+never the axis. The reader is unchanged (mdf4-parser `75cced1`); the plan is
+archived: [bus-logging frame table](archive/bus_logging_frame_table.md). OPEN only
+for the check below.
+
+Evidence: 26 of 26 suites green (ctest exit 0) in the workspace's
+`build-tables-explorer/` (SOURCE, Debug), 0 compiler warnings on a clean rebuild;
+the corpus suites ran their cases against the local ASAM examples, the new ones
+over `BusLogging/CAN`, every cell tied to mdf4-parser's `corpus_bus.cpp`
+expectations (an independent asammdf dump) and to a raw-record decode of the
+files. Every new case was seen failing first: the implementer's (tree nesting 12
+rows against 7, the table not opening, compile errors on the old types) and the
+lead's three (the emptied member column showing "text 0", the master-typed member
+labelled "Master channel", the cell-cap pin reading 1,024 against 45 under a
+widened cap). `tst_tablestorage`: the frame page of eight value columns, a 24-Byte
+MLSD hex column and a 45-Byte structure column reserves 153,536 B and retains
+153,520, peak equal to the reservation, with and without an emptied column; the
+text page keeps 1,061,032 / 1,061,016. An independent xhigh audit confirmed every
+clause by its own derivation and its own parse of the CAN files, found no defect
+and six low findings, all fixed in the batch: the cap rule pinned apart from the
+plan, a storage case for the emptied column, two docs still naming text and array
+channels only, a master-typed member shown as the axis, the hex cut's arithmetic
+below a three-Byte cap; a document whose member precedes its parent would null
+the tree parent, which the reader's indexing invariant excludes.
+
+UNVERIFIED — operator-visual, the CAN frame table: open the corpus's
+`BusLogging/CAN/Vector_CAN_DataFrame_Sort_Bus.MF4`. Pass: the group lists `t` and
+`CAN_DataFrame` ("Structure of 9 members") with nine rows under it titled
+`BusChannel` … `DataLength`, no `CAN_DataFrame.` prefix; selecting `CAN_DataFrame`
+shows eleven columns, `t [s]` at 120 px, the numbers right-aligned, `DataBytes` and
+`Bytes` left; row 0 reads 0.019968196, 1, "64 00 00 00", 4, 0, 100, 0, 0, 0, 4 and
+"64 00 00 00 00 04 04 64 00 00 00 00 00 00 00", the footer "Rows 0–1,023 of 1,457",
+the next-page arrow "Rows 1,024–1,456 of 1,457" with ID 18 and "00 01 00 00" in its
+last row; a member's detail panel shows Member Of and a Bus card (Bus Event Yes,
+Source Bus CAN), the group's Bus card Path Separator "none"; `ID` plots and
+`DataBytes` shows its own hex page. Fail: a flat member list, a plot or plot note
+for `CAN_DataFrame`, clipped or misaligned columns, or other cell values.
+
 ## 2026-10-13 — text and array channels show value tables — OPEN
 
 Selecting a decodable text channel switches the center panel from the plot to a

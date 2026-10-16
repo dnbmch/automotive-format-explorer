@@ -108,7 +108,7 @@ If your format has nothing graphical to show in the middle column, leave `center
 | A2L | `qrc:/qt/qml/ExplorerApp/qml/components/MemoryView.qml` | `MemoryMapModel` |
 | DBC, LDF | `qrc:/qt/qml/ExplorerApp/qml/components/SignalMapView.qml` | `SignalMapModel` |
 | MDF4 | `qrc:/qt/qml/ExplorerApp/qml/components/SignalPlotView.qml` | `SignalPlotModel` |
-| MDF4, a text or array channel selected | `qrc:/qt/qml/ExplorerApp/qml/components/ValueTableView.qml` | `ValueTableModel` |
+| MDF4, a text, Byte or array channel selected | `qrc:/qt/qml/ExplorerApp/qml/components/ValueTableView.qml` | `ValueTableModel` |
 
 A session that switches its center view on a selection, as MDF4 does, returns the
 current view and model from both functions; `AppController` announces the switch

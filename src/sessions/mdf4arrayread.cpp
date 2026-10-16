@@ -1,5 +1,7 @@
 #include "sessions/mdf4arrayread.h"
 
+#include "sessions/mdf4pageread.h"
+
 #include <algorithm>
 #include <cstddef>
 #include <utility>
@@ -30,8 +32,7 @@ AxisSource axisSource(const mdf4::File& document, const AxisFunction& axis, std:
         source.group = dimension.axis_group();
         source.channel = dimension.axis_channel();
         // Named as the tree titles a channel.
-        source.name = axisChannel.name().empty() ? "Channel " + std::to_string(source.channel + 1)
-                                                 : axisChannel.name();
+        source.name = mdf4page::channelTitle(axisGroup, static_cast<int>(source.channel));
         source.intervals = axisChannel.array().ca_type() == 3;
         source.leftOpen = source.intervals && axisChannel.array().left_open();
         source.labels = dimension.size() + (source.intervals ? 1 : 0);

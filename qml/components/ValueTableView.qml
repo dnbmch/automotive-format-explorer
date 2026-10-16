@@ -4,10 +4,10 @@ import QtQuick.Layouts
 import "."
 import ExplorerApp
 
-// The value table of a text or array channel: a page of texts with their
-// sample indices and times, or one sample of an array as rows × columns with
-// its axes as headers. The property and signal names match the center-panel
-// Loader contract.
+// The value table of a text, Byte or array channel: a page of samples with
+// their indices and times and a column per value, or one sample of an array as
+// rows × columns with its axes as headers. The property and signal names match
+// the center-panel Loader contract.
 Item {
     id: tableView
 
@@ -29,6 +29,11 @@ Item {
                                      : String(isArray ? mapModel.sample : mapModel.firstRow)
     readonly property int timeColumnWidth: 120
     readonly property int rowHeight: 22
+    // Columns as wide as their content: an array's, and a page's beside its
+    // time column when there are several; a page's one value column fills the
+    // rest.
+    readonly property bool fitColumns: isArray
+        || (mapModel ? mapModel.columnCount() - (mapModel.hasTimeColumn ? 1 : 0) > 1 : false)
     // An array's outer dimensions of more than one element, outer first: the
     // ones with an index to choose.
     readonly property var selectable: {
@@ -43,7 +48,13 @@ Item {
         return dimensions
     }
 
-    // The column headers' font, which an array column's width also fits.
+    // Numbers right-aligned, anything else left: every array column, a page's
+    // value columns.
+    function alignmentOf(column) {
+        return mapModel && mapModel.numericColumn(column) ? Text.AlignRight : Text.AlignLeft
+    }
+
+    // The column headers' font, which a fitted column's width also fits.
     FontMetrics {
         id: headerMetrics
         font.family: Theme.fontMono
@@ -158,7 +169,7 @@ Item {
         }
 
         // Where the table stands: a sample field with the previous and next
-        // page (text) or sample (array); below it, one index per outer
+        // page, or an array's sample; below it, one index per outer
         // dimension with a choice, in one row that scrolls sideways, so the
         // controls' height does not grow with the rank.
         Rectangle {
@@ -388,6 +399,7 @@ Item {
                     delegate: Rectangle {
                         id: columnCell
                         required property var model
+                        required property int column
                         implicitWidth: 64
                         implicitHeight: tableView.rowHeight + 2
                         color: Theme.bgHeader
@@ -398,7 +410,7 @@ Item {
                             anchors.leftMargin: 6
                             anchors.rightMargin: 6
                             verticalAlignment: Text.AlignVCenter
-                            horizontalAlignment: tableView.isArray ? Text.AlignRight : Text.AlignLeft
+                            horizontalAlignment: tableView.alignmentOf(columnCell.column)
                             text: columnCell.model.display ?? ""
                             elide: Text.ElideRight
                             font.family: Theme.fontMono
@@ -444,14 +456,16 @@ Item {
                     boundsBehavior: Flickable.StopAtBounds
                     model: tableView.mapModel
 
-                    // Text: Time at a fixed width and Text filling the rest; array
-                    // values as wide as their cells need.
+                    // A page's time at a fixed width and its one value column
+                    // filling the rest; any other column as wide as its cells
+                    // need.
                     columnWidthProvider: function(column) {
-                        if (tableView.isArray)
-                            return -1
-                        if (table.columns > 1 && column === 0)
+                        const timed = tableView.mapModel ? tableView.mapModel.hasTimeColumn : false
+                        if (timed && column === 0)
                             return tableView.timeColumnWidth
-                        return Math.max(120, table.width - (table.columns > 1 ? tableView.timeColumnWidth : 0))
+                        if (tableView.fitColumns)
+                            return -1
+                        return Math.max(120, table.width - (timed ? tableView.timeColumnWidth : 0))
                     }
                     rowHeightProvider: function(row) { return tableView.rowHeight }
                     onWidthChanged: forceLayout()
@@ -464,9 +478,9 @@ Item {
                         required property string display
                         required property int row
                         required property int column
-                        // An array column fits its values and its header's label.
+                        // A fitted column fits its values and its header's label.
                         implicitWidth: Math.max(72, valueLabel.implicitWidth + 12,
-                                                tableView.isArray
+                                                tableView.fitColumns
                                                 ? headerMetrics.advanceWidth(String(
                                                       tableView.mapModel.headerData(
                                                           column, Qt.Horizontal))) + 12
@@ -480,7 +494,7 @@ Item {
                             anchors.leftMargin: 6
                             anchors.rightMargin: 6
                             verticalAlignment: Text.AlignVCenter
-                            horizontalAlignment: tableView.isArray ? Text.AlignRight : Text.AlignLeft
+                            horizontalAlignment: tableView.alignmentOf(valueCell.column)
                             text: valueCell.display
                             elide: Text.ElideRight
                             font.family: Theme.fontMono
@@ -493,7 +507,7 @@ Item {
         }
 
         // The note on why nothing, or not everything, shows; else the rows a
-        // text page shows and how many of them were invalid.
+        // page shows and how many of them were invalid.
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 24

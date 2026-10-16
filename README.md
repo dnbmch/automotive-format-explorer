@@ -47,7 +47,7 @@ Browse every parsed entity in a structured tree with expand/collapse, keyboard s
 - **A2L**: Modules, Measurements, Characteristics, Axis Points, Compu Methods, Record Layouts, Units, Functions, Groups, Typedef Characteristics/Structures/Axes, Instances, Variant Coding, XCP and CCP protocol summaries
 - **DBC**: Messages, Signals, Nodes, Value Tables, Attribute Definitions, Environment Variables, Signal Groups
 - **LDF**: Frames, Signals, Nodes (Master/Slave), Schedule Tables, Signal Encoding Types, Signal Representations
-- **MDF4**: Channel Groups and Channels, each channel showing its unit and whether it is plottable, an array channel its type and shape (sources, storage layouts, invalidation Bytes, conversions, masters, validity rules, array dimensions and axes, and unsupported-feature reasons live in the detail panel)
+- **MDF4**: Channel Groups and Channels, each channel showing its unit and whether it is plottable, an array channel its type and shape, a structure such as a bus log's `CAN_DataFrame` its members nested under it (sources, storage layouts, invalidation Bytes, conversions, masters, validity rules, array dimensions and axes, bus-logging flags and bus types, and unsupported-feature reasons live in the detail panel)
 
 ### Detail Panel
 
@@ -107,6 +107,10 @@ per open file.
 - Unsupported channels stay browsable and explain why they are not plottable
 - Text channels open a value table in place of the plot: each sample's index, time and
   text, 1,024 rows per page, a text longer than 1 KiB cut and marked
+- Byte channels open the value table with each sample's Bytes as hex; a bus-logging
+  structure (a CAN log's `CAN_DataFrame`) shows a row per frame with its time, a column
+  per member and the frame's own Bytes, its members nested under it in the tree, each
+  keeping its own view
 - Array channels (look-ups, classification results and other MDF4 arrays) open the
   value table one sample at a time: the last two dimensions as rows and columns, the
   axes as headers, an index for each outer dimension
@@ -196,7 +200,7 @@ are used directly through the same public targets as installed packages.
 - [docs/ref/memory_view.md](docs/ref/memory_view.md) — A2L memory grid visual + interaction reference.
 - [docs/ref/signal_map.md](docs/ref/signal_map.md) — DBC/LDF signal grid visual + interaction reference.
 - [docs/ref/signal_plot.md](docs/ref/signal_plot.md) — format-neutral time-series plot reference.
-- [docs/ref/value_table.md](docs/ref/value_table.md) — MDF4 value table: center switch, text pages, array samples, accounting, states, cell text.
+- [docs/ref/value_table.md](docs/ref/value_table.md) — MDF4 value table: center switch, pages, array samples, accounting, states, cell text.
 - [docs/ref/keyboard.md](docs/ref/keyboard.md) — application + grid keyboard shortcuts.
 - [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — canonical parser dependencies, runtime dependency closure, static backend composition.
 - [docs/ref/release_packaging.md](docs/ref/release_packaging.md) — Windows and Linux package paths, launch gates, release publish gating.
