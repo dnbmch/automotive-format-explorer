@@ -47,7 +47,10 @@ it reads an array slice's axis notes, and a producer's text says only why nothin
 shows. The note's string slot is part of the page's structure and its reservation;
 its text is not counted. `tst_mdf4documentsession`'s `cachedPageKeepsItsNote`, both
 rows, failed on `11b5435` at the note after confirming the cache hit and the empty
-column, and passes; the seven table suites are green, 0 warnings.
+column, and passes; the seven table suites are green, 0 warnings. The independent
+reviewer accepted the correction with no new finding: its own session probe and both
+rows pass, each cache route showing the note with no new read and the column empty,
+the next page its text and no note.
 
 UNVERIFIED — operator-visual, the CAN frame table: open the corpus's
 `BusLogging/CAN/Vector_CAN_DataFrame_Sort_Bus.MF4`. Pass: the group lists `t` and
