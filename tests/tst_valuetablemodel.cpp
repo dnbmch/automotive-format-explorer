@@ -271,8 +271,9 @@ void TestValueTableModel::textWithoutTimeAxisAndEmpty() {
 
 // A page of the time, a Values column, a Text column and the channel's own
 // column: a value or text per cell, an empty one past a short member column,
-// headers by name, numbers right-aligned, and the notes in the page's word. An
-// array has no time column and numbers in every column.
+// headers by name, numbers right-aligned, the page's own note as the message
+// and the other notes in the page's word. An array has no time column and
+// numbers in every column.
 void TestValueTableModel::pageColumns() {
     TableHeader frames;
     frames.name = QStringLiteral("CAN_DataFrame");
@@ -313,7 +314,7 @@ void TestValueTableModel::pageColumns() {
     builder.addValues(0, ids, 3);
     builder.addText(1, notes, 2);
     builder.addBytes(2, bytes, 3);
-    model.setPage(builder.finish(1), TableNote::None, QStringLiteral("Note could not be read: test"));
+    model.setPage(builder.finish(1, "Note could not be read: test"));
     QCOMPARE(model.tableState(), ValueTableModel::Shown);
     QCOMPARE(model.message(), QStringLiteral("Note could not be read: test"));
     QCOMPARE(model.rowCount(), 3);

@@ -706,7 +706,7 @@ void Mdf4DocumentSession::onScanFinished() {
             break;
         case Request::Kind::Page:
             if (completion.page) {
-                _table_model->setPage(completion.page, TableNote::None, text(completion.note));
+                _table_model->setPage(completion.page);
             } else {
                 const auto [note, text] = noteFor(completion.scan, completion.build,
                                                   QString::fromLatin1(request.page.values));
@@ -858,7 +858,6 @@ void Mdf4DocumentSession::launch(Request request, std::uint64_t reserved) {
                 Completion completion;
                 completion.scan = std::move(result.scan);
                 completion.page = std::move(result.page);
-                completion.note = std::move(result.note);
                 promise.addResult(std::move(completion));
             }));
         return;

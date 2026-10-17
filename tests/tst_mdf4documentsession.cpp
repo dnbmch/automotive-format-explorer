@@ -909,6 +909,8 @@ private slots:
     void frameTableShown();
     void memberKeepsItsOwnView();
     void failedMemberLeavesItsColumnEmpty();
+    void cachedPageKeepsItsNote_data();
+    void cachedPageKeepsItsNote();
     void masterTypedMemberIsAValueChannel();
     void textPageShown();
     void textPagesAreBounded();
@@ -1295,6 +1297,64 @@ void TestMdf4DocumentSession::failedMemberLeavesItsColumnEmpty() {
     QCOMPARE(failed->rowCount(), 0);
     QCOMPARE(other->resultBytes().results, std::size_t(0));
     QCOMPARE(changed->requests().size(), std::size_t(2));
+}
+
+void TestMdf4DocumentSession::cachedPageKeepsItsNote_data() {
+    QTest::addColumn<bool>("paging");
+    QTest::newRow("channel selected again") << false;
+    QTest::newRow("page shown again") << true;
+}
+
+// A page whose member column a failed read emptied shows its note again when
+// the cache installs it, whether the channel is selected again or the table
+// returns to it from the next page, which read in full and has no note.
+void TestMdf4DocumentSession::cachedPageKeepsItsNote() {
+    QFETCH(bool, paging);
+    auto scans = std::make_shared<Scans>(false, 2048);
+    scans->chunk = 1;
+    scans->failAfterChunks = 1;
+    scans->outcome = [](const Scans::Request& request) -> std::optional<mdf4::ScanResult> {
+        if (request.first == 0 && request.lane == Scans::Request::Text &&
+            request.channel == std::uint32_t(kNote)) {
+            return finished(mdf4::Status::Error, "block cannot be read", "DG[0]/CG[0]/CN[8]");
+        }
+        return std::nullopt;
+    };
+    const QString note =
+        QStringLiteral("Note could not be read: block cannot be read (DG[0]/CG[0]/CN[8])");
+    auto session = openSession(scans, makeFrameDocument(2048));
+    const quint64 frame = channelKey(*session, kFrame);
+    session->selectNode(frame);
+    ValueTableModel* table = tableOf(*session);
+    QVERIFY(table);
+    QVERIFY(settle(*session));
+    QCOMPARE(table->message(), note);
+    if (paging) {
+        table->nextPage();
+        QVERIFY(settle(*session));
+        QCOMPARE(table->tableState(), ValueTableModel::Shown);
+        QCOMPARE(table->data(table->index(0, 3)).toString(), QStringLiteral("text 1024"));
+        QVERIFY(table->message().isEmpty());
+    } else {
+        session->selectNode(groupKey(*session));
+        QVERIFY(settle(*session));
+    }
+
+    const std::size_t reads = scans->requests().size();
+    if (paging) {
+        table->previousPage();
+    } else {
+        session->selectNode(frame);
+        table = tableOf(*session);
+        QVERIFY(table);
+    }
+    QVERIFY(settle(*session));
+    QCOMPARE(scans->requests().size(), reads);
+    QCOMPARE(table->tableState(), ValueTableModel::Shown);
+    QCOMPARE(table->firstRow(), qulonglong(0));
+    QCOMPARE(table->data(table->index(0, 3)).toString(), QString());
+    QCOMPARE(table->data(table->index(0, 1)).toString(), QStringLiteral("700"));
+    QCOMPARE(table->message(), note);
 }
 
 // A master-typed member is never its group's axis (the reader reads it as a

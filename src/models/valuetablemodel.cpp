@@ -143,15 +143,13 @@ QString ValueTableModel::message() const {
     case Pending:
         return QStringLiteral("Reading %1…").arg(values.toLower());
     case Shown: {
-        QStringList notes;
-        if (!content.text.isEmpty()) {
-            notes << content.text;
+        if (content.kind == Page) {
+            return QString::fromStdString(content.page->note);
         }
-        if (content.kind == Array) {
-            for (const TableAxis* axis : {&content.array->rowAxis, &content.array->columnAxis}) {
-                if (!axis->note.empty()) {
-                    notes << QString::fromStdString(axis->note);
-                }
+        QStringList notes;
+        for (const TableAxis* axis : {&content.array->rowAxis, &content.array->columnAxis}) {
+            if (!axis->note.empty()) {
+                notes << QString::fromStdString(axis->note);
             }
         }
         return notes.join(QStringLiteral("  ·  "));

@@ -125,6 +125,7 @@ PageResult readPage(const PagePlan& plan, const ScanFunction& scan, const ScanTe
     if (result.scan.outcome.status != mdf4::Status::Ok) {
         return result;
     }
+    std::string note;
     for (std::size_t column = 0; column < plan.members.size(); ++column) {
         const Lane& lane = plan.members[column];
         mdf4::ScanResult read = readLane(plan, lane.kind, lane.channel, column, false, builder, scan,
@@ -136,14 +137,14 @@ PageResult readPage(const PagePlan& plan, const ScanFunction& scan, const ScanTe
         }
         if (outcome.status != mdf4::Status::Ok) {
             builder.clearColumn(column);
-            result.note += result.note.empty() ? "" : "  ·  ";
-            result.note += lane.name + " could not be read: " + outcome.message;
+            note += note.empty() ? "" : "  ·  ";
+            note += lane.name + " could not be read: " + outcome.message;
             if (!outcome.location.empty()) {
-                result.note += " (" + outcome.location + ")";
+                note += " (" + outcome.location + ")";
             }
         }
     }
-    result.page = builder.finish(result.scan.invalidValues);
+    result.page = builder.finish(result.scan.invalidValues, std::move(note));
     return result;
 }
 

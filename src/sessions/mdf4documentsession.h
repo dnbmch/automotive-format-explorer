@@ -19,7 +19,6 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -146,8 +145,7 @@ private:
     };
 
     // What a read returns to the GUI thread: the plot's result or the table's.
-    // An array sample's outcome and samples read come in `scan`, a page's note
-    // on its member columns in `note`.
+    // An array sample's outcome and samples read come in `scan`.
     struct Completion {
         mdf4::ScanResult scan;
         PlotOverviewPtr overview;
@@ -155,7 +153,6 @@ private:
         PlotBuild build = PlotBuild::Continue;  // the window builder's final state
         TablePagePtr page;
         ArraySlicePtr slice;
-        std::string note;
     };
 
     // A finished result, keyed by its request: an overview by its channel; a

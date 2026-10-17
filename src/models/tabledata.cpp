@@ -124,8 +124,9 @@ void TablePageBuilder::clearColumn(std::size_t column) {
     target.text.clear();
 }
 
-TablePagePtr TablePageBuilder::finish(std::uint64_t invalidValues) {
+TablePagePtr TablePageBuilder::finish(std::uint64_t invalidValues, std::string note) {
     _page->invalidValues = invalidValues;
+    _page->note = std::move(note);
     return std::move(_page);
 }
 

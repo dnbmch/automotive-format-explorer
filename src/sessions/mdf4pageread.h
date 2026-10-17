@@ -83,14 +83,13 @@ std::uint64_t reservation(const PagePlan& plan);
 struct PageResult {
     mdf4::ScanResult scan;  // the own lane's, or that of the member read that ended the page
     TablePagePtr page;
-    std::string note;       // why member columns end early
 };
 
 // On a worker: the own lane, then each member's, over the page's samples in
 // one task. A member read that ends Error or ResourceLimit leaves its column
 // empty (the reader's chunks are provisional until a read returns Ok) and says
-// so in the note; one that ends Cancelled or SourceChanged ends the page. Every
-// read receives `control` unchanged.
+// so in the page's note; one that ends Cancelled or SourceChanged ends the
+// page. Every read receives `control` unchanged.
 PageResult readPage(const PagePlan& plan, const ScanFunction& scan, const ScanTextFunction& scanText,
                     const ScanBytesFunction& scanBytes, const mdf4::Control& control);
 

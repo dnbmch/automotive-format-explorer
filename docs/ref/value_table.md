@@ -63,8 +63,8 @@ result allowance ([MDF4 reads](../arch/architecture.md#mdf4-reads)).
   into its column. A member read that ends Cancelled or SourceChanged ends the page
   with that outcome; one that ends Error or ResourceLimit leaves its column empty
   (the reader's chunks are provisional until a read ends Ok) and adds "<member> could
-  not be read: <reason> (<location>)" to the page's note, several joined with
-  "  ·  ", which the footer shows in place of the rows' range. Every
+  not be read: <reason> (<location>)" to the page's note (`TablePage::note`), several
+  joined with "  ·  ", which the footer shows in place of the rows' range. Every
   read receives the task's `Control` unchanged, so each read's progress starts afresh
   and the table shows the highest so far. The rows are the samples the own lane
   delivered, so an unsorted group's short read shows what arrived; a column shorter
@@ -155,8 +155,8 @@ result allowance ([MDF4 reads](../arch/architecture.md#mdf4-reads)).
   storage is its reservation (`sizeof(TablePageBuilder)` covers the `make_shared`
   block header) and every page of `rows`, delivered in full or short, holds
   `reservation(rows, columns) − sizeof(TablePageBuilder)` as `TablePage::bytes()`, the
-  structure, its column slots and their capacities; the completion replaces the
-  reservation with it in one step.
+  structure, its column slots and their capacities; its note is not counted. The
+  completion replaces the reservation with it in one step.
 - `mdf4array::reservation(plan) = sizeof(ArraySample) + 8 B × (rows × columns + 1 +
   row labels + column labels)`, saturating, is admitted the same way. The plan refers
   to a fixed axis's points in the document (`AxisSource::fixed`, a pointer; the task
@@ -173,10 +173,11 @@ result allowance ([MDF4 reads](../arch/architecture.md#mdf4-reads)).
 - A page is retained like a plot result, keyed by its channel and first sample, an
   array slice by its channel, sample and element window: held while the table shows
   it, evicted least recently used when nothing holds it. Selecting the channel again
-  shows its first page or sample from the cache. When held results leave no room the
-  read is refused with "<rows> need N of result memory, but results in use hold H of
-  this file's A", the rows named "Texts", "Frames" or "Bytes" for a page and "Values"
-  for an array.
+  shows its first page or sample from the cache. A page holds its note and an array
+  slice its axis notes, so a result from the cache shows the message its read showed.
+  When held results leave no room the read is refused with "<rows> need N of result
+  memory, but results in use hold H of this file's A", the rows named "Texts",
+  "Frames" or "Bytes" for a page and "Values" for an array.
 
 ## States and notes
 
@@ -191,15 +192,16 @@ terms, its rows named by the header's word, "Texts", "Frames", "Bytes" or "Value
 "… could not be read: <reason> (<location>)", "… could not be read: the file changed
 since it was opened; reopen it", "… need more working memory than the decoder
 allows: …", "… exceed a reader limit: …" (an array slice above the reader's
-`readValues` among them), or the allowance's refusal above. A shown page's member
-notes and a shown array sample's axis notes are the message. `busy` and `progress`
+`readValues` among them), or the allowance's refusal above. A shown page's note and a
+shown array sample's axis notes are the message. `busy` and `progress`
 describe the read in flight for the selected channel. The footer shows the message,
 else a page's "Rows a–b of N" and its count of invalid samples.
 
 The model's producer contract is `setPageChannel(header, page)` and
 `setArrayChannel(header, slice)`, which show a channel with its first page or sample
-(null while it is read), `setPage(page, note, text)`, `setArraySlice(slice, note,
-text)`, `clear()`, `setBusy()` and `setProgress()`. The header (`TableHeader`) carries
+(null while it is read), `setPage(page, note, text)` and `setArraySlice(slice, note,
+text)`, whose note and text say why no page or slice shows, `clear()`, `setBusy()`
+and `setProgress()`. The header (`TableHeader`) carries
 the rows' word (`values`) and a page's columns after its time column, each a name
 and whether it holds numbers. Every change installs through one reset that follows
 the detail model's pattern: content installed again from an observer of the

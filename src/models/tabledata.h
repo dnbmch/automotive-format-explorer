@@ -45,10 +45,11 @@ struct TablePage {
     std::uint64_t invalidValues = 0;  // of the rows, those the producer's own lane delivered invalid
     std::vector<double> time;
     std::vector<TableColumn> columns;
+    std::string note;  // why a column shows no cells, when there is a reason to say
 
     std::size_t rows() const { return time.size(); }
     // The structure, its columns' slots and their capacities: what the page
-    // retains.
+    // retains; its note is not counted.
     std::uint64_t bytes() const;
 };
 
@@ -91,8 +92,8 @@ public:
     // stays allocated.
     void clearColumn(std::size_t column);
     // After the reads succeeded, with the count of invalid samples of the
-    // producer's own lane.
-    TablePagePtr finish(std::uint64_t invalidValues);
+    // producer's own lane and the page's note.
+    TablePagePtr finish(std::uint64_t invalidValues, std::string note = {});
 
 private:
     std::shared_ptr<TablePage> _page;

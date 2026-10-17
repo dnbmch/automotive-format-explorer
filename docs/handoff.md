@@ -26,15 +26,28 @@ rows against 7, the table not opening, compile errors on the old types) and the
 lead's three (the emptied member column showing "text 0", the master-typed member
 labelled "Master channel", the cell-cap pin reading 1,024 against 45 under a
 widened cap). `tst_tablestorage`: the frame page of eight value columns, a 24-Byte
-MLSD hex column and a 45-Byte structure column reserves 153,536 B and retains
-153,520, peak equal to the reservation, with and without an emptied column; the
-text page keeps 1,061,032 / 1,061,016. An independent xhigh audit confirmed every
+MLSD hex column and a 45-Byte structure column reserves 153,568 B and retains
+153,552, peak equal to the reservation, with and without an emptied column; the
+text page keeps 1,061,064 / 1,061,048. An independent xhigh audit confirmed every
 clause by its own derivation and its own parse of the CAN files, found no defect
 and six low findings, all fixed in the batch: the cap rule pinned apart from the
 plan, a storage case for the emptied column, two docs still naming text and array
 channels only, a master-typed member shown as the axis, the hex cut's arithmetic
 below a three-Byte cap; a document whose member precedes its parent would null
 the tree parent, which the reader's indexing invariant excludes.
+
+The independent review of the frame table (the workspace's
+`build-frame-independent-review/REVIEW.md`) found one P2 defect, corrected: a page
+whose failed member read emptied a column lost its note when the cache installed it
+again, on selecting the channel again or returning to the page, so the footer showed
+the plain row range over the empty column. The note is the page's own
+(`TablePage::note`, given to `TablePageBuilder::finish`), so the cache, the table and
+the read hold it with the cells; the model reads a shown page's note from the page as
+it reads an array slice's axis notes, and a producer's text says only why nothing
+shows. The note's string slot is part of the page's structure and its reservation;
+its text is not counted. `tst_mdf4documentsession`'s `cachedPageKeepsItsNote`, both
+rows, failed on `11b5435` at the note after confirming the cache hit and the empty
+column, and passes; the seven table suites are green, 0 warnings.
 
 UNVERIFIED — operator-visual, the CAN frame table: open the corpus's
 `BusLogging/CAN/Vector_CAN_DataFrame_Sort_Bus.MF4`. Pass: the group lists `t` and
