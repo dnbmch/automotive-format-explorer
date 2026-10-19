@@ -49,7 +49,7 @@ Every doc line costs context in every session that reads it. Write less, prune m
 
 Run what the work needs: builds, tests, the app, attached hardware. These bounds limit waste, not permission.
 
-- Reachable hardware (serial, USB, a programmer, a bench over SSH) is yours to drive: flash (back up first), read, measure. Fit the configuration to the wiring already there; a reading that contradicts it comes with the one check that decides. Hand the user only physical steps, one line each.
+- Reachable hardware (serial, USB, a programmer, a bench over SSH) is yours to drive: flash (back up only what the repo cannot rebuild — stored settings, calibration, a factory image), read, measure. Fit the configuration to the wiring already there; a reading that contradicts it comes with the one check that decides. Hand the user only physical steps, one line each.
 - Secrets live in the gitignored credential file named in `## Project notes`: store ones the user pastes there and say where; never in a tracked file, a commit or a handoff.
 - Probe a missing toolchain once; if absent, say so and stop.
 - If avoidable, nothing on the user's screen — no window, focus change, input, screenshot or clipboard on the console session. Browsers run headless, and only when a visual change needs seeing (`/looky`); desktop GUIs run in the agent's own RDP session; tests offscreen. One that needs a desktop while none is reachable is listed in the handoff as not run. Use srv-one when it makes sense.
@@ -106,7 +106,7 @@ Non-trivial work: map the code → findings with evidence → a recommendation p
 - `[skip ci]` on every commit by default: free pushing must not load CI. CI runs when the user asks; when a repo's CI has not run for a week of pushes, ask whether to run it.
 - No remote: commit locally and say so if the action only adds commits, otherwise stop. A failed push: stop and say so. Never force-push, amend a pushed commit or skip hooks.
 - Submodules: fetch them (`git submodule foreach git fetch origin`) and build the push set at push time, never from a list; push each submodule before its parent.
-- Other sessions share these trees: their finished work commits with yours, named in the message; leave it only while visibly mid-edit and broken, never revert it. Stage explicit paths, never `git add -A`. Announce the paths you claim and go on — a cross-session message can expire undelivered.
+- Other sessions share these trees: their finished work commits with yours, named in the message; leave it only while visibly mid-edit and broken, never revert it. Stage explicit paths, never `git add -A`. Parallel agents in one tree share git's index: each stages its own paths and commits with `git commit -m … -- <paths>`. Announce the paths you claim and go on — a cross-session message can expire undelivered.
 <!-- /block:c0a002 -->
 
 <!-- block: Greenfield — No Backwards-Compat [id:9e7f1d] -->
