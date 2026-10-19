@@ -15,12 +15,14 @@ built-in format list is how a format arrives, not a change to the shell.
 
 ## Format coverage
 
-- MDF4 structure browsing, metadata details, and single-channel plotting of whole
-  recordings (a bounded overview plus exact windows of the view) are implemented.
-  A release carrying them, real-recording acceptance and further viewer increments
-  are the [remaining MDF4 viewer scope](docs/plans/mdf4_viewer.md).
-- New-format backends follow the workspace parser-research priority once their
-  parsers exist: ARXML → ODX → FIBEX. Each plugs in as a `FormatAdapter` +
+- MDF4 structure browsing, metadata details, single-channel plotting of whole
+  recordings, and text, Byte, frame and array tables are implemented. The recorded
+  release carries MDF4 browsing and plotting; the tables are on the source head.
+  Real-recording acceptance and further viewer increments are the
+  [remaining MDF4 viewer scope](docs/plans/mdf4_viewer.md).
+- New-format backends follow the [workspace strategy](../docs/plans/strategy_2026h2.md):
+  concrete evaluation/outreach demand gates further format work, ODX before ARXML.
+  No new format is queued. Each selected parser plugs in as a `FormatAdapter` +
   `DocumentSession` with its own tree/detail/center wiring.
 
 ## View richness

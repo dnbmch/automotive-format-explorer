@@ -17,9 +17,9 @@ what is not built.
   ([value table](../ref/value_table.md)), the others are listed as not plottable with
   their reason.
 - If a real recording that matters comes back mostly non-plottable, dump it with the
-  parser's `mdf4_json` example, map each non-decodable channel class to the reader
-  increment that unlocks it (the increments in `mdf4-parser/roadmap.md`) and
-  spec those increments as a locked plan.
+  parser's `mdf4_json` example and map each non-decodable channel class to the reader's
+  [deferred breadth](../../../mdf4-parser/docs/backlog.md). Define a bounded increment
+  for the needed coverage before implementation.
 
 ## Viewer increments
 
