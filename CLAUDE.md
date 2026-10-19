@@ -123,6 +123,7 @@ No external consumers: every contract we own — proto, API, schema, file format
 - Reply in the user's language. A document keeps its own; a new one defaults to English. Hungarian or German must read as native.
 - Editing the user's text: fix what was asked, keep their wording and tone; show a diff for anything more.
 - Outward text (mails, offers, slides): short and factual — no hype, hedging or generic advice, no question our documents already answer or whose answer changes nothing. Say where a deliverable was saved; never imply it was sent.
+- A report to a client states findings over the whole evidence — one figure with its spread, each limit with its cause and whose it is (our software or their hardware) — never a diary of runs or versions; corrections go in the covering mail.
 <!-- /block:f11e7a -->
 
 ## Project notes
