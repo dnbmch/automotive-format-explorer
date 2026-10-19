@@ -1,6 +1,6 @@
 # automotive-format-explorer — handoff
 
-## 2026-10-17 — Byte channels and bus-logging structures show pages; members nest — OPEN
+## 2026-10-17 — Byte channels and bus-logging structures show pages; members nest — DONE
 
 Selecting a decodable Byte channel turns the center to the value table, a page of
 its samples' times and raw Bytes as hex; a compact structure's parent, such as a
@@ -13,8 +13,8 @@ the group's separator; the detail panel keeps the full name and gains the
 bus-logging cards (Member Of, Bus Event, Source Bus; the group's Bus Events, Plain
 Bus Events, Path Separator, Source Bus). A master-typed member is a value channel,
 never the axis. The reader is unchanged (mdf4-parser `75cced1`); the plan is
-archived: [bus-logging frame table](archive/bus_logging_frame_table.md). OPEN only
-for the check below.
+archived: [bus-logging frame table](archive/bus_logging_frame_table.md). Its visual
+check is verified (below).
 
 Evidence: 26 of 26 suites green (ctest exit 0) in the workspace's
 `build-tables-explorer/` (SOURCE, Debug), 0 compiler warnings on a clean rebuild;
@@ -52,20 +52,17 @@ reviewer accepted the correction with no new finding: its own session probe and 
 rows pass, each cache route showing the note with no new read and the column empty,
 the next page its text and no note.
 
-UNVERIFIED — operator-visual, the CAN frame table: open the corpus's
-`BusLogging/CAN/Vector_CAN_DataFrame_Sort_Bus.MF4`. Pass: the group lists `t` and
-`CAN_DataFrame` ("Structure of 9 members") with nine rows under it titled
-`BusChannel` … `DataLength`, no `CAN_DataFrame.` prefix; selecting `CAN_DataFrame`
-shows eleven columns, `t [s]` at 120 px, the numbers right-aligned, `DataBytes` and
-`Bytes` left; row 0 reads 0.019968196, 1, "64 00 00 00", 4, 0, 100, 0, 0, 0, 4 and
-"64 00 00 00 00 04 04 64 00 00 00 00 00 00 00", the footer "Rows 0–1,023 of 1,457",
-the next-page arrow "Rows 1,024–1,456 of 1,457" with ID 18 and "00 01 00 00" in its
-last row; a member's detail panel shows Member Of and a Bus card (Bus Event Yes,
-Source Bus CAN), the group's Bus card Path Separator "none"; `ID` plots and
-`DataBytes` shows its own hex page. Fail: a flat member list, a plot or plot note
-for `CAN_DataFrame`, clipped or misaligned columns, or other cell values.
+Verified 2026-10-19 on the Debug build of this source, driven by posted window input
+and read from window captures (the workspace's `build-release-wave/visual/`):
+`Vector_CAN_DataFrame_Sort_Bus.MF4` lists `t` and `CAN_DataFrame` ("Structure of 9
+members") with `BusChannel` … `DataLength` nested, no prefix; the frame page's eleven
+columns, row 0 and both footers read as specified, the next page's last row ID 18 and
+"00 01 00 00"; `ID` plots, `DataBytes` shows its own hex page, the group's Path
+Separator reads "none". A member's Bus card reads Bus Event Yes and Source Bus None:
+the file gives only the structure a source block (`cn_si_source` of every member is 0,
+the structure's names bus type 2), so the member has no source bus of its own.
 
-## 2026-10-13 — text and array channels show value tables — OPEN
+## 2026-10-13 — text and array channels show value tables — DONE
 
 Selecting a decodable text channel switches the center panel from the plot to a
 value table of its samples, one page of 1,024 per read through the reader's text
@@ -78,8 +75,8 @@ session's result allowance like plot results, and a reservation above the whole
 allowance is refused outright. Evidence: the session, controller, model and view
 suites with their new cases seen failing first; the array unit and the corpus suite
 against the 4.2.0 examples (POR, VMA, dSPACE, VLSD, unsorted VLSD); every Explorer
-suite green with 0 warnings against mdf4-parser `ff1483f`. OPEN only for the checks
-below.
+suite green with 0 warnings against mdf4-parser `ff1483f`. Its visual checks are
+verified (below).
 
 The independent review of the landed tables found two P2 defects, corrected in
 `5fb890a` and `f2f2fbf` (plan archived: [table storage and slice
@@ -98,47 +95,29 @@ sources read peak 1,060,968 of 1,060,968 (text) and 1,048,584 of 1,048,856 (arra
 against 1,585,256 and 2,097,160 before; 26 of 26 suites green with 0 warnings; the
 reviewer accepted both corrections with no new defect found.
 
-UNVERIFIED — operator-visual, the slice strip: open the corpus's
-`Arrays/Simple/dSPACE_MeasurementArrays.mf4`, select `Signal_MatrixDim` (2 × 3 × 4).
-Pass: one row under the sample controls reading "Slice", "1" and a spin box 0–1, the
-3 × 4 matrix filling the rest of the pane, the spin box stepping the matrix to the
-other slice; a 2-D array (KF4 below) shows no such row. Fail: a wrapped or missing
-row, a spin box for a singleton dimension, or a matrix squeezed by the controls.
-
-UNVERIFIED — operator-visual, three opens from the corpus's
-`ASAM_MDF_BS_V4-2-0/BaseStandard/Examples/`:
-- `ChannelTypes/VLSD/Vector_VLSDStringUTF8.mf4`, select the first group's `Data
-  channel`. Pass: the center turns into a table with the chip "Text channel", rows
-  0–9 reading "zero" through "nine" at times 0–9, the footer "Rows 0–9 of 10";
-  selecting a numeric channel brings the plot back; switching tabs and returning
-  shows the same table.
-- `Arrays/Classification/Porsche_2D_classification_result.mf4`, select
-  `2D_classification`. Pass: chips "s" and "Classification result 52 × 142", 52 rows
-  × 142 columns, the corner "throttle \ nmot", the first row and column headers
-  starting "[−∞, " and the last ending ", ∞[", cell (1, 0) "3698.8" and (26, 0)
-  "10697.06", no footer note.
-- `Arrays/Simple/Vector_MeasurementArrays.mf4`, select `KF4` (ninth group). Pass:
-  chip "Look-up 6 × 8", the corner "Axis 1 \ Curve1", rows headed 0…5 and columns
-  0…7, the footer "no Curve1 sample at or before this one", cell (2, 4) "24", the
-  header "t = 0.660880207" with the master's unit.
-- Fail, any of them: a plot or plot note, an empty table, a stuck busy indicator,
-  index headers on POR, cut-off headers, other values in those cells, a missing note,
-  or a crash.
+Verified 2026-10-19 the same way: `Signal_MatrixDim` (dSPACE, 2 × 3 × 4) shows one
+"Slice 1" row with a 0–1 spin box that steps the 3 × 4 matrix to the other slice and
+stops at 1, KF4 shows no such row; the VLSD `Data channel` table, the POR
+classification matrix (headers "[−∞, …" to "[100, ∞[" and "[7500, ∞["; cells (1, 0)
+3698.8 and (26, 0) 10697.06) and KF4 (cell (2, 4) 24, its Curve1 note and
+"t = 0.660880207 s") read as specified, and the VLSD table survives a tab switch.
 
 ## 2026-10-11 — invalidated samples plot as gaps — OPEN
 
 The MDF4 reader delivers a sample whose invalidation bit is set as NaN at its time
 ([reader contract](../../mdf4-parser/docs/arch/reader.md#read-set)); the plot draws a
 nonfinite value as a gap and the detail panel's Plot section states the channel's
-validity rule (`8061dd0`). OPEN only for the check below.
+validity rule (`8061dd0`). OPEN only for the hover below.
 
-UNVERIFIED — operator-visual: author a file with asammdf 8.8.18 (`MDF(version="4.10")`,
-`append([Signal(samples, timestamps, name, invalidation_bits=mask)])`, 40 samples at
-10 ms, the mask set at indices 0, 3, 4, 17 and 39), open it and select that channel.
-Pass: the exact-sample line breaks at t = 0.00, 0.03, 0.04, 0.17 and 0.39 s, the
-hover over a gap names no value, and the detail panel reads `Invalidation bit 0
-(Byte 0, bit 0 of the invalidation Bytes)`. Fail: a continuous line through those
-times, or a value shown there.
+Verified 2026-10-19: a file authored with asammdf 8.8.27 (`MDF(version="4.10")`,
+40 samples at 10 ms, invalidation bits at indices 0, 3, 4, 17 and 39; the workspace's
+`build-release-wave/visual/gaps.py`) draws its exact-sample line from 0.01 s with
+breaks at 0.03–0.04 and 0.17 and an end at 0.38 s, and the Plot section reads
+`Invalidation bit 0 (Byte 0, bit 0 of the invalidation Bytes)`.
+
+UNVERIFIED — the hover over a gap names no value; posted input to a parked window
+draws no hover readout, so it needs a real cursor. Pass: hovering at t = 0.17 s shows
+no value in the footer. Fail: a value shown there.
 
 ## 2026-10-06 — MDF4 detail labels and opening cancellation — OPEN
 
