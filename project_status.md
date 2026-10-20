@@ -92,7 +92,8 @@ deferred items in [docs/backlog.md](docs/backlog.md).
   (Linux, Ubuntu 24.04), packages and gates both, publishes the GitHub release, gates
   the downloaded assets again and records the manifest entry. Qt 6.10.1 on both. The
   repository has no workflows.
-- Packaging: Windows by dependency closure (`scripts/package_windows.sh`), Linux as
+- Packaging: Windows by dependency closure with `LICENSE.txt` and third-party notices
+  derived from what is packaged (`scripts/package_windows.sh`), Linux as
   an AppImage (`scripts/package_linux.sh`, linuxdeploy pinned) whose executable links
   `libGL.so.1`. Both launch gates run the packaged app's `--check`
   (`scripts/smoke_windows.ps1`; `scripts/smoke_linux.sh` on a virtual X server); the
@@ -106,8 +107,10 @@ The [latest release](https://github.com/dnbmch/automotive-format-explorer/releas
 opens A2L, DBC, LDF and MDF4; every release and the commits in it are in
 `dnbmch/aff-release-manifest`.
 
-The source-head launch-check corrections, non-ASCII path opening on Windows, and
-text, Byte, frame and array value tables are not in that release.
+The source-head launch-check corrections, non-ASCII path opening on Windows, text,
+Byte, frame and array value tables, the A2L view in the file's own keywords with
+links and the resolved conversion, the V1.7.1 MODULE blocks and the licence notices
+are not in that release.
 
 The README screenshots (`docs/screenshot_*.png`) show the current build: the A2L
 memory map, the DBC and LDF signal maps and the MDF4 plot of a long recording.

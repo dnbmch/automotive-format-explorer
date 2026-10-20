@@ -201,6 +201,10 @@ published unless every step before it passed:
 `build-release/release`. A release needs no parser `-lib` publication: the parsers
 are compiled in from their sources.
 
+After publishing, the downloaded Windows zip gets the workspace's
+[first-contact audit](../../../docs/ref/first_contact_audit.md): an A2L engineer's first
+five minutes with it, played on a clean Windows guest.
+
 ## What a package must satisfy
 
 - `scripts/package_windows.sh` produces a `dist/` with an empty unresolved set.

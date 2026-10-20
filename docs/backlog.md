@@ -152,3 +152,13 @@ by its file under `QT_PREFIX/lib`, the rest by `dpkg -S` to the package whose
 neither, then pack the AppImage in a second linuxdeploy run.
 
 **Size:** S.
+
+### BL-K8: an edited sample is not restaged in the build tree
+
+The build tree's `samples/` is copied by a POST_BUILD step of the executable
+(`CMakeLists.txt`), so a sample edit alone leaves the old copy, and the build tree's
+`--check` and "open a sample" links read it. Packaging copies from the source tree and
+is unaffected. Fix: stage the samples with a custom command whose `DEPENDS` lists the
+sample files, attached to the executable target.
+
+**Size:** XS.
