@@ -23,10 +23,11 @@ struct MemoryObject {
     uint64_t address = 0;
     uint64_t size = 0;      // byte footprint (0 = unknown)
     bool sizeApproximate = false;
-    int colorIndex = 0;     // index into color palette (0-7)
+    int colorIndex = 0;     // index into color palette (0-15)
     quint64 nodeKey = 0;    // the object's tree row, for tree/detail selection
     QString recordLayoutRef;
     QString conversion;
+    bool calibration = false;   // calibration data, not a measurement: the map opens where most are
 };
 
 // A memory segment (real from proto, or synthetic).

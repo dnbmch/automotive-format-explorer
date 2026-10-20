@@ -44,14 +44,14 @@ A desktop tool for inspecting **A2L**, **DBC**, **LDF**, and **MDF4** automotive
 
 Browse every parsed entity in a structured tree with expand/collapse, keyboard shortcuts, and a live filter box (`Ctrl+F`) that narrows the tree to matching names — matches keep their ancestors and children visible, so filtering to a message keeps its signals in view. Supported entity types include:
 
-- **A2L**: Modules, Measurements, Characteristics, Axis Points, Compu Methods, Record Layouts, Units, Functions, Groups, Typedef Characteristics/Structures/Axes, Instances, Variant Coding, XCP and CCP protocol summaries
+- **A2L**: Modules, Measurements, Characteristics, Axis Points, Blobs, Compu Methods, Record Layouts, Units, Functions, Groups, Frames, Transformers, User Rights, Typedef Characteristics/Measurements/Structures/Axes/Blobs, Instances, Variant Coding, XCP and CCP protocol summaries
 - **DBC**: Messages, Signals, Nodes, Value Tables, Attribute Definitions, Environment Variables, Signal Groups
 - **LDF**: Frames, Signals, Nodes (Master/Slave), Schedule Tables, Signal Encoding Types, Signal Representations
 - **MDF4**: Channel Groups and Channels, each channel showing its unit and whether it is plottable, an array channel its type and shape, a structure such as a bus log's `CAN_DataFrame` its members nested under it (sources, storage layouts, invalidation Bytes, conversions, masters, validity rules, array dimensions and axes, bus-logging flags and bus types, and unsupported-feature reasons live in the detail panel)
 
 ### Detail Panel
 
-Structured property cards for every entity type, with key fields, references, and metadata. Toggle **raw JSON** view to inspect the underlying protobuf data directly.
+Structured property cards for every entity type, with key fields, references, and metadata, in the file's own keywords (`MAP`, `RAT_FUNC`, `MSB_LAST`) and addresses in hex. A name of another entity — a conversion, record layout, input quantity, axis, function or group — is a link that selects it. For A2L, the resolved conversion follows the identity card: the formula as `phys = f(int)` (a RAT_FUNC's coefficients run the other way and are inverted), the unit and, for a table conversion, its rows. Toggle **raw JSON** view to inspect the underlying protobuf data directly.
 
 ### Memory View (A2L)
 
@@ -67,8 +67,9 @@ Visual hex grid of ECU memory segments. Each byte is color-coded by the object t
 | Cyan | VAL_BLK (value array) |
 | Green | MEASUREMENT (runtime signal) |
 | Gold | AXIS_PTS (standalone axis) |
+| Rose | BLOB (bytes without conversion) |
 
-- Segment selector with automatic fallback when no segments are defined
+- Segment selector, opening on the segment that holds the most calibration objects, with automatic fallback when no segments are defined
 - Hover tooltips with name, type, address, computed size, record layout, and conversion
 - Diagonal red hatching on bytes claimed by more than one object
 - Click-drag byte-range selection with a status-bar readout (range, byte count, objects in range)
@@ -122,7 +123,7 @@ Click a tree node and the center view scrolls to it with a highlight flash. Clic
 
 ### Multi-Tab
 
-Open multiple files side by side. Async file loading keeps the UI responsive for large files. Each tab keeps its own tree filter.
+Open multiple files side by side; drop files on the window to open them. The window title names the current file. Async file loading keeps the UI responsive for large files. Each tab keeps its own tree filter.
 
 ### Bundled Samples
 

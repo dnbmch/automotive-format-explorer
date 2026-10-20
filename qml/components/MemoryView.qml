@@ -33,7 +33,7 @@ Item {
     }
 
     readonly property var legendLabels: [
-        "VALUE", "CURVE", "MAP", "CUBOID+", "ASCII", "VAL_BLK", "MEASUREMENT", "AXIS_PTS"
+        "VALUE", "CURVE", "MAP", "CUBOID+", "ASCII", "VAL_BLK", "MEASUREMENT", "AXIS_PTS", "BLOB"
     ]
 
     ColumnLayout {
@@ -52,10 +52,14 @@ Item {
                 anchors.rightMargin: 8
                 spacing: 8
 
+                // The selector takes the width left over, so Go to and the
+                // row widths stay in view; its text elides.
                 ComboBox {
                     id: segmentCombo
                     visible: mapModel && mapModel.segmentCount > 1
-                    Layout.preferredWidth: 400
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 120
+                    Layout.maximumWidth: 460
                     model: {
                         if (!mapModel) return []
                         let items = []
@@ -78,13 +82,16 @@ Item {
 
                 Label {
                     visible: mapModel && mapModel.segmentCount === 1
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
                     text: mapModel ? mapModel.segmentLabel(0) : ""
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fontSizeS
                     color: Theme.textSecondary
                 }
 
-                Item { Layout.fillWidth: true }
+                // Keeps Go to at the right when the selector reaches its maximum.
+                Item { Layout.fillWidth: true; visible: segmentCombo.visible }
 
                 Label {
                     text: "Go to:"

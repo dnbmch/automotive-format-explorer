@@ -15,6 +15,12 @@ ASAP2_VERSION 1 71
       CPU_TYPE  "Cortex-M7"
       ECU       "Engine control demo"
       SUPPLIER  "Danube Mechatronics"
+      /begin MEMORY_SEGMENT Calibration "Calibration data in flash"
+        DATA FLASH INTERN 0x00810000 0x1000 -1 -1 -1 -1 -1
+      /end MEMORY_SEGMENT
+      /begin MEMORY_SEGMENT Ram "Measurement variables in RAM"
+        VARIABLES RAM INTERN 0x40008000 0x100 -1 -1 -1 -1 -1
+      /end MEMORY_SEGMENT
     /end MOD_PAR
 
     /begin MOD_COMMON "Little-endian target, absolute deposit"
@@ -232,6 +238,11 @@ ASAP2_VERSION 1 71
         STD_AXIS CoolantTemp CM_TempC 8 -40 140
       /end AXIS_DESCR
     /end CHARACTERISTIC
+
+    /begin BLOB KnockWindowTable "Knock detection windows, opaque to the MC system"
+      0x00810200 64
+      CALIBRATION_ACCESS NO_CALIBRATION
+    /end BLOB
 
     /* ------------------------------------------------------------------ */
     /* XCP on CAN                                                         */

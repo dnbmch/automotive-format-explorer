@@ -1,5 +1,20 @@
 # automotive-format-explorer — handoff
 
+## 2026-10-20 — an A2L engineer's first five minutes — OPEN
+
+Landed for v0.4.0 (workspace plan, archived: `docs/archive/a2l_first_impression.md`):
+A2L keywords instead of proto enum names, `0x` hex, segment labels in the file's case,
+the calibration segment first, links between entities in the details, the resolved
+conversion (`phys = f(int)`, RAT_FUNC inverted) under Identity, the six V1.7.1 MODULE
+blocks in the tree, BLOBs on the map, the window title, dropped files opening, a
+labelled Open button, the sample's memory segments, and `LICENSE.txt` with derived
+third-party notices in the Windows zip. Backlogged: BL-V7, BL-V8, BL-K6 (signing waits
+on the certificate), BL-K7.
+
+UNVERIFIED — dropping files on the window: drag an `.a2l` and a `.dbc` from Explorer
+onto it. Pass: "Drop to open" shows while dragging and both open in their own tabs.
+Fail: nothing opens or the overlay stays.
+
 ## 2026-10-11 — invalidated samples plot as gaps — OPEN
 
 The MDF4 reader delivers a sample whose invalidation bit is set as NaN at its time

@@ -72,6 +72,29 @@ beside the hex. Trigger: the reader reads a structure's attachment references
 
 **Size:** M.
 
+### BL-V7: a file without memory segments derives one span over all its objects
+
+`MemoryMapModel::finalize` derives a single segment from the lowest to the highest
+object address when the A2L declares no MEMORY_SEGMENT. Calibration data in flash
+and measurements in RAM then share one span a GiB or more tall: every object is
+reachable through Go to, none by scrolling. Fix: derive one segment per cluster,
+starting a new one where the gap to the next object exceeds a bound (64 KiB is 4096
+rows at 16 bytes), and label them `derived 1`, `derived 2`, …. The far-apart
+geometry tests (`farApartObjectsInDerivedSegment`, `farObjectPaintedAndSelectable`)
+then declare their segment explicitly.
+
+**Size:** S.
+
+### BL-V8: no "used by" list on a conversion or a record layout
+
+A measurement or characteristic lists the functions, groups, frames and
+transformers that reference it, as links. A COMPU_METHOD or RECORD_LAYOUT does not
+list the objects that use it. Fix: the A2L session builds the reverse index once
+with the tree (name to referencing rows); the card shows the first few hundred as
+links, as a function's lists do, and the count.
+
+**Size:** S.
+
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant
@@ -100,3 +123,32 @@ rebuilt from scratch every time. Workaround on a downgrade: delete the
 deployed DLLs next to the build-tree executable and rebuild.
 
 **Size:** XS if msys2 ever ships `cmp` in base; otherwise accept.
+
+### BL-K6: the Windows executable is unsigned
+
+SmartScreen names a downloaded copy's publisher "Unknown publisher", and managed
+company machines may refuse an unsigned executable outright. The operator buys
+the signing identity: Azure Artifact Signing, open to organizations in the EU at
+about $9.99 a month on a paid Azure subscription, after Microsoft validates the
+company's legal identity; an OV certificate on a hardware token ($150–300 a year)
+is the alternative ([Microsoft: code signing options](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options)).
+Since 2024 no certificate type skips SmartScreen's reputation: warnings fade as
+consistently signed releases build it. Fix: `release-explorer.sh` signs
+`automotive-format-explorer.exe` with signtool and a timestamp before the zip is
+packed, and its Windows gate checks the signature (`Get-AuthenticodeSignature`
+reports Valid). Trigger: the certificate profile exists.
+
+**Size:** S once the identity exists.
+
+### BL-K7: the AppImage carries no third-party notices
+
+The Windows zip carries `THIRD_PARTY_NOTICES.txt`, derived from what is packaged
+([release packaging](ref/release_packaging.md#the-windows-package)); the AppImage
+carries only `LICENSE`. It bundles Qt and ICU from Qt's Linux build and some forty
+Ubuntu libraries (protobuf, xcb, glib, krb5, …). Fix: in `package_linux.sh`, run
+linuxdeploy without `--output`, attribute each library in `AppDir/usr/lib` — Qt's
+by its file under `QT_PREFIX/lib`, the rest by `dpkg -S` to the package whose
+`/usr/share/doc/<package>/copyright` the notice copies — fail on a library with
+neither, then pack the AppImage in a second linuxdeploy run.
+
+**Size:** S.

@@ -26,7 +26,7 @@ Three-column split. Tree and detail panel are always visible. The memory view oc
 │            │  └──────────────────┘  │  ...              │
 │            │                        │                   │
 ├────────────┴────────────────────────┴───────────────────┤
-│ Status: 0x80100 — 0x8010F (16 bytes) | 3 objects       │
+│ Status: 0x00080100 — 0x0008010F (16 bytes) | 3 objects │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -71,10 +71,11 @@ Each row = 16 bytes (configurable: 8, 16, 32). Left gutter shows absolute addres
 | Characteristic (VAL_BLK) | Cyan | Array of values |
 | Measurement | Green | Runtime signal overlay |
 | AxisPts | Gold | Standalone axis distribution |
+| Blob | Rose | Bytes without conversion, its size given |
 | Unoccupied (in segment) | Dark gray | Allocated but not assigned |
 | Outside segment | Background | No data |
 
-A legend below the grid names the eight object-type colors. Adjacent same-color objects alternate between the base color and a darker shade, assigned once per segment in address order, so scrolling never changes a color.
+A legend below the grid names the nine object-type colors. Adjacent same-color objects alternate between the base color and a darker shade, assigned once per segment in address order, so scrolling never changes a color.
 
 ### Overlap hatching
 
@@ -85,28 +86,31 @@ Bytes claimed by more than one object (e.g. a measurement aliasing a characteris
 On hover over a colored cell, a floating tooltip shows name, type, address, size, and — when the object carries them — record layout and conversion method:
 ```
 KfAIRCTL_tTransDly
-Type: CURVE  |  Address: 0x80100  |  Size: 24 bytes
+Type: CURVE  |  Address: 0x00080100  |  Size: 24 bytes
 Record Layout: RL_CURVE_FLOAT32
 Conversion: CM_KfAIRCTL_tTransDly
 ```
 
 ### Segment selector
 
-Dropdown at the top of the memory view listing all `MemorySegment` entries. Each option shows:
+Dropdown at the top of the memory view listing all `MemorySegment` entries. Each option shows
+the segment's name as the file writes it, its range and its A2L memory and program types:
 ```
-CAL_FLASH  [0x80000 .. 0x8FFFF]  FLASH / CALIBRATION_VARIABLES
+CalData  0x80040000 .. 0x801BADB3  FLASH · DATA
 ```
 
-Selecting a segment scrolls the grid to that region and only colors objects within it.
+A file opens on the segment holding the most calibration objects (characteristics, axis
+points, blobs), then the most objects (the first of equals), not on the first one listed. Selecting a segment scrolls the grid to that region and only colors objects within
+it. The selector takes the toolbar width the jump field and the row-width buttons leave.
 
 #### Fallback when no segments are defined
 
 Many production A2L files have no `MemorySegment` entries at all — segments are optional in the spec. When no segments exist, the memory view derives a **synthetic range** from the objects themselves:
 
-1. Collect all addresses from Characteristics, AxisPts, and address-bearing Measurements
+1. Collect all addresses from Characteristics, AxisPts, Blobs and address-bearing Measurements
 2. Compute `min(all addresses)` and `max(all addresses + object size)`
 3. Align start down and end up to the nearest 256-byte boundary
-4. Present this as a single synthetic segment: `"[derived]  [0x80000 .. 0x8FFFF]"`
+4. Present this as a single synthetic segment: `derived  0x00080000 .. 0x0008FFFF`
 
 The segment selector dropdown is hidden when there is only one segment (real or synthetic). The grid is always available if there is at least one addressable object.
 
@@ -122,7 +126,7 @@ Click a colored cell in the memory view. The tree auto-scrolls to and selects th
 
 ### Memory → memory
 
-Click-drag selects a byte range: press anchors the selection, dragging extends it (clamped to the grid), and the selected bytes render with a translucent white overlay. The status bar switches to a range readout — `Selected: 0x80100 — 0x8010F (16 bytes) | 3 objects in range` — with the object count from `MemoryMapModel::objectsInRange`. A plain click clears the range and selects the byte's owning object as before; segment or model changes also clear it. The detail panel listing every object in the range is a [planned enhancement](../plans/memory_view_planned.md).
+Click-drag selects a byte range: press anchors the selection, dragging extends it (clamped to the grid), and the selected bytes render with a translucent white overlay. The status bar switches to a range readout — `Selected: 0x00080100 — 0x0008010F (16 bytes) | 3 objects in range` — with the object count from `MemoryMapModel::objectsInRange`. A plain click clears the range and selects the byte's owning object as before; segment or model changes also clear it. The detail panel listing every object in the range is a [planned enhancement](../plans/memory_view_planned.md).
 
 The "Go to" address field scrolls to the entered address and flash-highlights the object at it (`MemoryMapModel::objectAtAddress`), if any.
 

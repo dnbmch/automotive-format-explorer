@@ -20,7 +20,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
         if (xcp.has_protocol_layer()) {
             const auto& pl = xcp.protocol_layer();
             QList<DetailField> fields;
-            addField(fields, QStringLiteral("Protocol Version"), hex64(pl.protocol_version()));
+            addField(fields, QStringLiteral("Protocol Version"), hexText(pl.protocol_version()));
             addNumberField(fields, QStringLiteral("T1 (ms)"), pl.t1_ms());
             addNumberField(fields, QStringLiteral("T2 (ms)"), pl.t2_ms());
             addNumberField(fields, QStringLiteral("T3 (ms)"), pl.t3_ms());
@@ -30,8 +30,8 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
             addNumberField(fields, QStringLiteral("T7 (ms)"), pl.t7_ms());
             addNumberField(fields, QStringLiteral("MAX_CTO"), pl.max_cto());
             addNumberField(fields, QStringLiteral("MAX_DTO"), pl.max_dto());
-            addField(fields, QStringLiteral("Byte Order"), text(a2l::ByteOrder_Name(pl.byte_order())));
-            addField(fields, QStringLiteral("Address Granularity"), text(a2l::AddressGranularity_Name(pl.address_granularity())));
+            addField(fields, QStringLiteral("Byte Order"), enumKeyword(pl.byte_order()));
+            addField(fields, QStringLiteral("Address Granularity"), enumKeyword(pl.address_granularity()));
             if (pl.optional_cmds_size() > 0) {
                 addField(fields, QStringLiteral("Optional Commands"), joinNumbers(pl.optional_cmds()));
             }
@@ -73,16 +73,16 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
         if (xcp.has_daq()) {
             const auto& daq = xcp.daq();
             QList<DetailField> fields;
-            addField(fields, QStringLiteral("Config Type"), text(a2l::DaqConfigType_Name(daq.daq_config_type())));
+            addField(fields, QStringLiteral("Config Type"), enumKeyword(daq.daq_config_type()));
             addNumberField(fields, QStringLiteral("MAX_DAQ"), daq.max_daq());
             addNumberField(fields, QStringLiteral("MAX_EVENT_CHANNEL"), daq.max_event_channel());
             addNumberField(fields, QStringLiteral("MIN_DAQ"), daq.min_daq());
-            addField(fields, QStringLiteral("Optimisation Type"), text(a2l::DaqOptimisationType_Name(daq.optimisation_type())));
-            addField(fields, QStringLiteral("Address Extension"), text(a2l::DaqAddressExtensionMode_Name(daq.address_extension_mode())));
-            addField(fields, QStringLiteral("ID Field Type"), text(a2l::IdentificationFieldType_Name(daq.identification_field_type())));
+            addField(fields, QStringLiteral("Optimisation Type"), enumKeyword(daq.optimisation_type()));
+            addField(fields, QStringLiteral("Address Extension"), enumKeyword(daq.address_extension_mode()));
+            addField(fields, QStringLiteral("ID Field Type"), enumKeyword(daq.identification_field_type()));
             addNumberField(fields, QStringLiteral("Granularity ODT Entry Size DAQ"), daq.granularity_odt_entry_size_daq());
             addNumberField(fields, QStringLiteral("MAX_ODT_ENTRY_SIZE_DAQ"), daq.max_odt_entry_size_daq());
-            addField(fields, QStringLiteral("Overload Indication"), text(a2l::OverloadIndication_Name(daq.overload_indication())));
+            addField(fields, QStringLiteral("Overload Indication"), enumKeyword(daq.overload_indication()));
             addOptionalBool(fields, QStringLiteral("Prescaler Supported"), daq.has_prescaler_supported(), daq.prescaler_supported());
             addOptionalBool(fields, QStringLiteral("Resume Supported"), daq.has_resume_supported(), daq.resume_supported());
             addOptionalBool(fields, QStringLiteral("Store DAQ Supported"), daq.has_store_daq_supported(), daq.store_daq_supported());
@@ -96,8 +96,8 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
             if (daq.has_timestamp_supported()) {
                 const auto& ts = daq.timestamp_supported();
                 addNumberField(fields, QStringLiteral("Timestamp Ticks"), ts.timestamp_ticks());
-                addField(fields, QStringLiteral("Timestamp Size"), text(a2l::TimestampSize_Name(ts.timestamp_size())));
-                addField(fields, QStringLiteral("Timestamp Unit"), text(a2l::TimestampUnit_Name(ts.timestamp_unit())));
+                addField(fields, QStringLiteral("Timestamp Size"), enumKeyword(ts.timestamp_size()));
+                addField(fields, QStringLiteral("Timestamp Unit"), enumKeyword(ts.timestamp_unit()));
                 addOptionalBool(fields, QStringLiteral("Timestamp Fixed"), ts.has_timestamp_fixed(), ts.timestamp_fixed());
             }
 
@@ -116,7 +116,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
                 const auto& list = daq.daq_lists(i);
                 QList<DetailField> listFields;
                 addNumberField(listFields, QStringLiteral("DAQ List Number"), list.daq_list_number());
-                addField(listFields, QStringLiteral("DAQ List Type"), text(a2l::DaqListType_Name(list.daq_list_type())));
+                addField(listFields, QStringLiteral("DAQ List Type"), enumKeyword(list.daq_list_type()));
                 addNumberField(listFields, QStringLiteral("MAX_ODT"), list.max_odt());
                 addNumberField(listFields, QStringLiteral("MAX_ODT_ENTRIES"), list.max_odt_entries());
                 addOptionalNumber(listFields, QStringLiteral("First PID"), list.has_first_pid(), list.first_pid());
@@ -131,12 +131,12 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
                 addField(evFields, QStringLiteral("Name"), text(ev.name()));
                 addField(evFields, QStringLiteral("Short Name"), text(ev.short_name()));
                 addNumberField(evFields, QStringLiteral("Channel Number"), ev.event_channel_number());
-                addField(evFields, QStringLiteral("DAQ List Type"), text(a2l::DaqListType_Name(ev.daq_list_type())));
+                addField(evFields, QStringLiteral("DAQ List Type"), enumKeyword(ev.daq_list_type()));
                 addNumberField(evFields, QStringLiteral("MAX_DAQ_LIST"), ev.max_daq_list());
                 addNumberField(evFields, QStringLiteral("Time Cycle"), ev.time_cycle());
                 addNumberField(evFields, QStringLiteral("Time Unit"), ev.time_unit());
                 addNumberField(evFields, QStringLiteral("Priority"), ev.priority());
-                addField(evFields, QStringLiteral("Consistency"), text(a2l::DaqConsistency_Name(ev.consistency())));
+                addField(evFields, QStringLiteral("Consistency"), enumKeyword(ev.consistency()));
                 pushSection(sections, QStringLiteral("Event \"%1\" (#%2)").arg(text(ev.short_name())).arg(ev.event_channel_number()), std::move(evFields));
             }
         }
@@ -145,7 +145,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
         for (int i = 0; i < xcp.xcp_on_cans_size(); ++i) {
             const auto& can = xcp.xcp_on_cans(i);
             QList<DetailField> fields;
-            addField(fields, QStringLiteral("Transport Version"), hex64(can.transport_version()));
+            addField(fields, QStringLiteral("Transport Version"), hexText(can.transport_version()));
             addOptionalNumber(fields, QStringLiteral("CAN ID Broadcast"), can.has_can_id_broadcast(), can.can_id_broadcast());
             addOptionalNumber(fields, QStringLiteral("CAN ID Master"), can.has_can_id_master(), can.can_id_master());
             addOptionalBool(fields, QStringLiteral("Master Incremental"), can.has_can_id_master_incremental(), can.can_id_master_incremental());
@@ -154,7 +154,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
             addOptionalNumber(fields, QStringLiteral("Baudrate"), can.has_baudrate(), can.baudrate());
             addOptionalNumber(fields, QStringLiteral("Sample Point"), can.has_sample_point(), can.sample_point());
             if (can.has_sample_rate()) {
-                addField(fields, QStringLiteral("Sample Rate"), text(a2l::SampleRate_Name(can.sample_rate())));
+                addField(fields, QStringLiteral("Sample Rate"), enumKeyword(can.sample_rate()));
             }
             addOptionalNumber(fields, QStringLiteral("BTL Cycles"), can.has_btl_cycles(), can.btl_cycles());
             addOptionalNumber(fields, QStringLiteral("SJW"), can.has_sjw(), can.sjw());
@@ -175,7 +175,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
             if (can.daq_list_can_ids_size() > 0) {
                 for (const auto& dlc : can.daq_list_can_ids()) {
                     if (dlc.has_fixed_can_id()) {
-                        addField(fields, QStringLiteral("DAQ List #%1 CAN ID").arg(dlc.daq_list_number()), hex64(dlc.fixed_can_id()));
+                        addField(fields, QStringLiteral("DAQ List #%1 CAN ID").arg(dlc.daq_list_number()), hexText(dlc.fixed_can_id()));
                     } else if (dlc.has_variable_can_id()) {
                         addField(fields, QStringLiteral("DAQ List #%1 CAN ID").arg(dlc.daq_list_number()), QStringLiteral("variable"));
                     }
@@ -189,7 +189,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
         for (int i = 0; i < xcp.xcp_on_tcp_ips_size(); ++i) {
             const auto& ip = xcp.xcp_on_tcp_ips(i);
             QList<DetailField> fields;
-            addField(fields, QStringLiteral("Transport Version"), hex64(ip.transport_version()));
+            addField(fields, QStringLiteral("Transport Version"), hexText(ip.transport_version()));
             addNumberField(fields, QStringLiteral("Port"), ip.port());
             if (ip.has_host_name()) addField(fields, QStringLiteral("Host"), text(ip.host_name()));
             if (ip.has_address()) addField(fields, QStringLiteral("Address"), text(ip.address()));
@@ -197,7 +197,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
             addOptionalNumber(fields, QStringLiteral("MAX_BUS_LOAD"), ip.has_max_bus_load(), ip.max_bus_load());
             addOptionalNumber(fields, QStringLiteral("MAX_BIT_RATE"), ip.has_max_bit_rate(), ip.max_bit_rate());
             if (ip.has_packet_alignment()) {
-                addField(fields, QStringLiteral("Packet Alignment"), text(a2l::PacketAlignment_Name(ip.packet_alignment())));
+                addField(fields, QStringLiteral("Packet Alignment"), enumKeyword(ip.packet_alignment()));
             }
             addOptionalString(fields, QStringLiteral("Transport Layer Instance"), ip.has_transport_layer_instance(), ip.transport_layer_instance());
             pushSection(sections, QStringLiteral("XCP on TCP/IP"), std::move(fields));
@@ -207,7 +207,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
         for (int i = 0; i < xcp.xcp_on_udp_ips_size(); ++i) {
             const auto& ip = xcp.xcp_on_udp_ips(i);
             QList<DetailField> fields;
-            addField(fields, QStringLiteral("Transport Version"), hex64(ip.transport_version()));
+            addField(fields, QStringLiteral("Transport Version"), hexText(ip.transport_version()));
             addNumberField(fields, QStringLiteral("Port"), ip.port());
             if (ip.has_host_name()) addField(fields, QStringLiteral("Host"), text(ip.host_name()));
             if (ip.has_address()) addField(fields, QStringLiteral("Address"), text(ip.address()));
@@ -215,7 +215,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
             addOptionalNumber(fields, QStringLiteral("MAX_BUS_LOAD"), ip.has_max_bus_load(), ip.max_bus_load());
             addOptionalNumber(fields, QStringLiteral("MAX_BIT_RATE"), ip.has_max_bit_rate(), ip.max_bit_rate());
             if (ip.has_packet_alignment()) {
-                addField(fields, QStringLiteral("Packet Alignment"), text(a2l::PacketAlignment_Name(ip.packet_alignment())));
+                addField(fields, QStringLiteral("Packet Alignment"), enumKeyword(ip.packet_alignment()));
             }
             addOptionalString(fields, QStringLiteral("Transport Layer Instance"), ip.has_transport_layer_instance(), ip.transport_layer_instance());
             pushSection(sections, QStringLiteral("XCP on UDP/IP"), std::move(fields));
@@ -234,7 +234,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
 
             if (seg.has_checksum()) {
                 const auto& cs = seg.checksum();
-                addField(segFields, QStringLiteral("Checksum Type"), text(a2l::ChecksumType_Name(cs.type())));
+                addField(segFields, QStringLiteral("Checksum Type"), enumKeyword(cs.type()));
                 addOptionalNumber(segFields, QStringLiteral("Checksum MAX_BLOCK_SIZE"), cs.has_max_block_size(), cs.max_block_size());
                 addOptionalString(segFields, QStringLiteral("Checksum External Function"), cs.has_external_function(), cs.external_function());
             }
@@ -251,8 +251,8 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
                 const auto& mapping = seg.address_mappings(m);
                 addField(segFields, QStringLiteral("Mapping %1").arg(m),
                          QStringLiteral("%1 -> %2 (len %3)")
-                             .arg(hex64(mapping.mapping_address()))
-                             .arg(hex64(mapping.original_address()))
+                             .arg(hexText(mapping.mapping_address()))
+                             .arg(hexText(mapping.original_address()))
                              .arg(mapping.length()));
             }
 
@@ -310,28 +310,28 @@ QList<DetailSection> A2lDetailPresenter::ccpSummaryDetails(const A2lPath& path) 
         if (ccp.has_tp_blob()) {
             const auto& tp = ccp.tp_blob();
             QList<DetailField> fields;
-            addField(fields, QStringLiteral("CCP Version"), hex64(tp.ccp_version()));
-            addField(fields, QStringLiteral("BLOB Version"), hex64(tp.blob_version()));
-            addField(fields, QStringLiteral("CRM CAN ID"), hex64(tp.crm_can_id()));
-            addField(fields, QStringLiteral("DTO CAN ID"), hex64(tp.dto_can_id()));
+            addField(fields, QStringLiteral("CCP Version"), hexText(tp.ccp_version()));
+            addField(fields, QStringLiteral("BLOB Version"), hexText(tp.blob_version()));
+            addField(fields, QStringLiteral("CRM CAN ID"), hexText(tp.crm_can_id()));
+            addField(fields, QStringLiteral("DTO CAN ID"), hexText(tp.dto_can_id()));
             addNumberField(fields, QStringLiteral("Station Address"), tp.station_address());
-            addField(fields, QStringLiteral("Byte Order"), text(a2l::ByteOrder_Name(tp.byte_order())));
+            addField(fields, QStringLiteral("Byte Order"), enumKeyword(tp.byte_order()));
             addOptionalNumber(fields, QStringLiteral("Baudrate"), tp.has_baudrate(), tp.baudrate());
             addOptionalNumber(fields, QStringLiteral("Sample Point"), tp.has_sample_point(), tp.sample_point());
             addOptionalNumber(fields, QStringLiteral("Sample Rate"), tp.has_sample_rate(), tp.sample_rate());
             addOptionalNumber(fields, QStringLiteral("BTL Cycles"), tp.has_btl_cycles(), tp.btl_cycles());
             addOptionalNumber(fields, QStringLiteral("SJW"), tp.has_sjw(), tp.sjw());
             if (tp.has_sync_edge()) {
-                addField(fields, QStringLiteral("Sync Edge"), text(a2l::CcpSyncEdge_Name(tp.sync_edge())));
+                addField(fields, QStringLiteral("Sync Edge"), enumKeyword(tp.sync_edge()));
             }
             if (tp.has_daq_mode()) {
-                addField(fields, QStringLiteral("DAQ Mode"), text(a2l::CcpDaqMode_Name(tp.daq_mode())));
+                addField(fields, QStringLiteral("DAQ Mode"), enumKeyword(tp.daq_mode()));
             }
             if (tp.has_consistency()) {
-                addField(fields, QStringLiteral("Consistency"), text(a2l::CcpConsistency_Name(tp.consistency())));
+                addField(fields, QStringLiteral("Consistency"), enumKeyword(tp.consistency()));
             }
             if (tp.has_address_extension()) {
-                addField(fields, QStringLiteral("Address Extension"), text(a2l::CcpAddressExtensionMode_Name(tp.address_extension())));
+                addField(fields, QStringLiteral("Address Extension"), enumKeyword(tp.address_extension()));
             }
             if (tp.optional_cmds_size() > 0) {
                 addField(fields, QStringLiteral("Optional Commands"), joinNumbers(tp.optional_cmds()));
@@ -343,9 +343,9 @@ QList<DetailSection> A2lDetailPresenter::ccpSummaryDetails(const A2lPath& path) 
                 addNumberField(fields, QStringLiteral("Page %1 Number").arg(p), page.page_number());
                 addField(fields, QStringLiteral("Page %1 Name").arg(p), text(page.name()));
                 addNumberField(fields, QStringLiteral("Page %1 Address Extension").arg(p), page.address_extension());
-                addField(fields, QStringLiteral("Page %1 Address").arg(p), hex64(page.address()));
+                addField(fields, QStringLiteral("Page %1 Address").arg(p), hexText(page.address()));
                 addNumberField(fields, QStringLiteral("Page %1 Size").arg(p), page.size());
-                addField(fields, QStringLiteral("Page %1 Memory Type").arg(p), text(a2l::CcpPageMemoryType_Name(page.memory_type())));
+                addField(fields, QStringLiteral("Page %1 Memory Type").arg(p), enumKeyword(page.memory_type()));
                 addOptionalBool(fields, QStringLiteral("Page %1 RAM Init by ECU").arg(p), page.has_ram_init_by_ecu(), page.ram_init_by_ecu());
                 addOptionalBool(fields, QStringLiteral("Page %1 RAM Init by Tool").arg(p), page.has_ram_init_by_tool(), page.ram_init_by_tool());
                 addOptionalBool(fields, QStringLiteral("Page %1 Default").arg(p), page.has_default_page(), page.default_page());
@@ -355,12 +355,12 @@ QList<DetailSection> A2lDetailPresenter::ccpSummaryDetails(const A2lPath& path) 
                 const auto& psm = tp.page_switch_method();
                 addNumberField(fields, QStringLiteral("Page Switch Version"), psm.version());
                 if (psm.has_autostart_behavior()) {
-                    addField(fields, QStringLiteral("Autostart"), text(a2l::CcpAutostartBehavior_Name(psm.autostart_behavior())));
+                    addField(fields, QStringLiteral("Autostart"), enumKeyword(psm.autostart_behavior()));
                 }
                 if (psm.has_mailbox()) {
                     addNumberField(fields, QStringLiteral("Mailbox Version"), psm.mailbox().mailbox_version());
                     addNumberField(fields, QStringLiteral("Mailbox Setup Time (ms)"), psm.mailbox().page_setup_time_ms());
-                    addField(fields, QStringLiteral("Mailbox Start Address"), hex64(psm.mailbox().start_address()));
+                    addField(fields, QStringLiteral("Mailbox Start Address"), hexText(psm.mailbox().start_address()));
                 }
             }
 
@@ -379,7 +379,7 @@ QList<DetailSection> A2lDetailPresenter::ccpSummaryDetails(const A2lPath& path) 
                 const auto& qp = src.qp_blob();
                 addNumberField(fields, QStringLiteral("QP DAQ List Number"), qp.daq_list_number());
                 addNumberField(fields, QStringLiteral("QP Length"), qp.length());
-                addField(fields, QStringLiteral("QP CAN ID Mode"), text(a2l::CcpCanIdMode_Name(qp.can_id_mode())));
+                addField(fields, QStringLiteral("QP CAN ID Mode"), enumKeyword(qp.can_id_mode()));
                 addOptionalNumber(fields, QStringLiteral("QP Fixed CAN ID"), qp.has_fixed_can_id(), qp.fixed_can_id());
                 addOptionalNumber(fields, QStringLiteral("QP First PID"), qp.has_first_pid(), qp.first_pid());
                 addOptionalBool(fields, QStringLiteral("QP Reduction Allowed"), qp.has_reduction_allowed(), qp.reduction_allowed());
@@ -420,7 +420,7 @@ QList<DetailSection> A2lDetailPresenter::ccpSummaryDetails(const A2lPath& path) 
             const auto& kp = ccp.kp_blob();
             QList<DetailField> fields;
             addNumberField(fields, QStringLiteral("Address Extension"), kp.address_extension());
-            addField(fields, QStringLiteral("Address"), hex64(kp.address()));
+            addField(fields, QStringLiteral("Address"), hexText(kp.address()));
             addNumberField(fields, QStringLiteral("Size"), kp.size());
             if (kp.raster_ids_size() > 0) {
                 addField(fields, QStringLiteral("Raster IDs"), joinNumbers(kp.raster_ids()));
@@ -433,7 +433,7 @@ QList<DetailSection> A2lDetailPresenter::ccpSummaryDetails(const A2lPath& path) 
             const auto& dp = ccp.dp_blob();
             QList<DetailField> fields;
             addNumberField(fields, QStringLiteral("Address Extension"), dp.address_extension());
-            addField(fields, QStringLiteral("Address"), hex64(dp.address()));
+            addField(fields, QStringLiteral("Address"), hexText(dp.address()));
             addNumberField(fields, QStringLiteral("Size"), dp.size());
             pushSection(sections, QStringLiteral("DP_BLOB"), std::move(fields));
         }

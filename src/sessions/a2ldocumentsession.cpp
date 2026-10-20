@@ -21,7 +21,7 @@ A2lDocumentSession::A2lDocumentSession(QString displayName,
                          std::move(sourcePath),
                          std::move(diagnostics)),
       _document(std::move(document)),
-      _presenter(_document) {
+      _presenter(_document, _links) {
     buildTree();
     buildMemoryMap();
 }
@@ -44,6 +44,14 @@ TreeItem* A2lDocumentSession::appendEntity(TreeItem* parent, const QString& titl
                                            A2lPath path) {
     TreeItem* item = appendNode(parent, title, subtitle, iconKey, SemanticKind::Entity, true);
     _paths.emplace(item->nodeKey, path);
+    return item;
+}
+
+TreeItem* A2lDocumentSession::appendNamed(TreeItem* parent, const std::string& name,
+                                          const QString& subtitle, const QString& iconKey,
+                                          A2lPath path) {
+    TreeItem* item = appendEntity(parent, text(name), subtitle, iconKey, path);
+    _links.add(path.primaryIndex, path.kind, name, item->nodeKey);
     return item;
 }
 
@@ -74,7 +82,7 @@ static uint64_t mulSat(uint64_t a, uint64_t b) {
 }
 
 // Color index mapping for object types.
-// 0=VALUE, 1=CURVE, 2=MAP, 3=CUBOID+, 4=ASCII, 5=VAL_BLK, 6=MEASUREMENT, 7=AXIS_PTS
+// 0=VALUE, 1=CURVE, 2=MAP, 3=CUBOID+, 4=ASCII, 5=VAL_BLK, 6=MEASUREMENT, 7=AXIS_PTS, 8=BLOB
 int characteristicColorIndex(a2l::CharacteristicType type) {
     switch (type) {
     case a2l::CHARACTERISTIC_TYPE_VALUE:   return 0;
@@ -268,10 +276,8 @@ void A2lDocumentSession::buildMemoryMap() {
                 info.name = text(seg.name());
                 info.address = seg.address();
                 info.size = seg.size();
-                info.memoryType = text(
-                    a2l::MemoryType_Name(seg.memory_type()));
-                info.prgType = text(
-                    a2l::MemoryPrgType_Name(seg.prg_type()));
+                info.memoryType = enumKeyword(seg.memory_type());
+                info.prgType = enumKeyword(seg.prg_type());
                 _memory_map_model->addSegment(std::move(info));
             }
         }
@@ -290,12 +296,12 @@ void A2lDocumentSession::buildMemoryMap() {
             MemoryObject obj;
             obj.name = text(ch.name());
             obj.longIdentifier = text(ch.long_identifier());
-            obj.typeName = text(
-                a2l::CharacteristicType_Name(ch.type()));
+            obj.typeName = enumKeyword(ch.type());
             obj.address = ch.address();
             obj.size = sr.size;
             obj.sizeApproximate = sr.approximate;
             obj.colorIndex = characteristicColorIndex(ch.type());
+            obj.calibration = true;
             obj.recordLayoutRef = text(ch.record_layout_ref());
             obj.conversion = text(ch.conversion());
             auto keyIt = _tree_node_keys.find({static_cast<int>(A2lEntityKind::Characteristic), m, i});
@@ -322,9 +328,26 @@ void A2lDocumentSession::buildMemoryMap() {
             obj.size = sr.size;
             obj.sizeApproximate = sr.approximate;
             obj.colorIndex = 7; // AXIS_PTS color
+            obj.calibration = true;
             obj.recordLayoutRef = text(ap.record_layout_ref());
             obj.conversion = text(ap.conversion_ref());
             auto keyIt = _tree_node_keys.find({static_cast<int>(A2lEntityKind::AxisPts), m, i});
+            if (keyIt != _tree_node_keys.end()) obj.nodeKey = keyIt->second;
+            _memory_map_model->addObject(std::move(obj));
+        }
+
+        // Blobs: their size is given, in bytes.
+        for (int i = 0; i < module.blobs_size(); ++i) {
+            const auto& blob = module.blobs(i);
+            MemoryObject obj;
+            obj.name = text(blob.name());
+            obj.longIdentifier = text(blob.long_identifier());
+            obj.typeName = QStringLiteral("BLOB");
+            obj.address = blob.address();
+            obj.size = blob.size();
+            obj.colorIndex = 8; // BLOB color
+            obj.calibration = true;
+            auto keyIt = _tree_node_keys.find({static_cast<int>(A2lEntityKind::Blob), m, i});
             if (keyIt != _tree_node_keys.end()) obj.nodeKey = keyIt->second;
             _memory_map_model->addObject(std::move(obj));
         }
@@ -399,9 +422,9 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.measurements_size(); ++i) {
                 const auto& item = module.measurements(i);
-                TreeItem* node = appendEntity(section,
-                           text(item.name()),
-                           text(a2l::DataType_Name(item.datatype())),
+                TreeItem* node = appendNamed(section,
+                           item.name(),
+                           enumKeyword(item.datatype()),
                            QStringLiteral("measurement"),
                            A2lPath{A2lEntityKind::Measurement, moduleIndex, i, -1});
                 _tree_node_keys[{static_cast<int>(A2lEntityKind::Measurement), moduleIndex, i}] = node->nodeKey;
@@ -416,9 +439,9 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.characteristics_size(); ++i) {
                 const auto& item = module.characteristics(i);
-                TreeItem* node = appendEntity(section,
-                           text(item.name()),
-                           text(a2l::CharacteristicType_Name(item.type())),
+                TreeItem* node = appendNamed(section,
+                           item.name(),
+                           enumKeyword(item.type()),
                            QStringLiteral("characteristic"),
                            A2lPath{A2lEntityKind::Characteristic, moduleIndex, i, -1});
                 _tree_node_keys[{static_cast<int>(A2lEntityKind::Characteristic), moduleIndex, i}] = node->nodeKey;
@@ -433,12 +456,29 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.axis_points_size(); ++i) {
                 const auto& item = module.axis_points(i);
-                TreeItem* node = appendEntity(section,
-                           text(item.name()),
+                TreeItem* node = appendNamed(section,
+                           item.name(),
                            text(item.record_layout_ref()),
                            QStringLiteral("axispt"),
                            A2lPath{A2lEntityKind::AxisPts, moduleIndex, i, -1});
                 _tree_node_keys[{static_cast<int>(A2lEntityKind::AxisPts), moduleIndex, i}] = node->nodeKey;
+            }
+        }
+
+        if (module.blobs_size() > 0) {
+            TreeItem* section = appendNode(moduleItem,
+                                           QStringLiteral("Blobs"),
+                                           QString::number(module.blobs_size()),
+                                           QStringLiteral("blobs"),
+                                           SemanticKind::Section);
+            for (int i = 0; i < module.blobs_size(); ++i) {
+                const auto& item = module.blobs(i);
+                TreeItem* node = appendNamed(section,
+                           item.name(),
+                           QStringLiteral("%1 bytes").arg(item.size()),
+                           QStringLiteral("blob"),
+                           A2lPath{A2lEntityKind::Blob, moduleIndex, i, -1});
+                _tree_node_keys[{static_cast<int>(A2lEntityKind::Blob), moduleIndex, i}] = node->nodeKey;
             }
         }
 
@@ -450,9 +490,9 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.compu_methods_size(); ++i) {
                 const auto& item = module.compu_methods(i);
-                appendEntity(section,
-                             text(item.name()),
-                             text(a2l::ConversionType_Name(item.conversion_type())),
+                appendNamed(section,
+                             item.name(),
+                             enumKeyword(item.conversion_type()),
                              QStringLiteral("compumethod"),
                              A2lPath{A2lEntityKind::CompuMethod, moduleIndex, i, -1});
             }
@@ -466,8 +506,8 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.record_layouts_size(); ++i) {
                 const auto& item = module.record_layouts(i);
-                appendEntity(section,
-                             text(item.name()),
+                appendNamed(section,
+                             item.name(),
                              QStringLiteral("%1 components").arg(item.components_size()),
                              QStringLiteral("recordlayout"),
                              A2lPath{A2lEntityKind::RecordLayout, moduleIndex, i, -1});
@@ -482,8 +522,8 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.units_size(); ++i) {
                 const auto& item = module.units(i);
-                appendEntity(section,
-                             text(item.name()),
+                appendNamed(section,
+                             item.name(),
                              text(item.display()),
                              QStringLiteral("unit"),
                              A2lPath{A2lEntityKind::Unit, moduleIndex, i, -1});
@@ -498,8 +538,8 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.functions_size(); ++i) {
                 const auto& item = module.functions(i);
-                appendEntity(section,
-                             text(item.name()),
+                appendNamed(section,
+                             item.name(),
                              QStringLiteral("%1 refs").arg(item.in_measurements_size() +
                                                            item.out_measurements_size() +
                                                            item.def_characteristics_size() +
@@ -517,11 +557,60 @@ void A2lDocumentSession::buildTree() {
                                            SemanticKind::Section);
             for (int i = 0; i < module.groups_size(); ++i) {
                 const auto& item = module.groups(i);
-                appendEntity(section,
-                             text(item.name()),
+                appendNamed(section,
+                             item.name(),
                              item.has_root() && item.root() ? QStringLiteral("root") : QString(),
                              QStringLiteral("group"),
                              A2lPath{A2lEntityKind::Group, moduleIndex, i, -1});
+            }
+        }
+
+        if (module.frames_size() > 0) {
+            TreeItem* section = appendNode(moduleItem,
+                                           QStringLiteral("Frames"),
+                                           QString::number(module.frames_size()),
+                                           QStringLiteral("frames"),
+                                           SemanticKind::Section);
+            for (int i = 0; i < module.frames_size(); ++i) {
+                const auto& item = module.frames(i);
+                appendNamed(section,
+                            item.name(),
+                            QStringLiteral("%1 measurements").arg(item.frame_measurements_size()),
+                            QStringLiteral("frame"),
+                            A2lPath{A2lEntityKind::Frame, moduleIndex, i, -1});
+            }
+        }
+
+        if (module.transformers_size() > 0) {
+            TreeItem* section = appendNode(moduleItem,
+                                           QStringLiteral("Transformers"),
+                                           QString::number(module.transformers_size()),
+                                           QStringLiteral("transformers"),
+                                           SemanticKind::Section);
+            for (int i = 0; i < module.transformers_size(); ++i) {
+                const auto& item = module.transformers(i);
+                appendNamed(section,
+                            item.name(),
+                            enumKeyword(item.trigger()),
+                            QStringLiteral("transformer"),
+                            A2lPath{A2lEntityKind::Transformer, moduleIndex, i, -1});
+            }
+        }
+
+        if (module.user_rights_size() > 0) {
+            TreeItem* section = appendNode(moduleItem,
+                                           QStringLiteral("User Rights"),
+                                           QString::number(module.user_rights_size()),
+                                           QStringLiteral("userrights"),
+                                           SemanticKind::Section);
+            for (int i = 0; i < module.user_rights_size(); ++i) {
+                const auto& item = module.user_rights(i);
+                appendNamed(section,
+                            item.user_level_id(),
+                            item.has_read_only() && item.read_only() ? QStringLiteral("read only")
+                                                                     : QString(),
+                            QStringLiteral("userrights"),
+                            A2lPath{A2lEntityKind::UserRights, moduleIndex, i, -1});
             }
         }
 
@@ -555,8 +644,10 @@ void A2lDocumentSession::buildTree() {
         }
 
         if (module.typedef_characteristics_size() > 0 ||
+            module.typedef_measurements_size() > 0 ||
             module.typedef_structures_size() > 0 ||
             module.typedef_axes_size() > 0 ||
+            module.typedef_blobs_size() > 0 ||
             module.instances_size() > 0) {
             TreeItem* typesSection = appendNode(moduleItem,
                                                 QStringLiteral("Types"),
@@ -572,9 +663,9 @@ void A2lDocumentSession::buildTree() {
                                                SemanticKind::Section);
                 for (int i = 0; i < module.typedef_characteristics_size(); ++i) {
                     const auto& item = module.typedef_characteristics(i);
-                    appendEntity(section,
-                                 text(item.name()),
-                                 text(a2l::CharacteristicType_Name(item.type())),
+                    appendNamed(section,
+                                 item.name(),
+                                 enumKeyword(item.type()),
                                  QStringLiteral("typedefcharacteristic"),
                                  A2lPath{A2lEntityKind::TypedefItem, moduleIndex, i, kTypedefCharacteristicCategory});
                 }
@@ -588,8 +679,8 @@ void A2lDocumentSession::buildTree() {
                                                SemanticKind::Section);
                 for (int i = 0; i < module.typedef_structures_size(); ++i) {
                     const auto& item = module.typedef_structures(i);
-                    appendEntity(section,
-                                 text(item.name()),
+                    appendNamed(section,
+                                 item.name(),
                                  QStringLiteral("%1 components").arg(item.components_size()),
                                  QStringLiteral("typedefstructure"),
                                  A2lPath{A2lEntityKind::TypedefItem, moduleIndex, i, kTypedefStructureCategory});
@@ -604,11 +695,43 @@ void A2lDocumentSession::buildTree() {
                                                SemanticKind::Section);
                 for (int i = 0; i < module.typedef_axes_size(); ++i) {
                     const auto& item = module.typedef_axes(i);
-                    appendEntity(section,
-                                 text(item.name()),
+                    appendNamed(section,
+                                 item.name(),
                                  text(item.input_quantity()),
                                  QStringLiteral("typedefaxis"),
                                  A2lPath{A2lEntityKind::TypedefItem, moduleIndex, i, kTypedefAxisCategory});
+                }
+            }
+
+            if (module.typedef_measurements_size() > 0) {
+                TreeItem* section = appendNode(typesSection,
+                                               QStringLiteral("Typedef Measurements"),
+                                               QString::number(module.typedef_measurements_size()),
+                                               QStringLiteral("typedefmeasurements"),
+                                               SemanticKind::Section);
+                for (int i = 0; i < module.typedef_measurements_size(); ++i) {
+                    const auto& item = module.typedef_measurements(i);
+                    appendNamed(section,
+                                item.name(),
+                                enumKeyword(item.datatype()),
+                                QStringLiteral("typedefmeasurement"),
+                                A2lPath{A2lEntityKind::TypedefItem, moduleIndex, i, kTypedefMeasurementCategory});
+                }
+            }
+
+            if (module.typedef_blobs_size() > 0) {
+                TreeItem* section = appendNode(typesSection,
+                                               QStringLiteral("Typedef Blobs"),
+                                               QString::number(module.typedef_blobs_size()),
+                                               QStringLiteral("typedefblobs"),
+                                               SemanticKind::Section);
+                for (int i = 0; i < module.typedef_blobs_size(); ++i) {
+                    const auto& item = module.typedef_blobs(i);
+                    appendNamed(section,
+                                item.name(),
+                                QStringLiteral("%1 bytes").arg(item.size()),
+                                QStringLiteral("typedefblob"),
+                                A2lPath{A2lEntityKind::TypedefItem, moduleIndex, i, kTypedefBlobCategory});
                 }
             }
 
@@ -620,8 +743,8 @@ void A2lDocumentSession::buildTree() {
                                                SemanticKind::Section);
                 for (int i = 0; i < module.instances_size(); ++i) {
                     const auto& item = module.instances(i);
-                    appendEntity(section,
-                                 text(item.name()),
+                    appendNamed(section,
+                                 item.name(),
                                  text(item.type_ref()),
                                  QStringLiteral("instance"),
                                  A2lPath{A2lEntityKind::Instance, moduleIndex, i, -1});

@@ -33,8 +33,12 @@ private:
     // Appends a row that shows the entity at `path`.
     TreeItem* appendEntity(TreeItem* parent, const QString& title, const QString& subtitle,
                            const QString& iconKey, A2lPath path);
+    // Appends the row of a named entity, which a link in the details can select.
+    TreeItem* appendNamed(TreeItem* parent, const std::string& name, const QString& subtitle,
+                          const QString& iconKey, A2lPath path);
 
     a2l::A2lFile _document;
+    A2lLinks _links;
     A2lDetailPresenter _presenter;
     // The entity each entity row shows, by the row's key.
     std::unordered_map<quint64, A2lPath> _paths;

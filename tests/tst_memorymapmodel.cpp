@@ -4,8 +4,9 @@
 // ownership and overlap from the one sparse tile query (queryBytes) that
 // hit-testing (objectAtAddress) and hatching (isOverlap) also read, at any
 // distance into a segment; row geometry across multi-gigabyte segments; range
-// queries feeding the byte-range selection readout (objectsInRange); and the
-// record-layout / conversion roles feeding the hover tooltip.
+// queries feeding the byte-range selection readout (objectsInRange); the
+// record-layout / conversion roles feeding the hover tooltip; and the segment
+// a file opens on, with its label.
 
 #include "models/memorymapmodel.h"
 
@@ -53,6 +54,7 @@ private slots:
     void laterRowOwnsSharedBytes();
     void intervalEndsSaturate();
     void tooltipRolesExposed();
+    void opensOnTheBusiestSegment();
 
 private:
     std::unique_ptr<MemoryMapModel> _model;
@@ -322,6 +324,51 @@ void TestMemoryMapModel::tooltipRolesExposed() {
     const auto names = _model->roleNames();
     QVERIFY(names.contains(MemoryMapModel::RecordLayoutRole));
     QVERIFY(names.contains(MemoryMapModel::ConversionRole));
+}
+
+// A file lists its empty program-code segment first; the map opens on the
+// calibration data, and a label keeps the segment name as the file writes it.
+// Calibration objects decide before the count of all objects.
+void TestMemoryMapModel::opensOnTheBusiestSegment() {
+    MemoryMapModel model;
+    MemorySegmentInfo code;
+    code.name = QStringLiteral("Code");
+    code.address = 0x80000000;
+    code.size = 0x1000;
+    code.memoryType = QStringLiteral("FLASH");
+    code.prgType = QStringLiteral("CODE");
+    MemorySegmentInfo cal = code;
+    cal.name = QStringLiteral("CalData");
+    cal.address = 0x80040000;
+    cal.size = 0x100;
+    cal.prgType = QStringLiteral("DATA");
+    model.addSegment(code);
+    model.addSegment(cal);
+    model.addObject(makeObject(QStringLiteral("KF_A"), 0x80040000, 4));
+    model.addObject(makeObject(QStringLiteral("KF_B"), 0x80040010, 4));
+    model.finalize();
+
+    QCOMPARE(model.currentSegment(), 1);
+    QCOMPARE(model.objectCount(), 2);
+    QCOMPARE(model.segmentLabel(1),
+             QStringLiteral("CalData  0x80040000 .. 0x800400FF  FLASH \u00b7 DATA"));
+
+    // Calibration data outranks a RAM segment holding more measurements.
+    MemoryMapModel ecu;
+    MemorySegmentInfo ram = code;
+    ram.name = QStringLiteral("Ram");
+    ram.address = 0x70000000;
+    ram.size = 0x100;
+    ecu.addSegment(ram);
+    ecu.addSegment(cal);
+    for (uint64_t i = 0; i < 3; ++i) {
+        ecu.addObject(makeObject(QStringLiteral("M%1").arg(i), 0x70000000 + 4 * i, 4));
+    }
+    MemoryObject map = makeObject(QStringLiteral("KF_C"), 0x80040000, 4);
+    map.calibration = true;
+    ecu.addObject(map);
+    ecu.finalize();
+    QCOMPARE(ecu.currentSegment(), 1);
 }
 
 QTEST_MAIN(TestMemoryMapModel)

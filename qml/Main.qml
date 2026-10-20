@@ -14,11 +14,22 @@ ApplicationWindow {
     palette.accent: Theme.accent
     palette.highlight: Theme.accent
     palette.highlightedText: "white"
-    title: "Automotive Format Explorer"
+    title: AppController.currentTab
+           ? AppController.currentTab.title + " — Automotive Format Explorer"
+           : "Automotive Format Explorer"
 
     property bool leftPaneVisible: true
     property real _savedLeftWidth: 320
     property bool _ready: false
+
+    // Selects an entity as a tree click does, from elsewhere: a link in the
+    // details. The tree and the center view move to it.
+    function showNode(nodeKey) {
+        AppController.selectCurrentNode(nodeKey)
+        navPanel.selectAndScrollTo(nodeKey)
+        if (centerPanelLoader.item && centerPanelLoader.item.scrollToNodeKey)
+            centerPanelLoader.item.scrollToNodeKey(nodeKey)
+    }
 
     // Deferred startup — C++ handles show via DWM cloak.
     // Timer lets the first frame render before dismissing splash.
@@ -519,23 +530,38 @@ ApplicationWindow {
                                                 model: fields
 
                                                 delegate: RowLayout {
+                                                    id: fieldRow
+                                                    required property var modelData
+                                                    readonly property bool isLink: modelData.target > 0
                                                     Layout.fillWidth: true
                                                     spacing: Theme.sp12
 
                                                     Label {
                                                         Layout.preferredWidth: 180
+                                                        visible: fieldRow.modelData.key.length > 0
                                                         font.bold: true
                                                         font.pixelSize: Theme.fontSizeM
                                                         color: Theme.textSecondary
-                                                        text: modelData.key + ":"
+                                                        text: fieldRow.modelData.key + ":"
                                                     }
 
+                                                    // A value naming another entity selects it.
                                                     Label {
                                                         Layout.fillWidth: true
                                                         wrapMode: Text.Wrap
                                                         font.pixelSize: Theme.fontSizeM
-                                                        color: Theme.textPrimary
-                                                        text: modelData.value
+                                                        font.underline: fieldRow.isLink && valueMa.containsMouse
+                                                        color: fieldRow.isLink ? Theme.accent : Theme.textPrimary
+                                                        text: fieldRow.modelData.value
+
+                                                        MouseArea {
+                                                            id: valueMa
+                                                            anchors.fill: parent
+                                                            enabled: fieldRow.isLink
+                                                            hoverEnabled: true
+                                                            cursorShape: Qt.PointingHandCursor
+                                                            onClicked: root.showNode(fieldRow.modelData.target)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -548,7 +574,7 @@ ApplicationWindow {
                                         font.pixelSize: Theme.fontSizeL
                                         color: Theme.textMuted
                                         text: tabs.count === 0
-                                              ? "Open a file to inspect its structure."
+                                              ? "Open a file (Ctrl+O) or drop it here to inspect its structure."
                                               : "Select a tree node to view details."
                                         visible: detailList.count === 0
                                     }
@@ -623,6 +649,35 @@ ApplicationWindow {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: root.leftPaneVisible = true
+        }
+    }
+
+    // --- Files dropped on the window open, one after another ---
+    DropArea {
+        id: fileDrop
+        anchors.fill: parent
+        z: 5
+        keys: ["text/uri-list"]
+        onDropped: function(drop) {
+            if (!drop.hasUrls)
+                return
+            AppController.openFiles(drop.urls)
+            drop.accept(Qt.CopyAction)
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            visible: fileDrop.containsDrag
+            color: "#60000000"
+            border.color: Theme.accent
+            border.width: 2
+
+            Label {
+                anchors.centerIn: parent
+                text: "Drop to open"
+                font.pixelSize: Theme.fontSizeL
+                color: Theme.textWhite
+            }
         }
     }
 

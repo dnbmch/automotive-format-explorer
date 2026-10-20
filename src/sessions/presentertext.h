@@ -5,6 +5,7 @@
 // protobuf-typed helpers stay in the per-format presenter headers.
 
 #include "core/detailsection.h"
+#include "core/hextext.h"
 
 #include <QByteArrayView>
 #include <QString>
@@ -15,6 +16,8 @@
 
 #pragma push_macro("signals")
 #undef signals
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/generated_enum_reflection.h>
 #include <google/protobuf/message.h>
 #include <google/protobuf/repeated_ptr_field.h>
 #include <google/protobuf/util/json_util.h>
@@ -36,12 +39,41 @@ inline QString boolText(bool value) {
     return value ? QStringLiteral("Yes") : QStringLiteral("No");
 }
 
-inline QString hexId(quint32 value) {
-    return QStringLiteral("0x%1").arg(value, 0, 16).toUpper();
+// The length of the prefix every value name of the enum shares, up to its
+// last underscore: "CHARACTERISTIC_TYPE_" for CharacteristicType.
+// (Descriptor names are std::string in older protobuf, string_view in newer.)
+inline size_t enumPrefixLength(const google::protobuf::EnumDescriptor& descriptor) {
+    const std::string first(descriptor.value(0)->name());
+    size_t shared = first.size();
+    for (int i = 1; i < descriptor.value_count(); ++i) {
+        const std::string name(descriptor.value(i)->name());
+        size_t n = 0;
+        while (n < shared && n < name.size() && name[n] == first[n]) {
+            ++n;
+        }
+        shared = n;
+    }
+    if (shared == 0) {
+        return 0;
+    }
+    const size_t underscore = first.rfind('_', shared - 1);
+    return underscore == std::string::npos ? 0 : underscore + 1;
 }
 
-inline QString hexValue(quint32 value) {
-    return QStringLiteral("0x%1").arg(value, 0, 16).toUpper();
+// A proto enum value as the file's own keyword: its name without the shared
+// prefix, since each value names its keyword after it (CHARACTERISTIC_TYPE_MAP
+// is MAP). An UNSPECIFIED value is empty, so addField leaves it out; a number
+// the enum does not declare reads as that number.
+template<typename E>
+QString enumKeyword(E value) {
+    const google::protobuf::EnumDescriptor* descriptor = google::protobuf::GetEnumDescriptor<E>();
+    static const size_t prefix = enumPrefixLength(*descriptor);
+    const google::protobuf::EnumValueDescriptor* entry = descriptor->FindValueByNumber(value);
+    if (!entry) {
+        return QString::number(static_cast<int>(value));
+    }
+    const std::string keyword = std::string(entry->name()).substr(prefix);
+    return keyword == "UNSPECIFIED" ? QString() : QString::fromStdString(keyword);
 }
 
 inline void addField(QList<DetailField>& fields, const QString& key, const QString& value) {

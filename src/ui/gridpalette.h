@@ -11,18 +11,20 @@
 // Shared styling helpers for the QQuickPaintedItem grid renderers
 // (MemoryGridItem / SignalGridItem).
 //
-// Cell color encoding: -1 = unoccupied, otherwise (colorIndex 0-7 | 0x10
+// Cell color encoding: -1 = unoccupied, otherwise (colorIndex 0-15 | 0x10
 // alternate-shade bit) indexing the 32-entry palette.
+
+constexpr int kGridColorCount = 16;   // base colors; the shade bit 0x10 doubles them
 
 class GridPalette {
 public:
     void setColors(const QVariantList& colors, const QColor& unoccupied) {
         _palette.clear();
         _palette.resize(32);
-        for (int i = 0; i < colors.size() && i < 8; ++i) {
+        for (int i = 0; i < colors.size() && i < kGridColorCount; ++i) {
             QColor base(colors[i].toString());
-            _palette[static_cast<size_t>(i)] = base;                      // normal: 0-7
-            _palette[static_cast<size_t>(i | 0x10)] = base.darker(130);  // alternate: 16-23
+            _palette[static_cast<size_t>(i)] = base;                      // normal: 0-15
+            _palette[static_cast<size_t>(i | 0x10)] = base.darker(130);  // alternate: 16-31
         }
         _unoccupied = unoccupied;
     }
@@ -55,8 +57,12 @@ public:
     }
 
 private:
-    std::array<int8_t, 8> _shade{};
-    std::array<int32_t, 8> _last{-1, -1, -1, -1, -1, -1, -1, -1};
+    std::array<int8_t, kGridColorCount> _shade{};
+    std::array<int32_t, kGridColorCount> _last = [] {
+        std::array<int32_t, kGridColorCount> none{};
+        none.fill(-1);
+        return none;
+    }();
 };
 
 // Fading white flash around one object/signal, driven by a 30 ms timer.

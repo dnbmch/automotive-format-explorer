@@ -1,4 +1,5 @@
 #include "models/signalmapmodel.h"
+#include "core/hextext.h"
 
 #include <algorithm>
 
@@ -81,8 +82,8 @@ QString SignalMapModel::messageLabel(int index) const {
     }
     const auto& msg = _messages[index];
     QString idStr = msg.isExtendedId
-        ? QStringLiteral("0x%1x").arg(msg.id, 0, 16).toUpper()
-        : QStringLiteral("0x%1").arg(msg.id, 0, 16).toUpper();
+        ? hexText(msg.id) + QLatin1Char('x')
+        : hexText(msg.id);
     return QStringLiteral("%1  %2  DLC=%3").arg(idStr, msg.name).arg(msg.dlc);
 }
 

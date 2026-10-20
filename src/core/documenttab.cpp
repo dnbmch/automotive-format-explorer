@@ -11,6 +11,10 @@ DocumentSession* DocumentTab::session() const {
     return _session.get();
 }
 
+QString DocumentTab::title() const {
+    return _session->displayName();
+}
+
 TreeFilterModel* DocumentTab::treeModel() {
     return &_tree_filter;
 }

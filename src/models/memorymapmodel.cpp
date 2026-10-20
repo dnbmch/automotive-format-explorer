@@ -1,4 +1,5 @@
 #include "models/memorymapmodel.h"
+#include "core/hextext.h"
 
 #include <algorithm>
 
@@ -72,18 +73,12 @@ QString MemoryMapModel::segmentLabel(int index) const {
         return {};
     }
     const auto& seg = _segments[static_cast<size_t>(index)];
+    const QString range = QStringLiteral("%1 .. %2")
+        .arg(hexText(seg.address, 8), hexText(seg.address + seg.size - 1, 8));
     if (seg.synthetic) {
-        return QStringLiteral("[derived]  [0x%1 .. 0x%2]")
-            .arg(seg.address, 0, 16)
-            .arg(seg.address + seg.size - 1, 0, 16)
-            .toUpper();
+        return QStringLiteral("derived  %1").arg(range);
     }
-    return QStringLiteral("%1  [0x%2 .. 0x%3]  %4 / %5")
-        .arg(seg.name)
-        .arg(seg.address, 0, 16)
-        .arg(seg.address + seg.size - 1, 0, 16)
-        .arg(seg.memoryType, seg.prgType)
-        .toUpper();
+    return QStringLiteral("%1  %2  %3 · %4").arg(seg.name, range, seg.memoryType, seg.prgType);
 }
 
 quint64 MemoryMapModel::viewStartAddress() const {
@@ -281,14 +276,36 @@ void MemoryMapModel::finalize() {
         maxAddr = alignedEnd >= maxAddr ? alignedEnd : std::numeric_limits<uint64_t>::max();
 
         MemorySegmentInfo synthetic;
-        synthetic.name = QStringLiteral("[derived]");
         synthetic.address = minAddr;
         synthetic.size = maxAddr - minAddr;
         synthetic.synthetic = true;
         _segments.push_back(std::move(synthetic));
     }
 
+    // Open on the segment that holds the most calibration objects, then the
+    // most objects (the first of equals), not on whichever the file happens to
+    // list first.
+    size_t busiest = 0;
+    std::pair<size_t, size_t> most{0, 0};
+    for (size_t s = 0; s < _segments.size(); ++s) {
+        const uint64_t segEnd = addressEnd(_segments[s].address, _segments[s].size);
+        std::pair<size_t, size_t> held{0, 0};
+        for (const MemoryObject& obj : _all_objects) {
+            if (addressEnd(obj.address, obj.size > 0 ? obj.size : 1) > _segments[s].address
+                && obj.address < segEnd) {
+                held.first += obj.calibration ? 1 : 0;
+                ++held.second;
+            }
+        }
+        if (held > most) {
+            most = held;
+            busiest = s;
+        }
+    }
+    _current_segment = static_cast<int>(busiest);
+
     emit segmentsChanged();
+    emit currentSegmentChanged();
     rebuildFilteredObjects();
 }
 

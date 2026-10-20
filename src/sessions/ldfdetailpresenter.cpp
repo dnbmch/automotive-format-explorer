@@ -9,7 +9,7 @@ using namespace ldfdetail;
 namespace {
 
 QString hexAndDecimal(quint32 value) {
-    return QStringLiteral("%1 (%2)").arg(hexValue(value)).arg(value);
+    return QStringLiteral("%1 (%2)").arg(hexText(value)).arg(value);
 }
 
 QString joinNumbers(const google::protobuf::RepeatedField<google::protobuf::uint32>& values) {
@@ -53,7 +53,7 @@ QString ldfdetail::scheduleEntryLabel(const ldf::ScheduleEntry& entry) {
     case ldf::ScheduleEntry::kFrameName:
         return text(entry.frame_name());
     case ldf::ScheduleEntry::kDiagnosticCommand:
-        return text(ldf::DiagnosticCommand_Type_Name(entry.diagnostic_command().type()));
+        return enumKeyword(entry.diagnostic_command().type());
     case ldf::ScheduleEntry::COMMAND_NOT_SET:
         break;
     }
@@ -168,7 +168,7 @@ QList<DetailSection> LdfDetailPresenter::nodeDetails(const ldf::Node& node, bool
     QList<DetailSection> sections;
     QList<DetailField> identity;
     addField(identity, QStringLiteral("Name"), text(node.name()));
-    addField(identity, QStringLiteral("Role"), text(ldf::NodeRole_Name(node.role())));
+    addField(identity, QStringLiteral("Role"), enumKeyword(node.role()));
     pushSection(sections, QStringLiteral("Identity"), std::move(identity));
 
     QList<DetailField> timing;

@@ -68,6 +68,9 @@ public:
     void shutdown();
 
     Q_INVOKABLE void openFile(const QUrl& fileUrl);
+    // Opens each file in turn, one load at a time, as the command line does:
+    // files dropped on the window.
+    Q_INVOKABLE void openFiles(const QList<QUrl>& files);
     // Closes the tab at `index`. A current tab hands over to its successor,
     // else its predecessor; the closed tab is destroyed after the notifications.
     Q_INVOKABLE void closeTab(int index);

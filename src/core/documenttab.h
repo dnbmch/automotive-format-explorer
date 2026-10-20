@@ -16,6 +16,7 @@
 // hand it to the JavaScript engine.
 class DocumentTab : public QObject {
     Q_OBJECT
+    Q_PROPERTY(QString title READ title CONSTANT)
     Q_PROPERTY(TreeFilterModel* treeModel READ treeModel CONSTANT)
     Q_PROPERTY(QString filterText READ filterText NOTIFY filterTextChanged)
     Q_PROPERTY(QVariantList expandedKeys READ expandedKeys NOTIFY navigationChanged)
@@ -26,6 +27,8 @@ public:
     explicit DocumentTab(std::unique_ptr<DocumentSession> session);
 
     DocumentSession* session() const;
+    // The file's name, as its tab shows it.
+    QString title() const;
     TreeFilterModel* treeModel();
     QString filterText() const;
     // Keys of the expanded rows in row order, so parents precede children.

@@ -20,7 +20,7 @@ namespace {
 const QVariantList kColors = {
     QStringLiteral("#4a90d9"), QStringLiteral("#2bb3a0"), QStringLiteral("#9b59b6"),
     QStringLiteral("#5c6bc0"), QStringLiteral("#e67e22"), QStringLiteral("#26c6da"),
-    QStringLiteral("#66bb6a"), QStringLiteral("#d4ac0d"),
+    QStringLiteral("#66bb6a"), QStringLiteral("#d4ac0d"), QStringLiteral("#c0708a"),
 };
 const QColor kUnoccupied(0x33, 0x33, 0x33);
 
@@ -88,10 +88,27 @@ class TestMemoryGridItem : public QObject {
 
 private slots:
     void objectBeyondSixteenMiBPainted();
+    void ninthColorPaintsBothShades();
     void farObjectPaintedAndSelectable();
     void colorsStableAcrossScrolling();
     void modelDestroyedBeforeItem();
 };
+
+// Color 8 (an A2L BLOB) is past the first eight: two adjacent objects of it
+// paint its base color and its darker shade.
+void TestMemoryGridItem::ninthColorPaintsBothShades() {
+    MemoryMapModel model;
+    model.addObject(makeObject(QStringLiteral("BlobA"), 0x1000, 4, 8, 1));
+    model.addObject(makeObject(QStringLiteral("BlobB"), 0x1004, 4, 8, 2));
+    model.finalize();
+
+    GridItem item;
+    prepare(item, model);
+    const QImage image = render(item);
+    const QColor base(kColors[8].toString());
+    QCOMPARE(image.pixel(cellCenter(item, model, 0)), base.rgb());
+    QCOMPARE(image.pixel(cellCenter(item, model, 4)), base.darker(130).rgb());
+}
 
 void TestMemoryGridItem::objectBeyondSixteenMiBPainted() {
     // A 64 MiB segment, short enough for any row arithmetic: an object 48 MiB

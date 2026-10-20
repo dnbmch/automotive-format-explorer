@@ -32,6 +32,7 @@ QVariant DetailModel::data(const QModelIndex& index, int role) const {
             QVariantMap item;
             item.insert(QStringLiteral("key"), field.key);
             item.insert(QStringLiteral("value"), field.value);
+            item.insert(QStringLiteral("target"), QVariant::fromValue(qulonglong(field.target)));
             fields.push_back(item);
         }
         return fields;

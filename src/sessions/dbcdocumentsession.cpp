@@ -82,7 +82,7 @@ void DbcDocumentSession::buildTree() {
             const auto& message = _document.messages(i);
             TreeItem* messageItem = appendEntity(section,
                                                  text(message.name()),
-                                                 QStringLiteral("%1  DLC=%2").arg(hexId(message.id())).arg(message.dlc()),
+                                                 QStringLiteral("%1  DLC=%2").arg(hexText(message.id())).arg(message.dlc()),
                                                  QStringLiteral("message"),
                                                  DbcPath{DbcEntityKind::Message, i});
             _tree_node_keys[{static_cast<int>(DbcEntityKind::Message), i, -1}] = messageItem->nodeKey;
@@ -117,7 +117,7 @@ void DbcDocumentSession::buildTree() {
             const auto& envVar = _document.environment_variables(i);
             appendEntity(section,
                          text(envVar.name()),
-                         text(dbc::EnvironmentVariableType_Name(envVar.var_type())),
+                         enumKeyword(envVar.var_type()),
                          QStringLiteral("envvar"),
                          DbcPath{DbcEntityKind::EnvironmentVariable, i});
         }
@@ -129,7 +129,7 @@ void DbcDocumentSession::buildTree() {
             const auto& group = _document.signal_groups(i);
             appendEntity(section,
                          text(group.name()),
-                         hexId(group.message_id()),
+                         hexText(group.message_id()),
                          QStringLiteral("signalgroup"),
                          DbcPath{DbcEntityKind::SignalGroup, i});
         }
@@ -144,7 +144,7 @@ void DbcDocumentSession::buildTree() {
                 const auto& definition = _document.attribute_definitions(i);
                 appendEntity(defs,
                              text(definition.name()),
-                             text(dbc::AttributeScope_Name(definition.scope())),
+                             enumKeyword(definition.scope()),
                              QStringLiteral("attrdef"),
                              DbcPath{DbcEntityKind::AttributeDefinition, i});
             }

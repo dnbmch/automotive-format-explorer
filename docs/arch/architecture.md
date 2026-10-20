@@ -443,7 +443,19 @@ Center panel (memory grid / signal grid click)
             └─► AppController::selectCurrentNode(nodeKey)
                     └─► (same path as above)
             └─► NavPanel::selectAndScrollTo(nodeKey)
+
+Detail panel (a link in a card)
+    └─► Main.showNode(nodeKey)
+            └─► AppController::selectCurrentNode(nodeKey)
+            └─► NavPanel::selectAndScrollTo(nodeKey)
+            └─► center panel: scrollToNodeKey(nodeKey)
 ```
+
+A card row whose value names another entity carries that entity's row key in
+`DetailField::target`; the panel draws it as a link. The A2L session resolves a
+name through `A2lLinks` — module, entity kind and name to row key — which it fills
+while it builds the tree; a name the file does not define stays plain text.
+`selectAndScrollTo` clears a tree filter that hides the row it is asked for.
 
 `AppController` is the single mediator. The tree, detail, and center panels never call each other directly — they all go through the controller and identify entities by `nodeKey`.
 

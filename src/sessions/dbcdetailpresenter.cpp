@@ -105,7 +105,7 @@ QList<DetailSection> DbcDetailPresenter::messageDetails(const DbcPath& path) con
     const auto& message = _document.messages(path.primaryIndex);
     QList<DetailField> identity;
     addField(identity, QStringLiteral("Name"), text(message.name()));
-    addField(identity, QStringLiteral("CAN ID"), hexId(message.id()));
+    addField(identity, QStringLiteral("CAN ID"), hexText(message.id()));
     addField(identity, QStringLiteral("Extended ID"), boolText(message.is_extended_id()));
     addNumberField(identity, QStringLiteral("DLC"), message.dlc());
     addField(identity, QStringLiteral("Sender"), text(message.sender()));
@@ -153,10 +153,10 @@ QList<DetailSection> DbcDetailPresenter::messageDetails(const DbcPath& path) con
         addField(sigFields, QStringLiteral("Receivers"), joinStrings(sig.receivers()));
         addField(sigFields, QStringLiteral("Signed"), sig.is_signed() ? QStringLiteral("Yes") : QStringLiteral("No"));
         if (sig.value_type() != dbc::VALUE_TYPE_INTEGER) {
-            addField(sigFields, QStringLiteral("Value Type"), text(dbc::ValueType_Name(sig.value_type())));
+            addField(sigFields, QStringLiteral("Value Type"), enumKeyword(sig.value_type()));
         }
         if (sig.multiplex_type() != dbc::MULTIPLEX_NONE) {
-            QString muxText = text(dbc::MultiplexType_Name(sig.multiplex_type()));
+            QString muxText = enumKeyword(sig.multiplex_type());
             if (sig.multiplex_type() == dbc::MULTIPLEX_MULTIPLEXED ||
                 sig.multiplex_type() == dbc::MULTIPLEX_MULTIPLEXED_AND_MULTIPLEXOR) {
                 muxText += QStringLiteral(" (m%1)").arg(sig.multiplex_value());
@@ -216,7 +216,7 @@ QList<DetailSection> DbcDetailPresenter::signalDetails(const DbcPath& path) cons
     addNumberField(layout, QStringLiteral("Bit Length"), signal.bit_length());
     addField(layout,
              QStringLiteral("Byte Order"),
-             text(dbc::ByteOrder_Name(signal.byte_order())));
+             enumKeyword(signal.byte_order()));
     addField(layout, QStringLiteral("Signed"), boolText(signal.is_signed()));
     pushSection(sections, QStringLiteral("Layout"), std::move(layout));
 
@@ -228,13 +228,13 @@ QList<DetailSection> DbcDetailPresenter::signalDetails(const DbcPath& path) cons
     addField(scaling, QStringLiteral("Unit"), text(signal.unit()));
     addField(scaling,
              QStringLiteral("Value Type"),
-             text(dbc::ValueType_Name(signal.value_type())));
+             enumKeyword(signal.value_type()));
     pushSection(sections, QStringLiteral("Scaling"), std::move(scaling));
 
     QList<DetailField> multiplexing;
     addField(multiplexing,
              QStringLiteral("Mode"),
-             text(dbc::MultiplexType_Name(signal.multiplex_type())));
+             enumKeyword(signal.multiplex_type()));
     if (signal.multiplex_type() == dbc::MULTIPLEX_MULTIPLEXED ||
         signal.multiplex_type() == dbc::MULTIPLEX_MULTIPLEXED_AND_MULTIPLEXOR) {
         addNumberField(multiplexing, QStringLiteral("Value"), signal.multiplex_value());
@@ -318,10 +318,10 @@ QList<DetailSection> DbcDetailPresenter::attributeDefinitionDetails(const DbcPat
     addField(fields, QStringLiteral("Name"), text(definition.name()));
     addField(fields,
              QStringLiteral("Scope"),
-             text(dbc::AttributeScope_Name(definition.scope())));
+             enumKeyword(definition.scope()));
     addField(fields,
              QStringLiteral("Value Type"),
-             text(dbc::AttributeValueType_Name(definition.value_type())));
+             enumKeyword(definition.value_type()));
     addNumberField(fields, QStringLiteral("Int Min"), definition.int_min());
     addNumberField(fields, QStringLiteral("Int Max"), definition.int_max());
     addNumberField(fields, QStringLiteral("Float Min"), definition.float_min());
@@ -361,7 +361,7 @@ QList<DetailSection> DbcDetailPresenter::attributeValueDetails(const DbcPath& pa
     addField(fields, QStringLiteral("Value"), text(value.value()));
     addField(fields,
              QStringLiteral("Scope"),
-             text(dbc::AttributeScope_Name(value.scope())));
+             enumKeyword(value.scope()));
     pushSection(sections, QStringLiteral("Attribute"), std::move(fields));
     return sections;
 }
@@ -377,7 +377,7 @@ QList<DetailSection> DbcDetailPresenter::environmentVariableDetails(const DbcPat
     addField(identity, QStringLiteral("Name"), text(envVar.name()));
     addField(identity,
              QStringLiteral("Type"),
-             text(dbc::EnvironmentVariableType_Name(envVar.var_type())));
+             enumKeyword(envVar.var_type()));
     addField(identity, QStringLiteral("Unit"), text(envVar.unit()));
     pushSection(sections, QStringLiteral("Identity"), std::move(identity));
 
@@ -410,7 +410,7 @@ QList<DetailSection> DbcDetailPresenter::signalGroupDetails(const DbcPath& path)
     const auto& group = _document.signal_groups(path.primaryIndex);
     QList<DetailField> identity;
     addField(identity, QStringLiteral("Name"), text(group.name()));
-    addField(identity, QStringLiteral("Message ID"), hexId(group.message_id()));
+    addField(identity, QStringLiteral("Message ID"), hexText(group.message_id()));
     addNumberField(identity, QStringLiteral("Repetitions"), group.repetitions());
     pushSection(sections, QStringLiteral("Identity"), std::move(identity));
 

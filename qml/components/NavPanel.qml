@@ -113,6 +113,11 @@ Rectangle {
     function selectAndScrollTo(nodeKey) {
         if (!treeView.model) return
         let modelIdx = treeView.model.indexForNodeKey(nodeKey)
+        if (!modelIdx.valid && searchField.text.length > 0) {
+            // The filter hides the row: clear it to show the row in the whole tree.
+            _applyFilter("")
+            modelIdx = treeView.model.indexForNodeKey(nodeKey)
+        }
         if (!modelIdx.valid) return
 
         // Expand all ancestors so the node is visible.
@@ -170,18 +175,21 @@ Rectangle {
 
                 // Open file
                 Rectangle {
-                    width: 24; height: 24
+                    width: openLabel.implicitWidth + 16; height: 22
                     radius: Theme.radius
-                    color: openMa.containsMouse ? Theme.bgButtonHov : "transparent"
+                    color: openMa.containsMouse ? Theme.bgButtonHov : Theme.bgButton
+                    border.color: Theme.border
+                    border.width: 1
                     ToolTip.text: "Open file (Ctrl+O)"
                     ToolTip.visible: openMa.containsMouse
                     ToolTip.delay: 400
 
                     Label {
+                        id: openLabel
                         anchors.centerIn: parent
-                        text: "\u2750"
-                        font.pixelSize: 14
-                        color: Theme.textSecondary
+                        text: "Open\u2026"
+                        font.pixelSize: Theme.fontSizeS
+                        color: Theme.textPrimary
                     }
                     MouseArea {
                         id: openMa
@@ -358,11 +366,37 @@ Rectangle {
 
                 Label {
                     Layout.alignment: Qt.AlignHCenter
-                    text: "Open a supported file to\npopulate the tree."
-                    font.pixelSize: Theme.fontSizeXS
+                    text: "Open an A2L, DBC, LDF or MDF4 file,\nor drop one on the window."
+                    font.pixelSize: Theme.fontSizeS
                     color: Theme.textMuted
                     horizontalAlignment: Text.AlignHCenter
                     lineHeight: 1.3
+                }
+
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 4
+                    implicitWidth: openFileLabel.implicitWidth + 24
+                    implicitHeight: 28
+                    radius: Theme.radius
+                    color: openFileMa.containsMouse ? Theme.bgButtonHov : Theme.bgButton
+                    border.color: Theme.accent
+                    border.width: 1
+
+                    Label {
+                        id: openFileLabel
+                        anchors.centerIn: parent
+                        text: "Open file…"
+                        font.pixelSize: Theme.fontSizeM
+                        color: Theme.textWhite
+                    }
+                    MouseArea {
+                        id: openFileMa
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: navPanel.openRequested()
+                    }
                 }
 
                 Label {
@@ -370,7 +404,7 @@ Rectangle {
                     Layout.topMargin: 8
                     visible: AppController.sampleFiles.length > 0
                     text: "— or open a sample —"
-                    font.pixelSize: Theme.fontSizeXS
+                    font.pixelSize: Theme.fontSizeS
                     color: Theme.textMuted
                 }
 
@@ -382,7 +416,7 @@ Rectangle {
                         required property var modelData
                         Layout.alignment: Qt.AlignHCenter
                         text: sampleLink.modelData.title
-                        font.pixelSize: Theme.fontSizeS
+                        font.pixelSize: Theme.fontSizeM
                         font.underline: sampleLinkMa.containsMouse
                         color: sampleLinkMa.containsMouse ? Theme.accent : Theme.textSecondary
 

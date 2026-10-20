@@ -1,4 +1,5 @@
 #include "ui/memorygriditem.h"
+#include "core/hextext.h"
 #include "models/memorymapmodel.h"
 
 #include <QPainter>
@@ -58,7 +59,7 @@ void MemoryGridItem::paint(QPainter* painter) {
         // Address gutter.
         painter->setPen(QColor(0x88, 0x88, 0x88));
         const uint64_t absAddr = segStart + rowAddr;
-        const QString addrText = QStringLiteral("0x%1").arg(absAddr, 8, 16, QChar('0')).toUpper();
+        const QString addrText = hexText(absAddr, 8);
         painter->drawText(QRectF(4, y, gw - 8, cs), Qt::AlignLeft | Qt::AlignVCenter, addrText);
 
         // Byte cells.
@@ -218,7 +219,7 @@ QString MemoryGridItem::hoveredTooltip() const {
     const QString type = _model->data(mi, MemoryMapModel::TypeNameRole).toString();
     const bool approx = _model->data(mi, MemoryMapModel::SizeApproximateRole).toBool();
 
-    const QString addrHex = QStringLiteral("0x%1").arg(addr, 8, 16, QChar('0')).toUpper();
+    const QString addrHex = hexText(addr, 8);
     const QString sizeStr = approx
         ? QStringLiteral("~%1 bytes (approx)").arg(size)
         : QStringLiteral("%1 bytes").arg(size);

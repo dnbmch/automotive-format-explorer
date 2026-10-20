@@ -98,7 +98,7 @@ void LdfDocumentSession::buildTree() {
         for (int i = 0; i < _document.slaves_size(); ++i) {
             const auto& slave = _document.slaves(i);
             const QString subtitle = slave.has_attributes()
-                ? hexValue(slave.attributes().configured_nad())
+                ? hexText(slave.attributes().configured_nad())
                 : QStringLiteral("slave");
             appendEntity(nodes,
                          text(slave.name()),
@@ -129,7 +129,7 @@ void LdfDocumentSession::buildTree() {
             const auto& frame = _document.frames(i);
             TreeItem* frameItem = appendEntity(frames,
                                                text(frame.name()),
-                                               QStringLiteral("%1  %2B").arg(hexValue(frame.id())).arg(frame.length()),
+                                               QStringLiteral("%1  %2B").arg(hexText(frame.id())).arg(frame.length()),
                                                QStringLiteral("frame"),
                                                SemanticKind::Entity,
                                                LdfPath{LdfEntityKind::Frame, i});
@@ -188,7 +188,7 @@ void LdfDocumentSession::buildTree() {
             const auto& frame = _document.event_triggered_frames(i);
             appendEntity(events,
                          text(frame.name()),
-                         hexValue(frame.id()),
+                         hexText(frame.id()),
                          QStringLiteral("eventframe"),
                          SemanticKind::Entity,
                          LdfPath{LdfEntityKind::EventFrame, i});
@@ -219,7 +219,7 @@ void LdfDocumentSession::buildTree() {
                 const auto& address = _document.diagnostic_addresses(i);
                 appendEntity(addresses,
                              text(address.node_name()),
-                             hexValue(address.nad()),
+                             hexText(address.nad()),
                              QStringLiteral("diag-address"),
                              SemanticKind::Diagnostic,
                              LdfPath{LdfEntityKind::DiagnosticAddress, i});
@@ -245,7 +245,7 @@ void LdfDocumentSession::buildTree() {
                 const auto& frame = _document.diagnostic_frames(i);
                 appendEntity(frames,
                              text(frame.name()),
-                             hexValue(frame.id()),
+                             hexText(frame.id()),
                              QStringLiteral("diag-frame"),
                              SemanticKind::Diagnostic,
                              LdfPath{LdfEntityKind::DiagnosticFrame, i});

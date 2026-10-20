@@ -13,7 +13,12 @@
 #include <QString>
 #include <QStringList>
 
+#include <cmath>
 #include <cstdint>
+#include <initializer_list>
+#include <map>
+#include <string>
+#include <tuple>
 #include <type_traits>
 
 #include <google/protobuf/repeated_field.h>
@@ -23,11 +28,15 @@ enum class A2lEntityKind {
     Measurement,
     Characteristic,
     AxisPts,
+    Blob,
     CompuMethod,
     RecordLayout,
     Unit,
     Function,
     Group,
+    Frame,
+    Transformer,
+    UserRights,
     XcpSummary,
     CcpSummary,
     TypedefItem,
@@ -44,6 +53,33 @@ struct A2lPath {
     int tertiaryIndex = -1;
 };
 
+// The tree row of each named entity, by module, kind and name: what a link in
+// the details selects. The session fills it while it builds the tree.
+class A2lLinks {
+public:
+    void add(int module, A2lEntityKind kind, const std::string& name, quint64 key) {
+        _keys.emplace(Key{module, kind, name}, key);
+    }
+
+    // The row of the first of `kinds` that has an entity of this name, or 0.
+    // A reference may name any kind of one namespace: a TRANSFORMER's object
+    // is a CHARACTERISTIC, an AXIS_PTS, a BLOB or an INSTANCE.
+    quint64 find(int module, const std::string& name,
+                 std::initializer_list<A2lEntityKind> kinds) const {
+        for (A2lEntityKind kind : kinds) {
+            const auto it = _keys.find(Key{module, kind, name});
+            if (it != _keys.end()) {
+                return it->second;
+            }
+        }
+        return 0;
+    }
+
+private:
+    using Key = std::tuple<int, A2lEntityKind, std::string>;
+    std::map<Key, quint64> _keys;
+};
+
 // Format-specific helpers live in a2ldetail so they don't collide with other
 // backends' same-named global helpers (e.g. LDF's differently-defined
 // numberText) when all backends link statically into one executable.
@@ -52,10 +88,8 @@ namespace a2ldetail {
 constexpr int kTypedefCharacteristicCategory = 0;
 constexpr int kTypedefStructureCategory = 1;
 constexpr int kTypedefAxisCategory = 2;
-
-inline QString hex64(quint64 value) {
-    return QStringLiteral("0x%1").arg(value, 0, 16).toUpper();
-}
+constexpr int kTypedefMeasurementCategory = 3;
+constexpr int kTypedefBlobCategory = 4;
 
 template<typename T>
 QString numberText(T value) {
@@ -148,11 +182,15 @@ inline QString a2lEntityKindName(A2lEntityKind kind) {
     case A2lEntityKind::Measurement:    return QStringLiteral("Measurement");
     case A2lEntityKind::Characteristic: return QStringLiteral("Characteristic");
     case A2lEntityKind::AxisPts:        return QStringLiteral("Axis Points");
+    case A2lEntityKind::Blob:           return QStringLiteral("Blob");
     case A2lEntityKind::CompuMethod:    return QStringLiteral("Compu Method");
     case A2lEntityKind::RecordLayout:   return QStringLiteral("Record Layout");
     case A2lEntityKind::Unit:           return QStringLiteral("Unit");
     case A2lEntityKind::Function:       return QStringLiteral("Function");
     case A2lEntityKind::Group:          return QStringLiteral("Group");
+    case A2lEntityKind::Frame:          return QStringLiteral("Frame");
+    case A2lEntityKind::Transformer:    return QStringLiteral("Transformer");
+    case A2lEntityKind::UserRights:     return QStringLiteral("User Rights");
     case A2lEntityKind::XcpSummary:     return QStringLiteral("XCP Summary");
     case A2lEntityKind::CcpSummary:     return QStringLiteral("CCP Summary");
     case A2lEntityKind::TypedefItem:    return QStringLiteral("Typedef");
@@ -168,11 +206,15 @@ inline QString a2lSectionName(A2lEntityKind kind) {
     case A2lEntityKind::Measurement:    return QStringLiteral("Measurements");
     case A2lEntityKind::Characteristic: return QStringLiteral("Characteristics");
     case A2lEntityKind::AxisPts:        return QStringLiteral("Axis Points");
+    case A2lEntityKind::Blob:           return QStringLiteral("Blobs");
     case A2lEntityKind::CompuMethod:    return QStringLiteral("Compu Methods");
     case A2lEntityKind::RecordLayout:   return QStringLiteral("Record Layouts");
     case A2lEntityKind::Unit:           return QStringLiteral("Units");
     case A2lEntityKind::Function:       return QStringLiteral("Functions");
     case A2lEntityKind::Group:          return QStringLiteral("Groups");
+    case A2lEntityKind::Frame:          return QStringLiteral("Frames");
+    case A2lEntityKind::Transformer:    return QStringLiteral("Transformers");
+    case A2lEntityKind::UserRights:     return QStringLiteral("User Rights");
     case A2lEntityKind::XcpSummary:     return QStringLiteral("Protocols");
     case A2lEntityKind::CcpSummary:     return QStringLiteral("Protocols");
     case A2lEntityKind::TypedefItem:    return QStringLiteral("Types");
@@ -200,107 +242,124 @@ inline uint64_t dataTypeSize(a2l::DataType dt) {
     }
 }
 
-inline QString formatCompuMethodSummary(const a2l::CompuMethod& method) {
-    QString type = text(a2l::ConversionType_Name(method.conversion_type()));
-    if (method.has_coeffs_linear()) {
-        const auto& c = method.coeffs_linear();
-        return QStringLiteral("%1: %2x + %3")
-            .arg(type)
-            .arg(numberText(c.a()))
-            .arg(numberText(c.b()));
+// "k * x + d" without its zero terms.
+inline QString affineText(double k, double d, const QString& x) {
+    if (k == 0.0) {
+        return numberText(d);
     }
-    if (method.has_coeffs()) {
-        const auto& c = method.coeffs();
-        if (c.a() == 0.0 && c.d() == 0.0 && c.e() == 0.0 && c.f() == 1.0) {
-            return QStringLiteral("%1: %2x + %3")
-                .arg(type)
-                .arg(numberText(c.b()))
-                .arg(numberText(c.c()));
+    QString term = k == 1.0 ? x : QStringLiteral("%1 * %2").arg(numberText(k), x);
+    if (d != 0.0) {
+        term += QStringLiteral(" %1 %2").arg(d < 0.0 ? QStringLiteral("-") : QStringLiteral("+"),
+                                             numberText(std::abs(d)));
+    }
+    return term;
+}
+
+// The conversion as engineers read it, the physical value of the internal
+// one. LINEAR is that already. RAT_FUNC's COEFFS run the other way,
+// INT = (a*PHYS^2 + b*PHYS + c) / (d*PHYS^2 + e*PHYS + f) (ASAP2 1.7.1 section
+// 4.7.38): with a = d = 0 it inverts to PHYS = (f*INT - c) / (b - e*INT), and
+// otherwise it is shown as given. Empty for a table, whose rows say it.
+inline QString conversionFormula(const a2l::CompuMethod& method) {
+    const QString in = QStringLiteral("int");
+    switch (method.conversion_type()) {
+    case a2l::CONVERSION_TYPE_IDENTICAL:
+        return QStringLiteral("phys = int");
+    case a2l::CONVERSION_TYPE_LINEAR:
+        if (!method.has_coeffs_linear()) {
+            return {};
         }
-        return QStringLiteral("%1: (%2x²+%3x+%4)/(%5x²+%6x+%7)")
-            .arg(type)
-            .arg(numberText(c.a()))
-            .arg(numberText(c.b()))
-            .arg(numberText(c.c()))
-            .arg(numberText(c.d()))
-            .arg(numberText(c.e()))
-            .arg(numberText(c.f()));
+        return QStringLiteral("phys = ")
+            + affineText(method.coeffs_linear().a(), method.coeffs_linear().b(), in);
+    case a2l::CONVERSION_TYPE_RAT_FUNC: {
+        if (!method.has_coeffs()) {
+            return {};
+        }
+        const auto& c = method.coeffs();
+        if (c.a() == 0.0 && c.d() == 0.0 && c.b() != 0.0 && c.e() == 0.0) {
+            return QStringLiteral("phys = ") + affineText(c.f() / c.b(), -c.c() / c.b(), in);
+        }
+        if (c.a() == 0.0 && c.d() == 0.0 && c.e() != 0.0) {
+            return QStringLiteral("phys = (%1) / (%2)")
+                .arg(affineText(c.f(), -c.c(), in), affineText(-c.e(), c.b(), in));
+        }
+        return QStringLiteral("int = (%1 * phys^2 + %2 * phys + %3) / (%4 * phys^2 + %5 * phys + %6)")
+            .arg(numberText(c.a()), numberText(c.b()), numberText(c.c()),
+                 numberText(c.d()), numberText(c.e()), numberText(c.f()));
     }
-    if (method.has_compu_tab_ref()) {
-        return QStringLiteral("%1: %2").arg(type, text(method.compu_tab_ref()));
+    case a2l::CONVERSION_TYPE_FORM:
+        return method.has_formula_raw() ? text(method.formula_raw()) : QString();
+    default:
+        return {};
     }
-    if (method.has_formula_raw()) {
-        return QStringLiteral("%1: %2").arg(type, text(method.formula_raw()));
-    }
-    return type;
 }
 
 inline QString recordLayoutComponentSummary(const a2l::RecordLayoutComponent& component) {
     if (component.has_alignment()) {
         const auto& alignment = component.alignment();
         return QStringLiteral("Alignment %1 border=%2")
-            .arg(text(a2l::RecordLayoutAlignmentType_Name(alignment.type())))
+            .arg(enumKeyword(alignment.type()))
             .arg(alignment.alignment_border());
     }
     if (component.has_function_values()) {
         const auto& values = component.function_values();
         return QStringLiteral("Function Values pos=%1 type=%2")
             .arg(values.position())
-            .arg(text(a2l::DataType_Name(values.datatype())));
+            .arg(enumKeyword(values.datatype()));
     }
     if (component.has_axis_points()) {
         const auto& axis = component.axis_points();
         return QStringLiteral("Axis Points %1 pos=%2")
-            .arg(text(a2l::RecordLayoutAxis_Name(axis.axis())))
+            .arg(enumKeyword(axis.axis()))
             .arg(axis.position());
     }
     if (component.has_axis_rescale()) {
         const auto& axis = component.axis_rescale();
         return QStringLiteral("Axis Rescale %1 pos=%2")
-            .arg(text(a2l::RecordLayoutAxis_Name(axis.axis())))
+            .arg(enumKeyword(axis.axis()))
             .arg(axis.position());
     }
     if (component.has_axis_count()) {
         const auto& axis = component.axis_count();
         return QStringLiteral("Axis Count %1 pos=%2")
-            .arg(text(a2l::RecordLayoutAxis_Name(axis.axis())))
+            .arg(enumKeyword(axis.axis()))
             .arg(axis.position());
     }
     if (component.has_rescale_count()) {
         const auto& axis = component.rescale_count();
         return QStringLiteral("Rescale Count %1 pos=%2")
-            .arg(text(a2l::RecordLayoutAxis_Name(axis.axis())))
+            .arg(enumKeyword(axis.axis()))
             .arg(axis.position());
     }
     if (component.has_fixed_axis_count()) {
         const auto& axis = component.fixed_axis_count();
         return QStringLiteral("Fixed Axis Count %1 n=%2")
-            .arg(text(a2l::RecordLayoutAxis_Name(axis.axis())))
+            .arg(enumKeyword(axis.axis()))
             .arg(axis.number_of_axis_points());
     }
     if (component.has_identification()) {
         const auto& identification = component.identification();
         return QStringLiteral("Identification pos=%1 type=%2")
             .arg(identification.position())
-            .arg(text(a2l::DataType_Name(identification.datatype())));
+            .arg(enumKeyword(identification.datatype()));
     }
     if (component.has_axis_operand()) {
         const auto& operand = component.axis_operand();
         return QStringLiteral("Axis Operand %1 %2 pos=%3")
-            .arg(text(a2l::RecordLayoutAxisOperandKind_Name(operand.kind())))
-            .arg(text(a2l::RecordLayoutAxis_Name(operand.axis())))
+            .arg(enumKeyword(operand.kind()))
+            .arg(enumKeyword(operand.axis()))
             .arg(operand.position());
     }
     if (component.has_address_reference()) {
         const auto& reference = component.address_reference();
         return QStringLiteral("Address Ref %1 %2 pos=%3")
-            .arg(text(a2l::RecordLayoutAddressReferenceKind_Name(reference.kind())))
-            .arg(text(a2l::RecordLayoutAxis_Name(reference.axis())))
+            .arg(enumKeyword(reference.kind()))
+            .arg(enumKeyword(reference.axis()))
             .arg(reference.position());
     }
     if (component.has_static_flag()) {
         return QStringLiteral("Static Flag %1")
-            .arg(text(a2l::RecordLayoutStaticFlag_Name(component.static_flag().flag())));
+            .arg(enumKeyword(component.static_flag().flag()));
     }
     if (component.has_raw_component()) {
         return text(component.raw_component());
@@ -312,8 +371,8 @@ inline QString recordLayoutComponentSummary(const a2l::RecordLayoutComponent& co
 
 class A2lDetailPresenter final {
 public:
-    explicit A2lDetailPresenter(const a2l::A2lFile& document)
-        : _document(document) {
+    A2lDetailPresenter(const a2l::A2lFile& document, const A2lLinks& links)
+        : _document(document), _links(links) {
     }
 
     QList<DetailSection> buildDetails(const A2lPath& path) const;
@@ -324,18 +383,33 @@ private:
     QString entityName(const A2lPath& path) const;
     QString buildBreadcrumb(const A2lPath& path) const;
     const a2l::CompuMethod* findCompuMethod(const a2l::Module& module, const std::string& name) const;
-    void appendConversionSummary(QList<DetailSection>& sections, const A2lPath& path) const;
+    void insertResolvedConversion(QList<DetailSection>& sections, const A2lPath& path) const;
     void appendCrossReferences(QList<DetailSection>& sections, const A2lPath& path) const;
+    void appendConversionTable(QList<DetailSection>& sections, const a2l::Module& module,
+                               const std::string& name) const;
+
+    // A field naming another entity of the module: a link to its row when the
+    // file defines one of `kinds` by that name. Nothing for an empty name.
+    void addLink(QList<DetailField>& fields, const QString& key, int module,
+                 const std::string& name, std::initializer_list<A2lEntityKind> kinds) const;
+    // A section of names, each a link; a long list ends in the count it leaves out.
+    void appendNameList(QList<DetailSection>& sections, const QString& title, int module,
+                        const google::protobuf::RepeatedPtrField<std::string>& names,
+                        std::initializer_list<A2lEntityKind> kinds) const;
 
     QList<DetailSection> moduleDetails(const A2lPath& path) const;
     QList<DetailSection> measurementDetails(const A2lPath& path) const;
     QList<DetailSection> characteristicDetails(const A2lPath& path) const;
     QList<DetailSection> axisPtsDetails(const A2lPath& path) const;
+    QList<DetailSection> blobDetails(const A2lPath& path) const;
     QList<DetailSection> compuMethodDetails(const A2lPath& path) const;
     QList<DetailSection> recordLayoutDetails(const A2lPath& path) const;
     QList<DetailSection> unitDetails(const A2lPath& path) const;
     QList<DetailSection> functionDetails(const A2lPath& path) const;
     QList<DetailSection> groupDetails(const A2lPath& path) const;
+    QList<DetailSection> frameDetails(const A2lPath& path) const;
+    QList<DetailSection> transformerDetails(const A2lPath& path) const;
+    QList<DetailSection> userRightsDetails(const A2lPath& path) const;
     QList<DetailSection> xcpSummaryDetails(const A2lPath& path) const;
     QList<DetailSection> ccpSummaryDetails(const A2lPath& path) const;
     QList<DetailSection> typedefDetails(const A2lPath& path) const;
@@ -343,4 +417,5 @@ private:
     QList<DetailSection> variantCodingDetails(const A2lPath& path) const;
 
     const a2l::A2lFile& _document;
+    const A2lLinks& _links;
 };

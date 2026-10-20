@@ -1,4 +1,5 @@
 #include "core/appcontroller.h"
+#include "core/opensequence.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -149,6 +150,12 @@ QString AppController::lastError() const {
 // controller down or open another file. The pending load is therefore owned
 // before it is announced and released before completion is announced, and
 // state is re-read after every notification.
+void AppController::openFiles(const QList<QUrl>& files) {
+    auto* sequence = new OpenSequence(*this, files, this);
+    connect(sequence, &OpenSequence::finished, sequence, &QObject::deleteLater);
+    sequence->start();
+}
+
 void AppController::openFile(const QUrl& fileUrl) {
     if (_shut_down) {
         return;

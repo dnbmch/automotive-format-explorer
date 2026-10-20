@@ -289,6 +289,7 @@ class TestAppController : public QObject {
 
 private slots:
     void deliversSuccessfulLoad();
+    void openFilesOpensEachInTurn();
     void reportsFailedLoad();
     void rejectsUnsupportedAndConcurrentOpens();
     void destructionWithoutLoad();
@@ -350,6 +351,21 @@ void TestAppController::deliversSuccessfulLoad() {
     QCOMPARE(session->formatName(), QStringLiteral("Fake"));
     QCOMPARE(session->treeModel()->thread(), controller.thread());
     QCOMPARE(session->detailModel()->thread(), controller.thread());
+}
+
+// Files dropped on the window open one after another, each in its own tab;
+// the current tab's title names its file, for the window title.
+void TestAppController::openFilesOpensEachInTurn() {
+    Probe probe;
+    AppController controller(fakeFormats(probe));
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+
+    controller.openFiles({fakeFile(A), fakeFile(B)});
+    QTRY_COMPARE_WITH_TIMEOUT(loaded.count(), 2, 10000);
+
+    QCOMPARE(titles(controller), QStringList({A, B}));
+    QVERIFY(controller.lastError().isEmpty());
+    QCOMPARE(controller.currentTab()->title(), B);
 }
 
 void TestAppController::reportsFailedLoad() {
