@@ -42,8 +42,9 @@ trap 'rm -rf "$WORK"' EXIT
 #
 # The samples resolve from usr/bin/../share/<app>/samples at runtime.
 
-mkdir -p "$WORK/AppDir/usr/share/$APP"
+mkdir -p "$WORK/AppDir/usr/share/$APP" "$WORK/AppDir/usr/share/doc/$APP"
 cp -r samples "$WORK/AppDir/usr/share/$APP/samples"
+cp LICENSE "$WORK/AppDir/usr/share/doc/$APP/LICENSE"
 cp resources/icons/explorer_256.png "$WORK/$APP.png"
 cat > "$WORK/$APP.desktop" <<'DESKTOP'
 [Desktop Entry]

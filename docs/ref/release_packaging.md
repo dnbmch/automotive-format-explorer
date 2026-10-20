@@ -39,18 +39,28 @@ QT_PREFIX=C:/Qt/6.10.1/mingw_64 bash scripts/package_windows.sh <build> <dist>
 otherwise to the directory of `g++` on `PATH`. msys2 need not sit at one absolute
 path, so the toolchain is located, never hardcoded.
 
-Three steps, in this order:
+Four steps, in this order:
 
 1. **Payload** — the executable and `samples/`. The Explorer core and every
    format backend are static libraries inside the executable, so a newly added
    backend ships without touching the script.
 2. **Qt** — `windeployqt --qmldir qml --release --no-translations
-   --no-compiler-runtime` against the copied executable.
-   `--no-compiler-runtime` keeps Qt's own MinGW runtime out of `dist/`.
+   --no-compiler-runtime --no-system-d3d-compiler --no-opengl-sw` against the
+   copied executable. `--no-compiler-runtime` keeps Qt's own MinGW runtime out of
+   `dist/`. Qt Quick renders with Direct3D 11 on Windows: its shader compiler
+   `D3DCompiler_47.dll` is part of Windows since 8.1, and the software OpenGL
+   renderer `opengl32sw.dll` is never loaded.
 3. **Closure** — [scripts/deploy_closure.sh](../../scripts/deploy_closure.sh)
    over the whole of `dist/`, searching the msys2 `bin` ahead of Qt's. Every
    binary windeployqt just dropped in is walked too. Mechanics:
    [The dependency closure walk](cmake_build_system.md#the-dependency-closure-walk).
+4. **Licences** — `LICENSE.txt` and `THIRD_PARTY_NOTICES.txt`, which names every
+   other DLL in `dist/` by where it came from: a Qt library, plugin or QML module
+   is the same file under `QT_PREFIX`, listed under the LGPL v3
+   (`resources/licenses/`) with the SBOMs of the Qt modules that ship one
+   (`licenses/qt/`); an msys2 DLL is listed under the package whose pacman files
+   list names it, with that package's licence files. A DLL that is neither fails
+   the package. The AppImage carries `LICENSE` only (backlog BL-K7).
 
 Ordering is load-bearing: step 2 leaves the compiler runtime deliberately
 absent and step 3 fills it from msys2, so the runtime is deployed by provenance
