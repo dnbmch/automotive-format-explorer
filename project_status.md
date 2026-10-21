@@ -107,11 +107,6 @@ The [latest release](https://github.com/dnbmch/automotive-format-explorer/releas
 opens A2L, DBC, LDF and MDF4; every release and the commits in it are in
 `dnbmch/aff-release-manifest`.
 
-The source-head launch-check corrections, non-ASCII path opening on Windows, text,
-Byte, frame and array value tables, the A2L view in the file's own keywords with
-links and the resolved conversion, the V1.7.1 MODULE blocks and the licence notices
-are not in that release.
-
 The README screenshots (`docs/screenshot_*.png`) show the current build: the A2L
 memory map, the DBC and LDF signal maps and the MDF4 plot of a long recording.
 

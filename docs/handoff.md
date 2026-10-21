@@ -1,37 +1,5 @@
 # automotive-format-explorer — handoff
 
-## 2026-10-20 — an A2L engineer's first five minutes — OPEN
-
-Landed for v0.4.0 (workspace plan, archived: `docs/archive/a2l_first_impression.md`):
-A2L keywords instead of proto enum names, `0x` hex, segment labels in the file's case,
-the calibration segment first, links between entities in the details, the resolved
-conversion (`phys = f(int)`, RAT_FUNC inverted) under Identity, the six V1.7.1 MODULE
-blocks in the tree, BLOBs on the map, the window title, dropped files opening, a
-labelled Open button, the sample's memory segments, and `LICENSE.txt` with derived
-third-party notices in the Windows zip. Backlogged: BL-V7, BL-V8, BL-K6 (signing waits
-on the certificate), BL-K7.
-
-UNVERIFIED — dropping files on the window: drag an `.a2l` and a `.dbc` from Explorer
-onto it. Pass: "Drop to open" shows while dragging and both open in their own tabs.
-Fail: nothing opens or the overlay stays.
-
-## 2026-10-11 — invalidated samples plot as gaps — OPEN
-
-The MDF4 reader delivers a sample whose invalidation bit is set as NaN at its time
-([reader contract](../../mdf4-parser/docs/arch/reader.md#read-set)); the plot draws a
-nonfinite value as a gap and the detail panel's Plot section states the channel's
-validity rule (`8061dd0`). OPEN only for the hover below.
-
-Verified 2026-10-19: a file authored with asammdf 8.8.27 (`MDF(version="4.10")`,
-40 samples at 10 ms, invalidation bits at indices 0, 3, 4, 17 and 39; the workspace's
-`build-release-wave/visual/gaps.py`) draws its exact-sample line from 0.01 s with
-breaks at 0.03–0.04 and 0.17 and an end at 0.38 s, and the Plot section reads
-`Invalidation bit 0 (Byte 0, bit 0 of the invalidation Bytes)`.
-
-UNVERIFIED — the hover over a gap names no value; posted input to a parked window
-draws no hover readout, so it needs a real cursor. Pass: hovering at t = 0.17 s shows
-no value in the footer. Fail: a value shown there.
-
 ## 2026-10-06 — MDF4 detail labels and opening cancellation — OPEN
 
 Landed: the MDF4 detail panel labels the big-endian data types, the algebraic and

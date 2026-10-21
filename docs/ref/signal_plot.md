@@ -98,7 +98,8 @@ dense bursts separated by large gaps.
 - Mouse wheel zooms the domain axis around the pointer.
 - Left-button drag pans the visible domain window.
 - Hover over exact samples snaps to the nearest one and reports its coordinate,
-  actual value and absolute sample index. Hover over the overview reports the bins
+  actual value and absolute sample index; an invalid sample reports `—` for its
+  value and marks no point. Hover over the overview reports the bins
   under the pointer's pixel column: their coordinate range, index range, sample
   count, nonfinite count and extrema, and marks their band, never a single point.
 - Reset view (the header button or a double-click) restores the full domain range

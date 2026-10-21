@@ -11,8 +11,9 @@ them under "open a sample" when no file is open.
 | `tesla_can.dbc` | CAN (DBC) | [comma.ai opendbc](https://github.com/commaai/opendbc) project, unmodified. | MIT (see below) |
 | `demo_recording.mf4` | ASAM MDF 4.2 | Synthetic recording emitted by `dnbmch/mdf4-writer` (`emit_minimal_mf4`), written for this project. One channel group: a `t` time master and a `speed` sine — select `speed` to see the plot; `t` is the group's axis channel and does not plot. | Same as this repository (GPL-3.0) |
 
-`tesla_can.dbc` deliberately carries one dangling `VAL_` entry (message ID 568
-has no matching definition), so opening it shows the diagnostics badge with
+`tesla_can.dbc` deliberately carries one dangling `VAL_` entry (`VAL_ 568
+UI_mapSpeedLimit` names message 568, while that signal belongs to message 968),
+so opening it shows the diagnostics badge with
 exactly one DROPPED entry — that is the parser's data-loss reporting working,
 not a defect in the app.
 
