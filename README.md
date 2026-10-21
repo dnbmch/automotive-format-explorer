@@ -51,7 +51,7 @@ Browse every parsed entity in a structured tree with expand/collapse, keyboard s
 
 ### Detail Panel
 
-Structured property cards for every entity type, with key fields, references, and metadata, in the file's own keywords (`MAP`, `RAT_FUNC`, `MSB_LAST`) and addresses in hex. A name of another entity — a conversion, record layout, input quantity, axis, function or group — is a link that selects it. For A2L, the resolved conversion follows the identity card: the formula as `phys = f(int)` (a RAT_FUNC's coefficients run the other way and are inverted), the unit and, for a table conversion, its rows. Toggle **raw JSON** view to inspect the underlying protobuf data directly.
+Structured property cards for every entity type, with key fields, references, and metadata, in the file's own keywords (`MAP`, `RAT_FUNC`, `MSB_LAST`) and addresses in hex. A name of another entity — a conversion, record layout, input quantity, axis, function or group — is a link that selects it. For A2L, the resolved conversion follows the identity card: the formula as `phys = f(int)` (a RAT_FUNC's coefficients run the other way and are inverted), the unit (an object's `PHYS_UNIT` overrides the conversion method's unit) and, for a table conversion, its rows. Toggle **raw JSON** view to inspect the underlying protobuf data directly.
 
 ### Memory View (A2L)
 

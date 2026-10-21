@@ -60,6 +60,8 @@ private slots:
     void singleMatchRawJsonIsOneObject();
     void multipleMatchesRawJsonIsValidArray();
     void characteristicCardSpeaksA2l();
+    void resolvedConversionUsesObjectUnit_data();
+    void resolvedConversionUsesObjectUnit();
     void conversionFormulaReadsPhysFromInt();
     void verbalTableRowsFollowTheConversion();
     void enumKeywordDropsThePrefix();
@@ -227,6 +229,71 @@ void TestA2lDetailPresenter::characteristicCardSpeaksA2l() {
              QStringLiteral("phys = 1.25 * int - 2"));
     QCOMPARE(fieldIn(sections, QStringLiteral("Resolved Conversion"), QStringLiteral("Physical Unit")).value,
              QStringLiteral("rpm"));
+}
+
+void TestA2lDetailPresenter::resolvedConversionUsesObjectUnit_data() {
+    QTest::addColumn<int>("kind");
+    QTest::addColumn<bool>("hasOverride");
+    QTest::addColumn<QString>("unit");
+    for (const auto kind : {A2lEntityKind::Measurement, A2lEntityKind::Characteristic,
+                            A2lEntityKind::AxisPts, A2lEntityKind::TypedefItem}) {
+        const QByteArray name = a2ldetail::a2lEntityKindName(kind).toUtf8();
+        QTest::newRow((name + "-inherited").constData()) << int(kind) << false << QStringLiteral("V");
+        QTest::newRow((name + "-override").constData()) << int(kind) << true << QStringLiteral("mV");
+        QTest::newRow((name + "-empty-override").constData()) << int(kind) << true << QString();
+    }
+}
+
+// PHYS_UNIT takes precedence over COMPU_METHOD's unit (ASAM 1.7.1 section 4.7.116).
+void TestA2lDetailPresenter::resolvedConversionUsesObjectUnit() {
+    QFETCH(int, kind);
+    QFETCH(bool, hasOverride);
+    QFETCH(QString, unit);
+    a2l::A2lFile doc;
+    auto* module = doc.add_modules();
+    module->set_name("ECU");
+    auto* cm = module->add_compu_methods();
+    cm->set_name("CM_VOLTAGE");
+    cm->set_conversion_type(a2l::CONVERSION_TYPE_IDENTICAL);
+    cm->set_unit("V");
+    A2lPath path = pathFor(static_cast<A2lEntityKind>(kind), 0, 0);
+    const auto configure = [&](auto* object) {
+        object->set_name("Voltage");
+        if (hasOverride) object->set_phys_unit(unit.toStdString());
+    };
+    switch (path.kind) {
+    case A2lEntityKind::Measurement: {
+        auto* object = module->add_measurements();
+        configure(object);
+        object->set_conversion("CM_VOLTAGE");
+        break;
+    }
+    case A2lEntityKind::Characteristic: {
+        auto* object = module->add_characteristics();
+        configure(object);
+        object->set_conversion("CM_VOLTAGE");
+        break;
+    }
+    case A2lEntityKind::AxisPts: {
+        auto* object = module->add_axis_points();
+        configure(object);
+        object->set_conversion_ref("CM_VOLTAGE");
+        break;
+    }
+    case A2lEntityKind::TypedefItem: {
+        auto* object = module->add_typedef_measurements();
+        configure(object);
+        object->set_conversion("CM_VOLTAGE");
+        path.tertiaryIndex = a2ldetail::kTypedefMeasurementCategory;
+        break;
+    }
+    default: QFAIL("Unexpected entity kind");
+    }
+    const A2lLinks links;
+    const A2lDetailPresenter presenter(doc, links);
+    const auto sections = presenter.buildDetails(path);
+    QCOMPARE(fieldIn(sections, QStringLiteral("Resolved Conversion"), QStringLiteral("Physical Unit")).value,
+             unit);
 }
 
 // RAT_FUNC's COEFFS give int = f(phys) (ASAP2 1.7.1 section 4.7.38); LINEAR

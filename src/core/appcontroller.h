@@ -14,6 +14,8 @@
 #include <memory>
 #include <QUrl>
 
+class OpenSequence;
+
 class AppController : public QObject {
     Q_OBJECT
     Q_PROPERTY(TabModel* tabModel READ tabModel CONSTANT)
@@ -69,7 +71,8 @@ public:
 
     Q_INVOKABLE void openFile(const QUrl& fileUrl);
     // Opens each file in turn, one load at a time, as the command line does:
-    // files dropped on the window.
+    // files dropped on the window. Later drops append to the active sequence;
+    // a drop during an unrelated single-file load is refused before starting.
     Q_INVOKABLE void openFiles(const QList<QUrl>& files);
     // Closes the tab at `index`. A current tab hands over to its successor,
     // else its predecessor; the closed tab is destroyed after the notifications.
@@ -119,6 +122,7 @@ private:
     // True while the tab model inserts or removes a row.
     bool _in_row_change = false;
     QString _last_error;
+    OpenSequence* _open_sequence = nullptr;   // owned child, active dropped files
     bool _file_loading = false;   // _load_watcher holds an owned, untaken result
     QFutureWatcher<LoadResult> _load_watcher;
     std::atomic<bool> _load_cancel{false};   // read by the pending load's worker

@@ -22,6 +22,10 @@ void OpenSequence::start() {
     QMetaObject::invokeMethod(this, &OpenSequence::openNext, Qt::QueuedConnection);
 }
 
+void OpenSequence::append(const QList<QUrl>& files) {
+    _files.append(files);
+}
+
 int OpenSequence::failures() const {
     return _failures;
 }
@@ -32,6 +36,10 @@ void OpenSequence::openNext() {
         return;
     }
     _pending = true;
+    if (_controller.fileLoading()) {
+        settle(QStringLiteral("Another file is already loading."));
+        return;
+    }
     _controller.openFile(_files[_next]);
 }
 

@@ -151,7 +151,21 @@ QString AppController::lastError() const {
 // before it is announced and released before completion is announced, and
 // state is re-read after every notification.
 void AppController::openFiles(const QList<QUrl>& files) {
+    if (_shut_down || files.isEmpty()) {
+        return;
+    }
+    if (_open_sequence) {
+        _open_sequence->append(files);
+        return;
+    }
+    if (_file_loading) {
+        setLastError(QStringLiteral("Another file is already loading."));
+        return;
+    }
+
     auto* sequence = new OpenSequence(*this, files, this);
+    _open_sequence = sequence;
+    connect(sequence, &OpenSequence::finished, this, [this] { _open_sequence = nullptr; });
     connect(sequence, &OpenSequence::finished, sequence, &QObject::deleteLater);
     sequence->start();
 }

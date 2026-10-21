@@ -17,6 +17,8 @@ public:
     OpenSequence(AppController& controller, QList<QUrl> files, QObject* parent = nullptr);
 
     void start();
+    // Adds later dropped files while this sequence is still active.
+    void append(const QList<QUrl>& files);
     int failures() const;
 
 signals:
@@ -29,7 +31,7 @@ private:
     void settle(const QString& error);
 
     AppController& _controller;
-    const QList<QUrl> _files;
+    QList<QUrl> _files;
     qsizetype _next = 0;
     bool _pending = false;   // an open this sequence started awaits its outcome
     int _failures = 0;

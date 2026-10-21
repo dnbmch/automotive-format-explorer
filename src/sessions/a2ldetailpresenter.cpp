@@ -251,19 +251,25 @@ void A2lDetailPresenter::insertResolvedConversion(QList<DetailSection>& sections
 
     const int i = path.secondaryIndex;
     std::string convRef;
+    // PHYS_UNIT overrides the method's unit by presence, even when empty.
+    const std::string* unitOverride = nullptr;
     uint64_t sizeBytes = 0;
     if (path.kind == A2lEntityKind::Measurement && i >= 0 && i < module->measurements_size()) {
         convRef = module->measurements(i).conversion();
         sizeBytes = dataTypeSize(module->measurements(i).datatype());
+        if (module->measurements(i).has_phys_unit()) unitOverride = &module->measurements(i).phys_unit();
     } else if (path.kind == A2lEntityKind::Characteristic && i >= 0 && i < module->characteristics_size()) {
         convRef = module->characteristics(i).conversion();
+        if (module->characteristics(i).has_phys_unit()) unitOverride = &module->characteristics(i).phys_unit();
     } else if (path.kind == A2lEntityKind::AxisPts && i >= 0 && i < module->axis_points_size()) {
         convRef = module->axis_points(i).conversion_ref();
+        if (module->axis_points(i).has_phys_unit()) unitOverride = &module->axis_points(i).phys_unit();
     } else if (path.kind == A2lEntityKind::TypedefItem
                && path.tertiaryIndex == kTypedefMeasurementCategory
                && i >= 0 && i < module->typedef_measurements_size()) {
         convRef = module->typedef_measurements(i).conversion();
         sizeBytes = dataTypeSize(module->typedef_measurements(i).datatype());
+        if (module->typedef_measurements(i).has_phys_unit()) unitOverride = &module->typedef_measurements(i).phys_unit();
     } else {
         return;
     }
@@ -272,7 +278,7 @@ void A2lDetailPresenter::insertResolvedConversion(QList<DetailSection>& sections
     QList<DetailSection> table;
     if (const auto* cm = findCompuMethod(*module, convRef)) {
         addField(fields, QStringLiteral("Formula"), conversionFormula(*cm));
-        addField(fields, QStringLiteral("Physical Unit"), text(cm->unit()));
+        addField(fields, QStringLiteral("Physical Unit"), text(unitOverride ? *unitOverride : cm->unit()));
         addField(fields, QStringLiteral("Format"), text(cm->format()));
         if (cm->has_compu_tab_ref()) {
             appendConversionTable(table, *module, cm->compu_tab_ref());

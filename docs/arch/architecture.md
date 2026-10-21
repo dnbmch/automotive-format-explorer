@@ -150,6 +150,13 @@ sequence's. Each outcome is reported, a failed one counted; `finished()` follows
 last, and every step runs from the event loop, `start()` included. `main.cpp` hands
 it the files named on the command line: `automotive-format-explorer [files...]`.
 
+`AppController::openFiles()` keeps one sequence for dropped files. Later drops
+append to it, including before its first load and between files, so each file's
+outcome follows its own load. The sequence is released when it finishes. A drop
+during an unrelated single-file load is refused before creating a sequence.
+If another caller starts a load before a queued sequence step runs, that step
+reports its own refusal rather than waiting for the other load's result.
+
 With `--check`, `main.cpp` opens the named files, or all declared bundled samples
 when none is named. Missing samples fail instead of shrinking the check's input.
 An MDF4 diagnostic tab remains inspectable but its failed opening counts as a

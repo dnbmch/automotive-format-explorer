@@ -1,4 +1,5 @@
 #include "core/appcontroller.h"
+#include "core/opensequence.h"
 #include "sessions/adaptersessionbase.h"
 
 #include <QCoreApplication>
@@ -290,6 +291,10 @@ class TestAppController : public QObject {
 private slots:
     void deliversSuccessfulLoad();
     void openFilesOpensEachInTurn();
+    void overlappingDropsKeepTheirOwnOutcomes_data();
+    void overlappingDropsKeepTheirOwnOutcomes();
+    void dropDuringSingleFileLoadIsRefused();
+    void singleFileLoadBeforeQueuedDropIsNotClaimed();
     void reportsFailedLoad();
     void rejectsUnsupportedAndConcurrentOpens();
     void destructionWithoutLoad();
@@ -366,6 +371,103 @@ void TestAppController::openFilesOpensEachInTurn() {
     QCOMPARE(titles(controller), QStringList({A, B}));
     QVERIFY(controller.lastError().isEmpty());
     QCOMPARE(controller.currentTab()->title(), B);
+}
+
+void TestAppController::overlappingDropsKeepTheirOwnOutcomes_data() {
+    QTest::addColumn<QString>("when");
+    QTest::newRow("before-first-load") << QStringLiteral("before");
+    QTest::newRow("during-load") << QStringLiteral("loading");
+    QTest::newRow("during-completion") << QStringLiteral("idle");
+    QTest::newRow("between-files") << QStringLiteral("outcome");
+}
+
+void TestAppController::overlappingDropsKeepTheirOwnOutcomes() {
+    QFETCH(QString, when);
+    Probe probe;
+    probe.gateOpen = false;
+    AppController controller(fakeFormats(probe));
+    GateReleaser releaser(probe);
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+    if (when == QStringLiteral("idle")) {
+        callOnce(&controller, &AppController::fileLoadingChanged,
+                 [&] { return !controller.fileLoading(); },
+                 [&] { controller.openFiles({fakeFile(C)}); });
+    }
+
+    controller.openFiles({fakeFile(A), fakeFile(B)});
+    auto* sequence = controller.findChild<OpenSequence*>();
+    QVERIFY(sequence);
+    QSignalSpy outcomes(sequence, &OpenSequence::outcome);
+    QSignalSpy finished(sequence, &OpenSequence::finished);
+    if (when == QStringLiteral("outcome")) {
+        callOnce(sequence, &OpenSequence::outcome, [] { return true; },
+                 [&] { controller.openFiles({fakeFile(C)}); });
+    }
+    if (when == QStringLiteral("before")) {
+        controller.openFiles({fakeFile(C)});
+    }
+    QCoreApplication::processEvents();
+    QVERIFY(probe.waitUntilLoading());
+    if (when == QStringLiteral("loading")) {
+        controller.openFiles({fakeFile(C)});
+    }
+    probe.openGate();
+    QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 10000);
+
+    QCOMPARE(titles(controller), QStringList({A, B, C}));
+    QCOMPARE(loaded.count(), 3);
+    QCOMPARE(probe.loads(), 3);
+    QCOMPARE(outcomes.count(), 3);
+    const QStringList names{A, B, C};
+    for (int i = 0; i < names.size(); ++i) {
+        QCOMPARE(outcomes[i][0].toUrl(), fakeFile(names[i]));
+        QVERIFY(outcomes[i][1].toString().isEmpty());
+        QCOMPARE(loaded[i][0].toString(), names[i]);
+    }
+    QVERIFY(controller.lastError().isEmpty());
+    QVERIFY(!probe.timedOut());
+
+    // A completed batch releases the sequence for a later drop.
+    controller.openFiles({fakeFile(A)});
+    QTRY_COMPARE_WITH_TIMEOUT(loaded.count(), 4, 10000);
+    QCOMPARE(probe.loads(), 4);
+}
+
+void TestAppController::dropDuringSingleFileLoadIsRefused() {
+    Probe probe;
+    probe.gateOpen = false;
+    AppController controller(fakeFormats(probe));
+    GateReleaser releaser(probe);
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+
+    controller.openFile(fakeFile(A));
+    controller.openFiles({fakeFile(B)});
+    QCOMPARE(controller.lastError(), QStringLiteral("Another file is already loading."));
+    QVERIFY(controller.findChildren<OpenSequence*>().isEmpty());
+    probe.openGate();
+    QVERIFY(loaded.wait(10000));
+    QCOMPARE(titles(controller), QStringList({A}));
+    QCOMPARE(probe.loads(), 1);
+}
+
+void TestAppController::singleFileLoadBeforeQueuedDropIsNotClaimed() {
+    Probe probe;
+    probe.gateOpen = false;
+    AppController controller(fakeFormats(probe));
+    GateReleaser releaser(probe);
+    QSignalSpy loaded(&controller, &AppController::fileLoaded);
+    controller.openFiles({fakeFile(A)});
+    auto* sequence = controller.findChild<OpenSequence*>();
+    QVERIFY(sequence);
+    QSignalSpy outcomes(sequence, &OpenSequence::outcome);
+    controller.openFile(fakeFile(B));
+    QTRY_COMPARE_WITH_TIMEOUT(outcomes.count(), 1, 10000);
+    QCOMPARE(outcomes[0][0].toUrl(), fakeFile(A));
+    QCOMPARE(outcomes[0][1].toString(), QStringLiteral("Another file is already loading."));
+    probe.openGate();
+    QVERIFY(loaded.wait(10000));
+    QCOMPARE(titles(controller), QStringList({B}));
+    QCOMPARE(probe.loads(), 1);
 }
 
 void TestAppController::reportsFailedLoad() {
@@ -892,6 +994,7 @@ void TestAppController::everyPublicActionInertAfterShutdown() {
     QSignalSpy removed(controller.tabModel(), &QAbstractItemModel::rowsRemoved);
 
     controller.openFile(fakeFile(C));
+    controller.openFiles({fakeFile(C)});
     controller.closeTab(0);
     controller.setCurrentTabIndex(0);
     controller.selectCurrentNode(1);
