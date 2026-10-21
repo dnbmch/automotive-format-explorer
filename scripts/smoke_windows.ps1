@@ -166,7 +166,9 @@ try {
             break
         }
         foreach ($window in [SmokeWindows]::Visible($process.Id)) {
-            $main = $window.ClassName -match '^Qt\d*QWindow' -and $window.Title -eq $title
+            # Main.qml titles the window "<tab> <em dash> <app>" while a file is open.
+            $main = $window.ClassName -match '^Qt\d*QWindow' -and
+                    ($window.Title -eq $title -or $window.Title.EndsWith(" $([char]0x2014) $title"))
             if (-not $main) {
                 $verdict = 'unexpected window {0} "{1}" {2}' -f $window.ClassName, $window.Title, $window.Text
                 break
