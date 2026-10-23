@@ -73,9 +73,25 @@ QML="$PWD/qml"
             --executable "$BUILD_DIR/$APP" \
             --desktop-file "$APP.desktop" \
             --icon-file "$APP.png" \
-            --plugin qt \
-            --output appimage
+            --plugin qt
 )
+
+python3 scripts/linux_notices.py "$WORK/AppDir" --qt-prefix "$QT_PREFIX"
+(
+    cd "$WORK"
+    LD_LIBRARY_PATH="$QT_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage
+)
+
+# Confirm the packaging pass and the final image retained every attributed ELF
+# and all notice material. Extract in a private directory, never the source tree.
+python3 scripts/linux_notices.py "$WORK/AppDir" --verify
+mkdir "$WORK/verify"
+(
+    cd "$WORK/verify"
+    "$WORK"/Automotive_Format_Explorer-*.AppImage --appimage-extract >/dev/null
+)
+python3 scripts/linux_notices.py "$WORK/verify/squashfs-root" --verify
 
 # linuxdeploy writes the AppImage into its working directory, named after the
 # desktop entry.

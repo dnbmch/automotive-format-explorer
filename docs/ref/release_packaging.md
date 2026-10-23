@@ -60,7 +60,7 @@ Four steps, in this order:
    (`resources/licenses/`) with the SBOMs of the Qt modules that ship one
    (`licenses/qt/`); an msys2 DLL is listed under the package whose pacman files
    list names it, with that package's licence files. A DLL that is neither fails
-   the package. The AppImage carries `LICENSE` only (backlog BL-K7).
+   the package.
 
 Ordering is load-bearing: step 2 leaves the compiler runtime deliberately
 absent and step 3 fills it from msys2, so the runtime is deployed by provenance
@@ -93,6 +93,38 @@ linuxdeploy bundles every library the executable and the deployed Qt plugins nee
 except those it leaves to the system: glibc, the OpenGL and X11 client libraries,
 fontconfig and their like. The only platform plugin is xcb; a Wayland desktop runs
 the application through Xwayland.
+
+Deployment runs before notice generation and AppImage creation. The
+[notice helper](../../scripts/linux_notices.py) scans every deployed ELF library,
+including Qt plugins, native QML modules and library symlinks. It matches each to
+an installed Qt or distribution original by GNU build-id, SONAME and NEEDED
+entries. This trusts the installed build inputs while allowing linuxdeploy's
+RPATH rewrites; a matching basename alone is insufficient. Missing build IDs,
+unknown or ambiguous origins, and missing license material fail with the payload
+path. The application executable and its AppRun symlink use the application's
+own LICENSE.
+
+Qt originals are checked against their installed SPDX checksums where supplied.
+Matching module SPDX documents retain the actual license expressions and embedded
+dependency notices. Standard license texts come from the installed distribution's
+`/usr/share/common-licenses` or `resources/licenses`; custom license texts are
+embedded in the SPDX documents. Qt's ICU libraries are separate: their version
+must match Qt's SBOM and a versioned upstream notice in
+`resources/licenses/linux-materials.json`. That manifest records the source URLs
+and checksums of the vendored ICU and SPDX license texts. A new ICU version needs
+its corresponding material; Ubuntu's ICU copyright cannot substitute for Qt's.
+Distribution originals are attributed through `dpkg-query` to their installed
+package/version, copyright file and referenced common-license texts.
+
+`usr/share/doc/automotive-format-explorer/` contains `THIRD_PARTY_NOTICES.txt`,
+`third-party-files.json` (payload hashes and attribution), and deduplicated
+`licenses/` material. Ordering is stable. After AppImage creation the script checks
+both the AppDir and the extracted image against that inventory and requires every
+referenced notice file to be nonempty. Runtime payload locations are unchanged.
+
+Focused failure controls run on the Linux build image with
+`python3 tests/test_linux_notices.py` (CTest: `tst_linux_notices`); they compile private ELF fixtures and mock
+package ownership without modifying the package database.
 
 The executable links `libGL.so.1`, as Qt's own libraries do
 ([CMakeLists.txt](../../CMakeLists.txt) sets `OpenGL_GL_PREFERENCE` to `LEGACY`

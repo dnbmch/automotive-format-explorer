@@ -221,12 +221,20 @@ set_target_properties(
 
 # Bundled sample files, staged next to the executable so the "open a sample"
 # links resolve in dev builds and in the packaged release alike.
-add_custom_command(TARGET automotive-format-explorer POST_BUILD
+file(GLOB_RECURSE _sample_files CONFIGURE_DEPENDS LIST_DIRECTORIES false
+    "${CMAKE_CURRENT_SOURCE_DIR}/samples/*")
+set(_sample_stamp "${CMAKE_CURRENT_BINARY_DIR}/samples-$<CONFIG>.stamp")
+add_custom_command(OUTPUT "${_sample_stamp}"
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/samples"
         "$<TARGET_FILE_DIR:automotive-format-explorer>/samples"
+    COMMAND ${CMAKE_COMMAND} -E touch "${_sample_stamp}"
+    DEPENDS ${_sample_files} "${CMAKE_CURRENT_SOURCE_DIR}/samples"
     COMMENT "Staging sample files"
+    VERBATIM
 )
+add_custom_target(explorer-samples DEPENDS "${_sample_stamp}")
+add_dependencies(automotive-format-explorer explorer-samples)
 
 deploy_runtime_deps(automotive-format-explorer)
 

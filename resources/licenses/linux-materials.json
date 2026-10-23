@@ -1,0 +1,83 @@
+{
+  "ICU": {
+    "73.2": {
+      "file": "ICU-73.2.txt",
+      "sha256": "f3005e195ff74d8812cc1f182a1c446fab678d70a10e3dada497585befee5416",
+      "source": "https://raw.githubusercontent.com/unicode-org/icu/release-73-2/icu4c/LICENSE"
+    }
+  },
+  "SPDX": {
+    "AFL-2.1": {
+      "sha256": "93bb4f7417aa775bab9026cc3d0af28aeb64451fc5a8ec651876785edd8eaf9b",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/AFL-2.1.txt"
+    },
+    "BSD-2-Clause": {
+      "sha256": "f32fb3b417a194167cfad068223fc975ba96c5960513a10f66a3c28720aec1df",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/BSD-2-Clause.txt"
+    },
+    "BSD-3-Clause": {
+      "sha256": "5a93d5831e1297ab10fe643e1a631e83be392896da14ee2951285a79012df69d",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/BSD-3-Clause.txt"
+    },
+    "BSD-4-Clause": {
+      "sha256": "c80d927f03db7212ba43a869a383e249c19b40859ff0d9e2e2f968e4fdcf005f",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/BSD-4-Clause.txt"
+    },
+    "BSL-1.0": {
+      "sha256": "84c6ef3ea9e3254a54d0acf5d3e0c61ae011b8fef7dd6940591cf060e6380a8f",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/BSL-1.0.txt"
+    },
+    "FTL": {
+      "sha256": "ced6622122ce451cb1ea0c3c3f507a640e2a44c075c04900ddd9fae8acb5369f",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/FTL.txt"
+    },
+    "HPND": {
+      "sha256": "4d9ae4a36816338dfa153d1d6f92645c45f25eaa46908d3096922e2431fb571e",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/HPND.txt"
+    },
+    "HPND-sell-variant": {
+      "sha256": "235abc578371bf9861e3d6eee0a9ad16228f9be18408e17fc569c6a98ba69d5f",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/HPND-sell-variant.txt"
+    },
+    "IJG": {
+      "sha256": "7658542977bfdced9e1059a6c934ce4281de76d103b831007b825917dc62511a",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/IJG.txt"
+    },
+    "Imlib2": {
+      "sha256": "19d21c4402df7020d631511274d991393267fd56b59aa014c0be90becd7631e4",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/Imlib2.txt"
+    },
+    "Libpng": {
+      "sha256": "7667a8c88c7a63690244988d626bcddd27ed895526e2c3ab1a9adb463a5fa287",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/Libpng.txt"
+    },
+    "Linux-syscall-note": {
+      "sha256": "5bcef4fedbfc08776630e65d5d0d074dd31208037eddb167ca46a9ec4f737764",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/Linux-syscall-note.txt"
+    },
+    "MIT": {
+      "sha256": "b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/MIT.txt"
+    },
+    "Qt-GPL-exception-1.0": {
+      "sha256": "fad799fdc248a52b9c0fa17823b6d4bc9907a19d6e8c78b8a071c9b551ea9c60",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/Qt-GPL-exception-1.0.txt"
+    },
+    "Unicode-3.0": {
+      "sha256": "f7db81051789b729fea528a63ec4c938fdcb93d9d61d97dc8cc2e9df6d47f2a1",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/Unicode-3.0.txt"
+    },
+    "X11": {
+      "sha256": "e1963c9958b93bc2578b34f8ae22cfe205e8c0e7d5be7235cfdbdefbf92a5423",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/X11.txt"
+    },
+    "blessing": {
+      "sha256": "592db1199aab67aafe4515db9808b420db122083807c5329b2f061951e79acbe",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/blessing.txt"
+    },
+    "libpng-2.0": {
+      "sha256": "f207d0f7375b977f76ce2437962c1c12a646f15cda3df48d5472ac95eb68e8ff",
+      "source": "https://raw.githubusercontent.com/spdx/license-list-data/v3.27.0/text/libpng-2.0.txt"
+    }
+  }
+}

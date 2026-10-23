@@ -139,26 +139,3 @@ packed, and its Windows gate checks the signature (`Get-AuthenticodeSignature`
 reports Valid). Trigger: the certificate profile exists.
 
 **Size:** S once the identity exists.
-
-### BL-K7: the AppImage carries no third-party notices
-
-The Windows zip carries `THIRD_PARTY_NOTICES.txt`, derived from what is packaged
-([release packaging](ref/release_packaging.md#the-windows-package)); the AppImage
-carries only `LICENSE`. It bundles Qt and ICU from Qt's Linux build and some forty
-Ubuntu libraries (protobuf, xcb, glib, krb5, …). Fix: in `package_linux.sh`, run
-linuxdeploy without `--output`, attribute each library in `AppDir/usr/lib` — Qt's
-by its file under `QT_PREFIX/lib`, the rest by `dpkg -S` to the package whose
-`/usr/share/doc/<package>/copyright` the notice copies — fail on a library with
-neither, then pack the AppImage in a second linuxdeploy run.
-
-**Size:** S.
-
-### BL-K8: an edited sample is not restaged in the build tree
-
-The build tree's `samples/` is copied by a POST_BUILD step of the executable
-(`CMakeLists.txt`), so a sample edit alone leaves the old copy, and the build tree's
-`--check` and "open a sample" links read it. Packaging copies from the source tree and
-is unaffected. Fix: stage the samples with a custom command whose `DEPENDS` lists the
-sample files, attached to the executable target.
-
-**Size:** XS.

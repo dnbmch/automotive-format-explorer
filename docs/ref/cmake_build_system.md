@@ -84,6 +84,23 @@ Qt is `--provided` here: build-tree runs resolve Qt from its own install, as cte
 
 The step needs msys2's `bash`, located two levels above the compiler (`<msys2>/mingw64/bin/g++.exe` → `<msys2>/usr/bin/bash.exe`) rather than on `PATH`, which on Windows would also offer System32's WSL launcher. Without it the deploy warns at configure time and is skipped. `objdump` is taken from `--search` when the build environment does not put it on `PATH`.
 
+## Build-tree samples
+
+`explorer-samples` is an executable dependency with a configuration-specific stamp.
+Its custom command depends on the recursively discovered sample files and copies
+the complete `samples/` directory beside `$<TARGET_FILE:automotive-format-explorer>`.
+A sample edit stages the files on the next executable build without compiling or
+relinking it; a subsequent unchanged build does no staging work. The destination
+follows configured runtime output directories and multi-configuration generators.
+Packaging separately copies the source samples into its existing runtime location.
+
+`python tests/test_sample_staging.py <private-build-dir>` exercises the production
+rule with a tiny executable, including paths with spaces. Pass
+`--generator "Ninja Multi-Config"` to exercise configuration-specific output.
+CTest registers it as `tst_sample_staging` using the configured CMake, compiler and
+generator. If Python is unavailable, configure warns that this test and the
+Linux-only `tst_linux_notices` regression test are not registered.
+
 ## Static composition
 
 One assembly path on every platform. `explorer-core` (controller, format list, models,

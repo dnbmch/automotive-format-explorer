@@ -1,5 +1,20 @@
 find_package(Qt6 6.5 REQUIRED COMPONENTS Test)
 
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME tst_sample_staging COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/test_sample_staging.py"
+        "${CMAKE_CURRENT_BINARY_DIR}/sample-staging-check"
+        --cmake "${CMAKE_COMMAND}" --generator "${CMAKE_GENERATOR}"
+        --compiler "${CMAKE_CXX_COMPILER}" --make-program "${CMAKE_MAKE_PROGRAM}")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_test(NAME tst_linux_notices COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/test_linux_notices.py")
+    endif()
+else()
+    message(WARNING "Python3 not found: sample staging and Linux notice regression tests are not registered")
+endif()
+
 # On Windows the test executables resolve Qt's DLLs from the Qt install and the
 # toolchain's from the compiler's directory. Hand ctest a PATH that includes
 # both so the suite runs without developer shell setup.
