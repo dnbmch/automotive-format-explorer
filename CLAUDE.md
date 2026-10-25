@@ -86,6 +86,7 @@ Non-trivial work: map the code → findings with evidence → a recommendation p
 
 - Every finding ends fixed, backlogged with its fix, or asked — never only reported. Leftover drift is yours: there is no other lane.
 - Low-stakes items: apply the default and list it in one table the user can veto; ask only about load-bearing forks.
+- A text change that records landed work — a `CLAUDE.md` invariant line, a tool count, a proof row, a renamed reference, a doc line — is applied with the work and listed for veto in the report; a decision that changes cost, schedule, behaviour or geometry still waits for the user's word.
 - An agreed next step is carried out, not re-approved; a concern goes beside the result, not instead of it.
 - Define done up front, checkable where possible ("fix the bug" → a failing test that then passes). Renames and moves update every reference in the same change — grep, don't recall.
 
