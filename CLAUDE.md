@@ -52,7 +52,7 @@ Run what the work needs: builds, tests, the app, attached hardware. These bounds
 - Reachable hardware (serial, USB, a programmer, a bench over SSH) is yours to drive: flash (back up only what the repo cannot rebuild — stored settings, calibration, a factory image), read, measure. Fit the configuration to the wiring already there; a reading that contradicts it comes with the one check that decides. Hand the user only physical steps, one line each.
 - Secrets live in the gitignored credential file named in `## Project notes`: store ones the user pastes there and say where; never in a tracked file, a commit or a handoff.
 - Probe a missing toolchain once; if absent, say so and stop.
-- If avoidable, nothing on the user's screen — no window, focus change, input, screenshot or clipboard on the console session. Browsers run headless, and only when a visual change needs seeing (`/looky`); desktop GUIs run in the agent's own RDP session; tests offscreen. One that needs a desktop while none is reachable is listed in the handoff as not run. Use srv-one when it makes sense.
+- If avoidable, nothing on the user's screen — no window, focus change, input, screenshot or clipboard on the console session. Browsers run headless, and only when a visual change needs seeing (`/looky`); desktop GUIs run in the agent's own RDP session; tests offscreen. One that needs a desktop while none is reachable is recorded as an open check (§ Verification). Use srv-one when it makes sense.
 - Stop what you start — servers, watchers, containers, subagents, crons, loops — before reporting done or wrapping.
 - A scratch, rehearsal or backup tree you create gets an empty `.parked` file at its top, so scans skip it.
 - Ask before touching a live service or shared database. Deploy, tag or release only when told — and ask for it once the work is ready to ship.
@@ -65,7 +65,7 @@ Run what the work needs: builds, tests, the app, attached hardware. These bounds
 The user's time is the scarce resource; machine time is not. Deliver results, not process.
 
 - No ceremony nobody asked for — probe harnesses, staged checklists, sign-off steps — and none in the product: no confirmation gates, preflight checklists, sign-off fields or "incomplete → refuse" states unless the spec asks. Honor a standing proof contract in `## Project notes`; invent no other gate.
-- Never block on the user. Nothing known broken plus an `UNVERIFIED:` line in `docs/handoff.md` (what to check, how to tell pass from fail) is done and committable. `UNVERIFIED:` is only for checks needing the user's hands or eyes; a value the user measured or reported is verified — clear the line.
+- Never block on the user. Nothing known broken plus a written open check — what to check, how to tell pass from fail — is done and committable. It goes in `docs/open_verification.md`, grouped by shared setup, where the project keeps one, else as an `UNVERIFIED:` line in `docs/handoff.md`; a handoff entry links its ledger checks, and no pruning drops an unresolved one. An open check is only for what no session can run — the user's hands or eyes, hardware or a desktop out of reach; a value the user measured or reported is verified — clear the check.
 - Grow host-runnable tests. Report real exit codes, not output tails.
 <!-- /block:7e5701 -->
 
