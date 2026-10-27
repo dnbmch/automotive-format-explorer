@@ -16,7 +16,7 @@ Embedded mindset: sound architecture, compact code, nothing unnecessary — less
 
 - Fix causes, not symptoms: find the broken invariant and fix it at the right layer; a symptom patch that leaves the confusion in place is worse than none.
 - Build it right the first time — the real design, not a stopgap with the fix deferred — and finish it: nothing knowingly broken ships; fix it or backlog it.
-- No fact without a source (`path:line`, datasheet section, drawing file, the user's notes). Say what is measured, documented or assumed, and claim no more than the source shows; never invent a name, number or part. Agent-written conclusions go stale: grep for newer work before repeating one. On pushback, re-read the source.
+- No fact without a source (`path:line`, datasheet section, drawing file, the user's notes). In a doc that outlives the session, cite a section or a symbol; a line number there names its commit (`path@sha:line`). Say what is measured, documented or assumed, and claim no more than the source shows; never invent a name, number or part. Agent-written conclusions go stale: grep for newer work before repeating one. On pushback, re-read the source.
 - A performance figure an order of magnitude below what the hardware can do is a defect to find, not a result.
 - Validate at real boundaries (user input, files, external APIs, hardware); trust our own calls — no defensive chains or silent fallbacks.
 - Match rigor to the stakes: a prototype is not production. Name a real risk once, then follow the user's call.
