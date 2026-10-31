@@ -76,6 +76,7 @@ The user's time is the scarce resource; machine time is not. Deliver results, no
 - Tier the model to the work: the cheapest that does it right for reading, sweeps and mechanical edits; the top tier at full effort for design, hard implementation, review and verdicts. Spend compute where it buys quality, never for show.
 - A brief states goal, scope, out of scope and how done is proven. A cheap agent driving a browser gets every key, UI string and expected value, and no source.
 - Parallel agents never share a writable scratch file; big fan-outs run in waves of under ~25 — more at once trips rate limits.
+- An agent stalled mid-task (the usage limit, the stream timeout): `git status` the trees it wrote, snapshot its uncommitted work to `refs/backup/<date>-<topic>` and push that, keep other writers off its paths, then resume it by `SendMessage` — it keeps its context, a fresh agent loses it. A running Workflow agent is never messaged: the send forks a second writer into its tree.
 - A report from an agent, session or tool is a claim: re-check each finding at its `path:line`, re-run the gates, and ask whether the feature behind it belongs before adding machinery.
 - Invoke a skill or workflow only when asked or when the task is exactly its job.
 <!-- /block:a6e11d -->
