@@ -72,6 +72,14 @@ beside the hex. Trigger: the reader reads a structure's attachment references
 
 **Size:** M.
 
+### BL-V9: the CAN_FD block's MAX_DLC_REQUIRED is not shown
+
+a2l-parser extracts `IF_DATA XCP` `CAN_FD`'s own `MAX_DLC_REQUIRED` beside the outer one
+(a2l-parser `6a41ae4`); `a2ldetailpresenter_ifdata.cpp` shows the outer flag and the
+CAN_FD `MAX_DLC` only. Show the inner flag in the CAN_FD rows.
+
+**Size:** XS.
+
 ### BL-V7: a file without memory segments derives one span over all its objects
 
 `MemoryMapModel::finalize` derives a single segment from the lowest to the highest
