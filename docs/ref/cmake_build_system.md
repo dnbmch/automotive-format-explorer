@@ -8,7 +8,8 @@ How the explorer's CMake assembles parser dependencies, links its static librari
 `a2lparser::a2lparser`, `dbcparser::dbcparser`, `ldfparser::ldfparser` and
 `mdf4parser::mdf4parser`. Each target supplies its headers and archive dependencies.
 MDF4's zlib dependency belongs to the producer export. Explorer separately finds
-protobuf because it directly uses reflection and JSON utilities.
+protobuf because it directly uses reflection and JSON utilities
+(`google/protobuf/util/json_util.h`, a stable API on protobuf v3 and v4+ alike).
 
 Standalone builds default to `AFF_PARSER_MODE=PACKAGE` and use complete installed
 packages from `CMAKE_PREFIX_PATH`:

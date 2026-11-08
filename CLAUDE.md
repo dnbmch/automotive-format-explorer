@@ -137,47 +137,10 @@ No external consumers: every contract we own — proto, API, schema, file format
 
 **The plot stack takes operator-authored changes only** (`plotdata`, `SignalPlotModel`, `SignalPlotItem`, `SignalPlotView.qml`), so it can be relicensed for a live view in the proprietary product apps ([signal plot](docs/ref/signal_plot.md)).
 
-### Architecture
+**Architecture:** `qml/` holds the views; `src/core/` the `AppController` QML singleton and `DocumentTab`; `src/builtinformats.cpp` the one format list, the only place a concrete adapter is built; `src/adapters/`, `src/sessions/`, `src/models/` and `src/ui/` (the painted renderers) the per-format backends and shared models. Module map, contracts, ownership and selection flow: [docs/arch/architecture.md](docs/arch/architecture.md#project-structure). Adding a format: [docs/arch/adapter_contract.md](docs/arch/adapter_contract.md). Test harness facts: [docs/ref/tests.md](docs/ref/tests.md).
 
-- `qml/` — `Main.qml` lays out the tabs, the nav tree, a center-panel `Loader` and the detail panel; `components/` holds the views
-- `src/core/` — `AppController` (QML singleton owning the format list, the one pending load and the tabs), `DocumentTab`, format ids, tree items, diagnostics
-- `src/builtinformats.cpp` — the one list of format id, suffixes and adapter; the only place a concrete adapter is built
-- `src/adapters/` — one `FormatAdapter` per format: loads a file on a worker thread, returns a `DocumentSession`
-- `src/sessions/` — per format a session over `AdapterSessionBase` and a detail presenter; the session holds its document (MDF4: shared with its retained reader) and owns its tree, detail and center-panel models; `mdf4pageread` and `mdf4arrayread` are the MDF4 session's Qt-free page and array-sample reads (plan, reservation, lanes or axis labels)
-- `src/models/` — tree, filter, detail and tab models, the memory map, signal map, signal plot and value table models, the format-neutral plot and table data
-- `src/ui/` — `QQuickPaintedItem` renderers: memory grid, signal grid, signal plot
+**Build:** Qt 6.5+, CMake 3.21+, Protobuf; configure is offline. Commands: [README § Building from Source](README.md#building-from-source); parser dependencies and the Windows runtime deploy: [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md).
 
-Contracts, ownership and selection flow: [docs/arch/architecture.md](docs/arch/architecture.md). Adding a format: [docs/arch/adapter_contract.md](docs/arch/adapter_contract.md).
+**Code conventions:** the workspace's, [CLAUDE.md § Code conventions](../CLAUDE.md#code-conventions-workspace-single-source-of-truth).
 
-### Build
-
-```bash
-cmake -B build-package -G Ninja -DCMAKE_PREFIX_PATH="/path/to/parser-prefix;/path/to/Qt"
-cmake --build build-package
-```
-
-Qt 6.5+, CMake 3.21+, Protobuf required. Standalone builds consume complete installed parser packages via `CMAKE_PREFIX_PATH`; workspace source builds use `AFF_BUILD_EXPLORER=ON`. Configure is offline. Acquisition and workflow lock setup: [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md).
-
-### Code conventions
-
-See workspace [CLAUDE.md "Code conventions"](../CLAUDE.md#code-conventions-workspace-single-source-of-truth). Repo-specific exceptions:
-
-- Qt 6 + QML is the entire UI layer. The workspace "no Qt" rule applies to the parser/library repos, not here
-
-### Release
-
-- A release is one command at the workspace root, run only on the operator's instruction: `bash release-explorer.sh vX.Y.Z [--notes FILE] [--dry-run]`. It refuses unless every repository is committed and pushed, builds and tests everything on Windows here and on Linux on srv-one, packages and gates both, publishes the GitHub release, gates the downloaded assets again and records the manifest entry. `--dry-run` stops before publishing
-- The repository has no workflows: the public repo cannot reach the private parser sources, so builds, tests and gates run in that script
-- Both platforms build against Qt 6.10.1 from Qt's own binaries; on Windows msys2 supplies gcc, ninja, cmake, and protobuf; Linux builds run on srv-one: workspace [local toolchain](../docs/ref/local_toolchain.md#linux-on-srv-one)
-- The launch gates run the packaged app's `--check`, which opens every bundled sample and exits non-zero on a failed open or a QML warning
-- Never re-tag a published version
-- Packaging paths and launch gates: [docs/ref/release_packaging.md](docs/ref/release_packaging.md)
-
-### Platform differences
-
-| | Windows | Linux |
-|---|---------|-------|
-| Qt deploy | `windeployqt` + dependency-closure walk (`scripts/deploy_closure.sh`, shared by the package and the build-tree deploy) | AppImage by `scripts/package_linux.sh`: linuxdeploy and its Qt plugin, pinned |
-| OpenGL link | — | `libGL.so.1`, as Qt's libraries link it (`OpenGL_GL_PREFERENCE` `LEGACY`) |
-| Protobuf JSON | `google/protobuf/util/json_util.h` (stable API, works on both v3 and v4+) | |
-| File paths | UTF-8 active code page from `resources/explorer.manifest`, so the parsers' narrow opens read the adapters' UTF-8 paths ([FormatAdapter contract](docs/arch/architecture.md#formatadapter-contract)) | UTF-8 natively |
+**Release:** one command at the workspace root, run only on the operator's instruction: `bash release-explorer.sh vX.Y.Z [--notes FILE] [--dry-run]`. Never re-tag a published version. Steps, packages, launch gates and the Windows/Linux deploy and OpenGL-link differences: [docs/ref/release_packaging.md](docs/ref/release_packaging.md); Linux builds run on srv-one: workspace [local toolchain](../docs/ref/local_toolchain.md#linux-on-srv-one). Windows file paths take the UTF-8 code page: [FormatAdapter contract](docs/arch/architecture.md#formatadapter-contract).

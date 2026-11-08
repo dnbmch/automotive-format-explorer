@@ -69,24 +69,13 @@ Visual hex grid of ECU memory segments. Each byte is color-coded by the object t
 | Gold | AXIS_PTS (standalone axis) |
 | Rose | BLOB (bytes without conversion) |
 
-- Segment selector, opening on the segment that holds the most calibration objects, with automatic fallback when no segments are defined
-- Hover tooltips with name, type, address, computed size, record layout, and conversion
-- Diagonal red hatching on bytes claimed by more than one object
-- Click-drag byte-range selection with a status-bar readout (range, byte count, objects in range)
-- Jump-to-address input field
-- Configurable bytes-per-row (8 / 16 / 32)
-- Alternating shades to distinguish adjacent same-type objects
-- Tiered size calculation (exact for VALUE/CURVE/MAP, approximate for complex record layouts)
+A segment selector, hover tooltips with record layout and conversion, red hatching on bytes claimed by more than one object, click-drag byte-range selection, jump-to-address and 8 / 16 / 32 bytes per row; sizes are exact for VALUE/CURVE/MAP and approximate for complex record layouts ([memory view reference](docs/ref/memory_view.md)).
 
 ### Signal Map (DBC / LDF)
 
 Bit-level visualization of CAN and LIN message payloads. Each signal is rendered at its exact bit position with correct big-endian or little-endian layout, except that ISO 17987 big-endian LIN signals are drawn little-endian ([BL-V3](docs/backlog.md#bl-v3-iso-17987-big-endian-lin-signals-are-drawn-little-endian)).
 
-- Color-coded signals with alternating shades
-- Multiplexor group filtering
-- Overlap detection
-- Hover tooltips with factor, offset, range, and unit
-- Keyboard navigation
+Color-coded signals, multiplexor group filtering, overlap detection, hover tooltips with factor, offset, range and unit, and keyboard navigation ([signal map reference](docs/ref/signal_map.md)).
 
 ### Signal Plot (MDF4)
 
@@ -97,25 +86,9 @@ bins, so every sample of a long recording is represented; zooming in reads the e
 samples of the view, at most 4 Mi at a time. Results stay within a 256 MiB allowance
 per open file.
 
-- The overview draws each column's minimum to maximum, never joining columns as if
-  they were samples; exact samples are drawn as a line, or as columns when denser
-  than the pixels
-- Hover reports a column's time and sample range with its extrema, or an exact
-  sample's time, value and index
-- Wheel zoom around the pointer, drag pan, and reset to the whole recording
-- Progress while reading; a newer selection or view cancels obsolete reads
-- A recording that ends early is marked incomplete with the samples it holds
-- Unsupported channels stay browsable and explain why they are not plottable
-- Text channels open a value table in place of the plot: each sample's index, time and
-  text, 1,024 rows per page, a text longer than 1 KiB cut and marked
-- Byte channels open the value table with each sample's Bytes as hex; a bus-logging
-  structure (a CAN log's `CAN_DataFrame`) shows a row per frame with its time, a column
-  per member and the frame's own Bytes, its members nested under it in the tree, each
-  keeping its own view
-- Array channels (look-ups, classification results and other MDF4 arrays) open the
-  value table one sample at a time: the last two dimensions as rows and columns, the
-  axes as headers, an index for each outer dimension
-- A group's master channel is listed as its axis rather than offered as a signal
+The overview draws each column's minimum to maximum, never joined as if they were samples; exact samples are a line, or columns when denser than the pixels. Hover reports a column's range and extrema or an exact sample, with wheel zoom, drag pan and reset; progress shows while reading, a newer selection or view cancels obsolete reads, and a recording that ends early is marked incomplete. Unsupported channels stay browsable and say why they are not plottable; a group's master channel is listed as its axis ([signal plot reference](docs/ref/signal_plot.md)).
+
+Text, Byte and array channels open a value table in place of the plot: texts and Bytes (hex) in pages of 1,024 samples, a bus log's `CAN_DataFrame` as a row per frame with a column per member, an array one sample at a time with its axes as headers ([value table reference](docs/ref/value_table.md)).
 
 ### Bidirectional Selection
 
@@ -205,6 +178,7 @@ are used directly through the same public targets as installed packages.
 - [docs/ref/keyboard.md](docs/ref/keyboard.md) — application + grid keyboard shortcuts.
 - [docs/ref/cmake_build_system.md](docs/ref/cmake_build_system.md) — canonical parser dependencies, runtime dependency closure, static backend composition.
 - [docs/ref/release_packaging.md](docs/ref/release_packaging.md) — Windows and Linux package paths, launch gates, release publish gating.
+- [docs/ref/tests.md](docs/ref/tests.md) — what the suites cover, harness facts.
 - [roadmap.md](roadmap.md) — direction and planned work.
 - [project_status.md](project_status.md) — current state of play.
 - [docs/backlog.md](docs/backlog.md) — known issues / planned changes.

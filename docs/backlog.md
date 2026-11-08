@@ -63,7 +63,7 @@ print-friendly view of it (`SignalMapView.qml`, `SignalGridItem`). Neither exist
 ### BL-V6: frame payload decoded against the attached database
 
 A bus log's frame table shows each frame's payload (`DataBytes`) and the
-structure's own Bytes as hex ([value table](../ref/value_table.md#pages)). A bus
+structure's own Bytes as hex ([value table](ref/value_table.md#pages)). A bus
 log may attach the database that describes its frames (a DBC for CAN), which the
 structure references through `cn_at_reference` (MDF Bus Logging AS §4.3). Wanted:
 the payload decoded into the attached database's signals through the DBC parser,
@@ -147,8 +147,3 @@ packed, and its Windows gate checks the signature (`Get-AuthenticodeSignature`
 reports Valid). Trigger: the certificate profile exists.
 
 **Size:** S once the identity exists.
-
-## Docs
-
-- Entry docs over budget: CLAUDE.md 183 / README 216 / status 121 / handoff 111 = 631 lines (limit ~400 together, CLAUDE.md ≤ 200, per the Documentation block). At the next wrap: delete sections without a reader, move detail into docs/, re-measure.
-- docs/handoff.md:17 entry of 2026-09-28 is still OPEN after 30+ days. At the next wrap: fold its open items into this backlog or docs/open_verification.md, then delete the entry.

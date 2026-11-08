@@ -231,7 +231,8 @@ published unless every step before it passed:
 
 `--dry-run` stops after step 4 and leaves the packages and notes in
 `build-release/release`. A release needs no parser `-lib` publication: the parsers
-are compiled in from their sources.
+are compiled in from their sources. The repository has no workflows: the public repo
+cannot reach the private parser sources, so builds, tests and gates run in this script.
 
 After publishing, the downloaded Windows zip gets the workspace's
 [first-contact audit](../../../docs/ref/first_contact_audit.md): an A2L engineer's first
@@ -246,6 +247,7 @@ five minutes with it, played on a clean Windows guest.
 - `dist/libstdc++-6.dll` and `dist/libgcc_s_seh-1.dll` are msys2's, not Qt's.
 - `scripts/package_linux.sh` produces the AppImage, and `scripts/smoke_linux.sh`
   passes against it, in srv-one's check.
-- The AppImage's executable names `libGL.so.1` and not `libOpenGL.so.0`, and it
-  starts on srv-one's desktop, which has no `libopengl0`.
+- The AppImage's executable names `libGL.so.1` and not `libOpenGL.so.0`, and its
+  `--check` passes through FUSE on srv-one's Ubuntu 26.04 desktop, which has no
+  `libopengl0`.
 - A failure on either platform stops the release before anything is published.

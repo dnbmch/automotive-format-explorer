@@ -5,101 +5,35 @@ deferred items in [docs/backlog.md](docs/backlog.md).
 
 ## Built
 
-- Qt 6 / QML desktop app: tree view + detail panel + format-specific center view.
-- Static per-format backends for A2L, DBC, LDF, and MDF4, linked into one
-  executable on every platform and composed from a single built-in format list
-  (id, suffixes, adapter, bundled sample) that also derives the dialog filters and sample list;
-  each backend provides a `FormatAdapter`, a `DocumentSession` and its presenter.
-- `AppController` owns its format list and its one pending load: shutdown stops
-  opens, suppresses late completions, asks the load to stop (an MDF4 opening
-  stops; an A2L, DBC or LDF parse runs to its end) and joins it before adapters go,
-  disposing any undelivered session on the GUI thread; afterwards every public
-  action does nothing.
-- Each open file is a `DocumentTab` owning its session, tree filter and tree
-  navigation. The controller tracks the current tab by identity; closing a tab
-  announces the new current tab before destroying the closed one, and tab
-  switches or closes requested during a tab-model row change are deferred by tab
-  identity. Painted items track their model's lifetime.
-- A2L memory-map view and DBC/LDF signal-map view via `QQuickPaintedItem`
-  C++ renderers (`MemoryGridItem`, `SignalGridItem`) with FBO scrolling.
-- Format-neutral single-channel signal plot (`plotdata`, `SignalPlotModel`,
-  `SignalPlotItem`): a worker-built overview of at most 4,096 bins covers every
-  sample of a channel, and exact windows of at most 4 Mi samples follow the view;
-  bins are painted as unjoined extrema columns, exact samples as a line or, when
-  dense, as columns. Hover reports a bin range or an exact sample with its index;
-  a source that ended early shows "N of M samples"; zoom, pan and reset.
-- MDF4 open indexes metadata once into one retained `mdf4::Reader` shared by the
-  tree, detail cards, time axes and every read. The tree is admitted against a
-  384 MiB estimate before it is built. One read runs at a time with a single
-  replaceable pending read; obsolete reads are cancelled and their results and
-  progress discarded. Completed overviews, windows, pages and array slices
-  share one 256 MiB allowance per session with the read in flight's reservation,
-  evicting only results nobody else holds and refusing, with the numbers, when held
-  results leave no room or the request exceeds the whole allowance.
-  Empty, short, refused, changed-file and failed scans read differently; the domain
-  is the reader's time axis or the sample index; group masters are listed as axis
-  channels, not signals. Text, Byte and array channels are shown as value tables in
-  place of the plot: a text or Byte channel in pages of 1,024 samples, a bus log's
-  structure as a frame table with a column per member and its members nested under
-  it in the tree, an array channel one sample at a time with its axes as headers,
-  paired with the array's samples by the spec's rule, and a slice selector per outer
-  dimension with more than one element; their reads share the scheduler and the
-  allowance. Closing a tab cancels its read and waits
-  for the reader's next checkpoint.
-- Memory grid: sparse byte queries remove the 16 MiB coverage cap and support tested
-  multi-GiB spans, with overlap hatching (bytes claimed by more than
-  one object), click-drag byte-range selection with status readout, and hover
-  tooltips with record layout / conversion — see [docs/ref/memory_view.md](docs/ref/memory_view.md).
-- Bidirectional selection (tree ↔ detail ↔ center) keyed by session-local node keys,
-  which every tree row has.
-- Per-tab tree filter (`TreeFilterModel` proxy, `Ctrl+F`) with recursive matching.
-  Tab switches and filter clears restore each tab's expansion (categories
-  included), current row and scroll; the tab keeps its pre-filter navigation.
-- Raw JSON is serialized only when the raw view reads it.
-- Bundled samples (one per format, `samples/`, including a writer-authored
-  `.mf4` recording) with "open a sample" links in the empty sidebar; provenance
-  in `samples/SAMPLES.md`.
-- Command line: `automotive-format-explorer [files...]` opens each file as a tab,
-  one after another (`OpenSequence`). `--check` opens the named files or every
-  declared bundled sample, including missing paths, and exits 0 only when each
-  opening succeeded, the QML engine reported no warning and the main window drew
-  the last one. Failed MDF4 openings retain their diagnostic tabs but fail the
-  check; recoverable file diagnostics pass. Both launch gates use this verdict.
-- On Windows the executable runs with the UTF-8 active code page (application
-  manifest), so files open under non-ASCII directory and file names; `tst_check`
-  opens all four formats that way.
-- Splash overlay + DWM cloak startup.
-- Links the four canonical parser targets, from complete installed packages or
-  source workspace composition. GPL-3.0.
-- QTest coverage for tree filtering, memory models, the plot builders (bin
-  partition up to 2^64, domain decision, exact windows over gaps, repeats and
-  nonfinite values, storage), the plot model and painted item, A2L/MDF4 detail
-  presenters, MDF4 scan scheduling and cancellation, stale progress and results,
-  outcomes, reservation and eviction, tree admission, worker-thread hand-off and
-  teardown from and during scans, a generated 4.5 M-sample recording through the
-  real reader, the production format list (suffixes, dialog filters, sample
-  classification, one bundled sample per format opened through the controller)
-  controller load/shutdown lifetimes and the tab contract through a fake adapter,
-  tab navigation and pre-filter snapshots, lazy raw JSON, the painted items'
-  model lifetimes, and the production nav panel offscreen, registered with
-  ctest; `release-explorer.sh` runs them on both platforms before a release. The end-to-end
-  writer-file smoke opens and plots the bundled `samples/demo_recording.mf4`
-  through the production adapter, and a truncated copy asks for a reload;
-  `MDF4_WRITER_SAMPLE` points it at a different recording, and it reports as a
-  ctest skip when that resolves to nothing.
-- Releases from the workspace sources, one command: `release-explorer.sh <tag>` at the
-  workspace root builds and tests everything on the workstation (Windows) and srv-one
-  (Linux, Ubuntu 24.04), packages and gates both, publishes the GitHub release, gates
-  the downloaded assets again and records the manifest entry. Qt 6.10.1 on both. The
-  repository has no workflows.
-- Packaging: Windows by dependency closure with `LICENSE.txt` and third-party notices
-  derived from what is packaged (`scripts/package_windows.sh`), Linux as
-  an AppImage (`scripts/package_linux.sh`, linuxdeploy pinned) whose executable links
-  `libGL.so.1`. Both launch gates run the packaged app's `--check`
-  (`scripts/smoke_windows.ps1`; `scripts/smoke_linux.sh` on a virtual X server); the
-  Windows gate fails without the platform plugin, and the AppImage's check passes
-  through FUSE on srv-one's Ubuntu 26.04 desktop, which has no `libopengl0`. See
-  [docs/ref/release_packaging.md](docs/ref/release_packaging.md).
+- Qt 6 / QML desktop app: tree view, detail panel and a format-specific center view.
+  A2L, DBC, LDF and MDF4 backends are linked statically into one executable from one
+  built-in format list ([format composition](docs/arch/architecture.md#format-composition)).
+- `AppController` owns the format list and the one pending load; shutdown cancels an
+  MDF4 opening and waits for an A2L, DBC or LDF parse
+  ([opening and shutdown](docs/arch/architecture.md#opening-files-and-shutdown)).
+- Each open file is a `DocumentTab` owning its session, tree filter (`Ctrl+F`) and tree
+  navigation ([tabs](docs/arch/architecture.md#tabs)).
+- A2L memory map and DBC/LDF signal map as painted C++ renderers
+  ([memory view](docs/ref/memory_view.md), [signal map](docs/ref/signal_map.md)).
+- Format-neutral signal plot: an overview of at most 4,096 bins covers every sample,
+  exact windows of at most 4 Mi samples follow the view ([signal plot](docs/ref/signal_plot.md)).
+- MDF4 through one retained reader per file: a metadata-only open, a 384 MiB tree
+  admission, one read at a time within a 256 MiB result allowance per open file
+  ([MDF4 reads](docs/arch/architecture.md#mdf4-reads)); text, Byte, bus-log frame and
+  array channels as value tables ([value table](docs/ref/value_table.md)).
+- Bidirectional selection by session-local node keys; raw JSON serialized only when
+  the raw view reads it ([bidirectional selection](docs/arch/architecture.md#bidirectional-selection)).
+- Bundled samples with "open a sample" links ([samples/SAMPLES.md](samples/SAMPLES.md));
+  `automotive-format-explorer [files...]` and `--check`
+  ([opening several files](docs/arch/architecture.md#opening-several-files)); the UTF-8
+  active code page on Windows ([FormatAdapter contract](docs/arch/architecture.md#formatadapter-contract));
+  splash overlay + DWM cloak startup.
+- Links the four canonical parser targets from complete installed packages or source
+  workspace composition ([CMake build system](docs/ref/cmake_build_system.md)). GPL-3.0.
+- QTest suites registered with CTest ([tests](docs/ref/tests.md)).
+- Releases from the workspace sources, one command, as a Windows zip and a Linux
+  AppImage, each gated by the packaged app's `--check`
+  ([release packaging](docs/ref/release_packaging.md)).
 
 ## Published
 
@@ -112,9 +46,9 @@ memory map, the DBC and LDF signal maps and the MDF4 plot of a long recording.
 
 ## Deferred
 
-No implementation is mid-flight. Platform and operator checks remain in
-[docs/handoff.md](docs/handoff.md); remaining MDF4 viewer scope is in its
-[plan](docs/plans/mdf4_viewer.md).
+No implementation is mid-flight. The operator's and the reference laptop's checks are
+open in [docs/open_verification.md](docs/open_verification.md); remaining MDF4 viewer
+scope is in its [plan](docs/plans/mdf4_viewer.md).
 
 Tracked in [docs/backlog.md](docs/backlog.md): the adapter-repetition call
 (BL-E2) remains parked because the loaders have distinct boundaries. Memory-
