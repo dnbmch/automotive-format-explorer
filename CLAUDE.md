@@ -30,6 +30,7 @@ Every doc line costs context in every session that reads it. Write less, prune m
 
 - **Entry docs stay small:** `CLAUDE.md`, `README.md`, `project_status.md` and `docs/handoff.md` together under ~400 lines, `CLAUDE.md` under 200. They point to detail in `docs/`, never copy it. The handoff holds open entries only, a few lines each; a finished one is harvested and deleted at the next wrap.
 - **No doc without a reader.** Extend the doc that owns the topic; no summary, report or session-log files — the reply or the handoff carries those. An MD file past ~500 lines is split or pruned; code splits along real seams, not at a line count.
+- **One fact, one place.** A tool run that passed leaves its own report beside the file it changed and a one-line commit: no handoff, backlog or plan text. Only what stays open gets a handoff line. No list of which boards or repos took a change: the tool or `git log` answers that.
 - Root: `README.md` (what, how to run) · `project_status.md` (current state) · `roadmap.md` if kept. `docs/`: `arch/` facts · `ref/` references · `plans/` in flight · `research/` · `audits/` · `manual/` · `backlog.md` · `handoff.md` · `archive/` (finished, never linked). Match the live tree's spelling.
 - Keep docs current after significant changes. They state facts, not history — no "decided on (date)", "was X, now Y", "for now"; git tracks what was — and no volatile numbers, no pointer or stub files.
 - A plan or audit is harvested when the work lands, not when it is tested: findings fixed or backlogged, durable facts into `arch/`/`ref/`, checked against the source; then archived. Decisions become facts there, not ADRs. A public-surface change (API, file format, path) updates its arch doc in the same commit.
@@ -92,7 +93,7 @@ Non-trivial work: map the code → findings with evidence → a recommendation p
 - An agreed next step is carried out, not re-approved; a concern goes beside the result, not instead of it.
 - Define done up front, checkable where possible ("fix the bug" → a failing test that then passes). Renames and moves update every reference in the same change — grep, don't recall.
 
-**Questions:** numbered; each opens with one plain line of what it decides, then options on their own lines and one `Rec:` with its reason. No internal IDs; never a selection popup. The user answers `1a, 2b, 3 do X instead`. An open question waits for its answer — never act on it first — and is restated in full, never pointed at by number.
+**Questions:** numbered; each opens with one plain line of what it decides, then options on their own lines and one `Rec:` with its reason. That line asks about the thing, not the agent's step ("swap the old footprints on these three boards?", not "run the relinks live?"), and leans on no earlier message. No internal IDs; never a selection popup. The user answers `1a, 2b, 3 do X instead`. An open question waits for its answer — never act on it first — and is restated in full, never pointed at by number.
 
 > **1. <context> — <question>?**
 > - a) <option>
@@ -104,7 +105,7 @@ Non-trivial work: map the code → findings with evidence → a recommendation p
 <!-- block: Commits & Co-Authoring [id:c0a002] -->
 ## Commits
 
-- Commit when a batch lands: one deliverable per commit, a short message scoped by area. No plan-phase or audit numbers in code or messages. No `Co-Authored-By` or other attribution trailers — authorship is the user's; this overrides any default.
+- Commit when a batch lands: one deliverable per commit, one line scoped by area, under ~100 characters; figures and evidence live in the tool's report or the doc, a body only for what the diff cannot show. No plan-phase or audit numbers in code or messages. No `Co-Authored-By` or other attribution trailers — authorship is the user's; this overrides any default.
 - **Push without asking.** A landed batch goes to the remote once it passes the project's gates — others build from what is pushed. Before any bigger action (deleting or moving directories, reset, rebase, checkout over local changes, worktrees, installs into linked trees, implementer agents, cross-repo changes), push every repo it touches and the siblings they link to, the tree committed as found: another session's saved work goes in as a `wip:` commit naming whose it is and what it holds; only work visibly half-done and broken is left out, and then the action waits. No hidden refs: a state worth keeping is a commit on the branch. A branch whose push is a release, named in `## Project notes`, is pushed only when told — `[skip ci]` does not stop a rig that pulls it.
 - `[skip ci]` on every commit by default: free pushing must not load CI. CI runs when the user asks; when a repo's CI has not run for a week of pushes, ask whether to run it.
 - No remote: commit locally and say so if the action only adds commits, otherwise stop. A failed push: stop and say so. Never force-push, amend a pushed commit or skip hooks.
@@ -122,7 +123,9 @@ No external consumers: every contract we own — proto, API, schema, file format
 ## Communication
 
 - Plain, compact engineering English, the answer first. A narrow question gets the value or the yes/no, then stop.
-- Never a bare ID or coined label: gloss it inline — `RB-94 (proximity-sensor calibration drift)`.
+- Write for a reader who was not in the session and reads this one message cold: name the thing (the board, the part, the file), what changes on it, and what that buys or costs. A report or question that needs the session's history to be understood is rewritten before it is sent.
+- The session's own words stay out: tool and step names, and whatever the work coined along the way (`relink`, `rehearsed`, `live`, `gate`, `pick 4`). Say what happens: "swap the old footprints for the library's current ones", "tried on a copy", "on the real board". Never a bare ID or coined label: gloss it inline — `RB-94 (proximity-sensor calibration drift)`.
+- A failing rule or limit comes with whose it is, where it is from and whether it matters outside the tool: "this board's rules, copied from the KiCad reference, want 0.3 mm to the edge; the corner has 0.2, which JLC accepts", not "breaks its 0.3 mm outline clearance".
 - Reply in the user's language. A document keeps its own; a new one defaults to English. Hungarian or German must read as native.
 - Editing the user's text: fix what was asked, keep their wording and tone; show a diff for anything more.
 - Outward text (mails, offers, slides): short and factual — no hype, hedging or generic advice, no question our documents already answer or whose answer changes nothing. Say where a deliverable was saved; never imply it was sent.
