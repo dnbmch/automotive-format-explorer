@@ -84,6 +84,17 @@ links, as a function's lists do, and the count.
 
 **Size:** S.
 
+### BL-V10: a signal running off its frame is drawn cut short with no flag
+
+`SignalMapModel::rebuildBitMap` keeps only the positions inside the frame's bits, in
+either byte order: a big-endian 16-bit signal at offset 63 of an 8-byte frame shows
+8 cells (a little-endian one 1) and a tooltip that still says 16-bit, nothing marking
+the bits that fall outside. Fix:
+mark the entry (its legend swatch and cells) and say in the tooltip how many of its
+bits run past the frame.
+
+**Size:** XS.
+
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant
