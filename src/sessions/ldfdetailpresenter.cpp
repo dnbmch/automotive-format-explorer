@@ -32,8 +32,7 @@ void addOptionalNumberField(QList<DetailField>& fields, const QString& key, T va
     }
 }
 
-// A signal carries one init value when scalar, several when an array; render the
-// single value bare and the array braced.
+// A byte array's init value is written braced, one byte included; a scalar's bare.
 QString initValueText(const ldf::Signal& signal) {
     if (signal.init_values_size() == 0) {
         return {};
@@ -42,8 +41,8 @@ QString initValueText(const ldf::Signal& signal) {
     for (int v = 0; v < signal.init_values_size(); ++v) {
         parts.push_back(numberText(signal.init_values(v)));
     }
-    return parts.size() == 1 ? parts.front()
-                             : QStringLiteral("{%1}").arg(parts.join(QStringLiteral(", ")));
+    const QString values = parts.join(QStringLiteral(", "));
+    return signal.byte_array() ? QStringLiteral("{%1}").arg(values) : values;
 }
 
 } // namespace
