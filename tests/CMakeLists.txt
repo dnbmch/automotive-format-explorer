@@ -48,6 +48,8 @@ explorer_add_test(tst_detailmodel explorer-core)
 
 explorer_add_test(tst_memorymapmodel explorer-core)
 
+explorer_add_test(tst_signalmapmodel explorer-core)
+
 # The painted grid is compiled into the executable; its test compiles the same
 # source and paints into an image on the offscreen platform.
 explorer_add_test(tst_memorygriditem explorer-core Qt6::Quick)

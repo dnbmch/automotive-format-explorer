@@ -188,7 +188,7 @@ Physical: raw x 0.1  [0 .. 8000] rpm
 Receivers: BCM, Dashboard
 ```
 
-A multiplexed DBC signal adds `Multiplexor (M)`, `Multiplexed: m<N>` or `Mux: m<N> + multiplexor`. An LDF signal shows `Publisher: <node>` (the signal's own publisher) and no receivers line; its scaling comes from the first physical range of its encoding, and the bracketed range shows that range's physical bounds (its raw bounds × factor + offset, lower first); logical encoding values are not shown.
+A big-endian signal's bits read from its MSB, the start bit, to its LSB, the last bit of its Motorola walk: `Bits: MSB 7 .. LSB 8 (16-bit, big-endian)` for 16 bits from bit 7. A multiplexed DBC signal adds `Multiplexor (M)`, `Multiplexed: m<N>` or `Mux: m<N> + multiplexor`. An LDF signal shows `Publisher: <node>` (the signal's own publisher) and no receivers line; its scaling comes from the first physical range of its encoding, and the bracketed range shows that range's physical bounds (its raw bounds × factor + offset, lower first); logical encoding values are not shown.
 
 ### Multiplexing (DBC only)
 

@@ -258,11 +258,20 @@ QString SignalMapModel::signalTooltip(int signalIndex) const {
     if (!isValidSignalIndex(signalIndex)) return {};
     const auto& sig = currentSignals()[signalIndex];
 
+    // A big-endian signal runs from its MSB, the start bit, to its LSB, the last
+    // display position bitPositions() walks to; display position p is bit
+    // p / 8 * 8 + 7 - p % 8.
+    QString bits = QStringLiteral("[%1..%2]").arg(sig.startBit).arg(sig.startBit + sig.bitLength - 1);
+    if (sig.bigEndian) {
+        const std::vector<int> positions = bitPositions(sig);
+        if (!positions.empty()) {
+            const int last = positions.back();
+            bits = QStringLiteral("MSB %1 .. LSB %2").arg(sig.startBit).arg(last / 8 * 8 + 7 - last % 8);
+        }
+    }
     QString orderStr = sig.bigEndian ? QStringLiteral("big-endian") : QStringLiteral("little-endian");
-    QString tip = QStringLiteral("%1\nBits: [%2..%3] (%4-bit, %5)")
-        .arg(sig.name)
-        .arg(sig.startBit)
-        .arg(sig.startBit + sig.bitLength - 1)
+    QString tip = QStringLiteral("%1\nBits: %2 (%3-bit, %4)")
+        .arg(sig.name, bits)
         .arg(sig.bitLength)
         .arg(orderStr);
 
