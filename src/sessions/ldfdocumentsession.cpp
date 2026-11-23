@@ -296,9 +296,9 @@ void LdfDocumentSession::buildSignalMap() {
                 // sent first holds its most significant part, the bit order within a byte
                 // is unchanged: the DBC Motorola start bit. Numbering taken from the excerpt
                 // of ISO 17987-3:2025 5.2.2.6.2 and its Figure 13 key on the standard's
-                // SIST catalog page (docs/ref/signal_map.md). A byte array, one init value
-                // per byte, maps byte by byte from its offset (ISO 17987-3:2016 5.1.4).
-                sig.bigEndian = _document.big_endian_signals() && fullSig.init_values_size() <= 1;
+                // SIST catalog page (docs/ref/signal_map.md). A byte array, its init value
+                // braced, maps byte by byte from its offset (ISO 17987-3:2016 5.1.4).
+                sig.bigEndian = _document.big_endian_signals() && !fullSig.byte_array();
 
                 if (fullSig.has_encoding()) {
                     const auto& enc = fullSig.encoding();

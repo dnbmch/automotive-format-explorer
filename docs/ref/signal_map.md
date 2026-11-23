@@ -63,7 +63,8 @@ Same three-column split as A2L. The signal map replaces the memory view in the c
 | `Signal.name` | Signal name |
 | `Signal.start_bit` | Start bit offset in frame |
 | `Signal.bit_length` | Number of bits |
-| `Signal.init_value` | Initial/default value |
+| `Signal.init_values` | Initial/default value, one element per byte for a byte array |
+| `Signal.byte_array` | The init value is braced (`{…}`, one byte included): a byte array ([LDF byte order](#ldf-byte-order)) |
 | `Signal.publisher` | Publishing node |
 | `Signal.encoding` | Optional `SignalEncoding` (physical/logical mappings) |
 
@@ -117,7 +118,7 @@ LDF has no multiplexing, and LIN 1.3–2.2 signals are little-endian: the offset
 
 An ISO 17987 file with `LIN_sig_byte_order_big_endian` (`LdfFile.big_endian_signals`) makes each scalar signal big-endian: its offset names its MSB, the byte sent first holds its most significant part, and the bit order within a byte is unchanged. That is the DBC Motorola layout above with the offset as the start bit, unconverted, drawn with the `←`. The numbering is taken from the text of ISO 17987-3:2025 §5.2.2.6.2 and its Figure 13 key as excerpted on the standard's SIST catalog page; the standard is paywalled, Figure 13's bit layout is unseen, and no tool documentation or open-source LDF implementation that lays big-endian signals out is known (ldfparser parses the directive and packs every frame little-endian). [Open check](../open_verification.md#an-iso-17987-big-endian-ldf-beside-a-reference-tool).
 
-A byte array (one init value per byte) maps byte by byte from the lowest-numbered data byte (ISO 17987-3:2016 §5.1.4) and keeps the little-endian layout from its offset. A one-byte array's single init value reads like a scalar's in the parsed file, so it is drawn as a scalar.
+A byte array (`Signal.byte_array`: its init value is braced, one byte included) maps byte by byte from the lowest-numbered data byte (ISO 17987-3:2016 §5.1.4) and keeps the little-endian layout from its offset.
 
 ## Rendering
 
