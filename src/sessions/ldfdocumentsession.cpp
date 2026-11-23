@@ -284,9 +284,6 @@ void LdfDocumentSession::buildSignalMap() {
             SignalEntry sig;
             sig.name = text(frameSig.signal_name());
             sig.startBit = static_cast<int>(frameSig.start_bit());
-            // ISO 17987 big-endian signals are drawn little-endian until the
-            // standard's bit numbering is confirmed (docs/backlog.md).
-            sig.bigEndian = false;
             sig.colorIndex = j % 8;
 
             // Enrich from top-level signal definition.
@@ -295,6 +292,13 @@ void LdfDocumentSession::buildSignalMap() {
                 const ldf::Signal& fullSig = _document.signals(it->second);
                 sig.bitLength = static_cast<int>(fullSig.bit_length());
                 sig.sender = text(fullSig.publisher());
+                // LIN_sig_byte_order_big_endian: a scalar's offset names its MSB, the byte
+                // sent first holds its most significant part, the bit order within a byte
+                // is unchanged: the DBC Motorola start bit. Numbering taken from the excerpt
+                // of ISO 17987-3:2025 5.2.2.6.2 and its Figure 13 key on the standard's
+                // SIST catalog page (docs/ref/signal_map.md). A byte array, one init value
+                // per byte, maps byte by byte from its offset (ISO 17987-3:2016 5.1.4).
+                sig.bigEndian = _document.big_endian_signals() && fullSig.init_values_size() <= 1;
 
                 if (fullSig.has_encoding()) {
                     const auto& enc = fullSig.encoding();

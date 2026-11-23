@@ -42,17 +42,6 @@ domain rules, not a second decode path.
 
 **Size:** S.
 
-### BL-V3: ISO 17987 big-endian LIN signals are drawn little-endian
-
-An ISO 17987 LDF may declare big-endian signals (`LIN_sig_byte_order_big_endian`,
-parsed as `LdfFile.big_endian_signals`), but `LdfDocumentSession` sets
-`bigEndian = false` for every signal it maps, so the signal map lays such signals
-out little-endian. Map the flag onto `SignalEntry::bigEndian` after confirming the
-standard's big-endian bit numbering against the DBC Motorola layout that
-`SignalMapModel::bitPositions()` resolves.
-
-**Size:** S.
-
 ### BL-V4: signal-map export and print view
 
 Export the current message layout as PNG or SVG (for documentation), and a

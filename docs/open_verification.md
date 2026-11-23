@@ -1,7 +1,8 @@
 # Open verification — automotive-format-explorer
 
-Checks no session can run here: they need the operator's eyes on a Windows desktop or
-the 16 GB reference laptop. Each states what to check and how pass differs from fail.
+Checks no session can run here: they need the operator's eyes on a Windows desktop, the
+16 GB reference laptop, or a licensed tool or standard. Each states what to check and
+how pass differs from fail.
 
 ## One Windows launch of a fresh build
 
@@ -68,3 +69,17 @@ the 10 GB file, and from builds before the reader's stream-trailer check. Pass =
 same order of overview and window times on a cold first read, cancellation well under
 100 ms, peak commit about 75 MiB with a full window; fail = a peak that grows with the
 recording, or a close or selection change that waits for a scan to finish.
+
+## An ISO 17987 big-endian LDF beside a reference tool
+
+The big-endian numbering the signal map draws is taken from an excerpt of ISO 17987-3
+([LDF byte order](ref/signal_map.md#ldf-byte-order)). Open an ISO 17987 LDF that
+declares `LIN_sig_byte_order_big_endian` and has a scalar of 9–16 bits crossing a
+byte boundary at an offset that is not a byte edge, a scalar of 8 bits or fewer, and a
+byte array, in the Explorer and in a tool that encodes LIN frames from an LDF (Vector
+CANoe or LDF Explorer), or read the file against ISO 17987-3 Figure 13 and
+ISO 17987-2 §12.3.4.2 (`signal_offset`). For each signal, compare the bytes and bits it
+occupies in the reference with the Explorer's cells. Pass: every signal owns the same
+bits, the offset naming each scalar's MSB and each byte array's first byte. Fail: a
+scalar shifted or mirrored within its bytes, an 8-bit-or-shorter scalar whose offset
+names its LSB, or a byte array whose offset names anything but its first byte's bit 0.

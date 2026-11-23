@@ -73,7 +73,7 @@ A segment selector, hover tooltips with record layout and conversion, red hatchi
 
 ### Signal Map (DBC / LDF)
 
-Bit-level visualization of CAN and LIN message payloads. Each signal is rendered at its exact bit position with correct big-endian or little-endian layout, except that ISO 17987 big-endian LIN signals are drawn little-endian ([BL-V3](docs/backlog.md#bl-v3-iso-17987-big-endian-lin-signals-are-drawn-little-endian)).
+Bit-level visualization of CAN and LIN message payloads. Each signal is rendered at its exact bit position with correct big-endian or little-endian layout, ISO 17987 big-endian LIN signals included.
 
 Color-coded signals, multiplexor group filtering, overlap detection, hover tooltips with factor, offset, range and unit, and keyboard navigation ([signal map reference](docs/ref/signal_map.md)).
 

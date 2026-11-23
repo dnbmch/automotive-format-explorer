@@ -1,6 +1,6 @@
 # Signal Map View — DBC & LDF
 
-Bit-level visualization of CAN/LIN message payloads. Signals are rendered at their exact bit positions with colored cells, byte boundaries, and endianness-correct layout (except ISO 17987 big-endian LIN signals, see [LDF simplification](#ldf-simplification)). Reuses the generic center panel slot.
+Bit-level visualization of CAN/LIN message payloads. Signals are rendered at their exact bit positions with colored cells, byte boundaries, and endianness-correct layout ([LDF byte order](#ldf-byte-order)). Reuses the generic center panel slot.
 
 ## Layout
 
@@ -72,7 +72,7 @@ Same three-column split as A2L. The signal map replaces the memory view in the c
 | Aspect | DBC | LDF |
 |---|---|---|
 | Max payload | 8 bytes (CAN) / 64 bytes (CAN FD) | 8 bytes |
-| Byte order | Per-signal (LE or BE) | LE in LIN 1.3–2.2; ISO 17987 may declare BE (`LdfFile.big_endian_signals`), which the signal map ignores |
+| Byte order | Per-signal (LE or BE) | LE in LIN 1.3–2.2; an ISO 17987 file may declare its scalar signals BE (`LdfFile.big_endian_signals`) |
 | Multiplexing | Yes (`M`, `m<N>`) | No |
 | Extended ID | Yes (29-bit) | No (6-bit, 0-63) |
 | Complexity | Higher | Lower |
@@ -111,9 +111,13 @@ One row per byte, eight bit cells per row:
 - **Byte boundary**: a thin line between byte rows
 - **Endianness indicator**: a `←` after the name of a big-endian signal; little-endian signals carry no arrow
 
-### LDF simplification
+### LDF byte order
 
-LIN 1.3–2.2 signals are little-endian, and LDF has no multiplexing. The signal map draws every LDF signal little-endian, ISO 17987 big-endian signals included ([BL-V3](../backlog.md#bl-v3-iso-17987-big-endian-lin-signals-are-drawn-little-endian)). The bit numbering is straightforward sequential. No endianness arrows appear.
+LDF has no multiplexing, and LIN 1.3–2.2 signals are little-endian: the offset names the signal's LSB and its bits run sequentially, with no endianness arrow.
+
+An ISO 17987 file with `LIN_sig_byte_order_big_endian` (`LdfFile.big_endian_signals`) makes each scalar signal big-endian: its offset names its MSB, the byte sent first holds its most significant part, and the bit order within a byte is unchanged. That is the DBC Motorola layout above with the offset as the start bit, unconverted, drawn with the `←`. The numbering is taken from the text of ISO 17987-3:2025 §5.2.2.6.2 and its Figure 13 key as excerpted on the standard's SIST catalog page; the standard is paywalled, Figure 13's bit layout is unseen, and no tool documentation or open-source LDF implementation that lays big-endian signals out is known (ldfparser parses the directive and packs every frame little-endian). [Open check](../open_verification.md#an-iso-17987-big-endian-ldf-beside-a-reference-tool).
+
+A byte array (one init value per byte) maps byte by byte from the lowest-numbered data byte (ISO 17987-3:2016 §5.1.4) and keeps the little-endian layout from its offset. A one-byte array's single init value reads like a scalar's in the parsed file, so it is drawn as a scalar.
 
 ## Rendering
 
@@ -259,7 +263,7 @@ It exposes a `mapModel` property (the `SignalMapModel`) and a `nodeKeyClicked(va
 
 ### Session wiring
 
-`DbcDocumentSession` and `LdfDocumentSession` each own a `std::unique_ptr<SignalMapModel>`, override `centerPanelSource()` (returns `SignalMapView.qml`) and `centerPanelModel()` (returns the model), and populate it via a private `buildSignalMap()` that calls `finalize()` when done. DBC iterates `_document.messages()`; LDF iterates `_document.frames()`, mapping LDF fields onto the same `SignalEntry`/`MessageEntry` shapes with `bigEndian`/`multiplexType`/`isExtendedId` fixed to false/0/false, the message's `sender` from the frame publisher and each signal's from the signal's own publisher.
+`DbcDocumentSession` and `LdfDocumentSession` each own a `std::unique_ptr<SignalMapModel>`, override `centerPanelSource()` (returns `SignalMapView.qml`) and `centerPanelModel()` (returns the model), and populate it via a private `buildSignalMap()` that calls `finalize()` when done. DBC iterates `_document.messages()`; LDF iterates `_document.frames()`, mapping LDF fields onto the same `SignalEntry`/`MessageEntry` shapes with `bigEndian` set for a big-endian file's scalar signals ([LDF byte order](#ldf-byte-order)), `multiplexType`/`isExtendedId` fixed to 0/false, the message's `sender` from the frame publisher and each signal's from the signal's own publisher.
 
 The generic center-panel Loader in Main.qml needs no format-specific wiring: it reads `centerPanelSource()`, passes `centerPanelModel()` as `mapModel`, and routes `nodeKeyClicked` the same way it does for the memory view.
 
