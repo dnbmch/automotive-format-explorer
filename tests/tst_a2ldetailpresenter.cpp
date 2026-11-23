@@ -59,6 +59,7 @@ private slots:
     void summaryWithoutMatchingIfDataIsEmpty();
     void singleMatchRawJsonIsOneObject();
     void multipleMatchesRawJsonIsValidArray();
+    void canFdRowsShowTheirOwnMaxDlcRequired();
     void characteristicCardSpeaksA2l();
     void resolvedConversionUsesObjectUnit_data();
     void resolvedConversionUsesObjectUnit();
@@ -189,6 +190,34 @@ void TestA2lDetailPresenter::multipleMatchesRawJsonIsValidArray() {
     QCOMPARE(err.error, QJsonParseError::NoError);
     QVERIFY(parsed.isArray());
     QCOMPARE(parsed.array().size(), 2);
+}
+
+// CAN_FD carries its own MAX_DLC_REQUIRED beside XCP_ON_CAN's: the flag shows in
+// the CAN-FD rows, and only where the block sets it.
+void TestA2lDetailPresenter::canFdRowsShowTheirOwnMaxDlcRequired() {
+    a2l::A2lFile doc;
+    a2l::Module* module = doc.add_modules();
+    module->set_name("ECU_MAIN");
+    a2l::IfDataXcp* xcp = module->add_if_datas()->mutable_xcp();
+    a2l::XcpCanFd* required = xcp->add_xcp_on_cans()->mutable_can_fd();
+    required->set_max_dlc(64);
+    required->set_max_dlc_required(true);
+    xcp->add_xcp_on_cans()->mutable_can_fd()->set_max_dlc(64);
+
+    const A2lLinks links;
+    const A2lDetailPresenter presenter(doc, links);
+    QList<DetailSection> cans;
+    for (const DetailSection& section : presenter.buildDetails(pathFor(A2lEntityKind::XcpSummary))) {
+        if (section.title == QStringLiteral("XCP on CAN")) cans.push_back(section);
+    }
+
+    QCOMPARE(cans.size(), 2);
+    const QString title = QStringLiteral("XCP on CAN");
+    QCOMPARE(fieldIn({cans[0]}, title, QStringLiteral("CAN-FD MAX_DLC")).value, QStringLiteral("64"));
+    QCOMPARE(fieldIn({cans[0]}, title, QStringLiteral("CAN-FD MAX_DLC_REQUIRED")).value, QStringLiteral("Yes"));
+    QCOMPARE(fieldIn({cans[0]}, title, QStringLiteral("MAX_DLC_REQUIRED")).key, QString());
+    QCOMPARE(fieldIn({cans[1]}, title, QStringLiteral("CAN-FD MAX_DLC")).value, QStringLiteral("64"));
+    QCOMPARE(fieldIn({cans[1]}, title, QStringLiteral("CAN-FD MAX_DLC_REQUIRED")).key, QString());
 }
 
 // A MAP with its conversion: keywords, a hex address, the resolved formula

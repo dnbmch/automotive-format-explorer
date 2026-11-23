@@ -166,6 +166,7 @@ QList<DetailSection> A2lDetailPresenter::xcpSummaryDetails(const A2lPath& path) 
             if (can.has_can_fd()) {
                 const auto& fd = can.can_fd();
                 addOptionalNumber(fields, QStringLiteral("CAN-FD MAX_DLC"), fd.has_max_dlc(), fd.max_dlc());
+                addOptionalBool(fields, QStringLiteral("CAN-FD MAX_DLC_REQUIRED"), fd.has_max_dlc_required(), fd.max_dlc_required());
                 addOptionalNumber(fields, QStringLiteral("CAN-FD Data Baudrate"), fd.has_can_fd_data_transfer_baudrate(), fd.can_fd_data_transfer_baudrate());
                 addOptionalNumber(fields, QStringLiteral("CAN-FD Sample Point"), fd.has_sample_point(), fd.sample_point());
                 addOptionalNumber(fields, QStringLiteral("CAN-FD BTL Cycles"), fd.has_btl_cycles(), fd.btl_cycles());
