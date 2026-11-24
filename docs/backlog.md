@@ -95,6 +95,17 @@ bits run past the frame.
 
 **Size:** XS.
 
+### BL-V11: MAX_DLC_REQUIRED reads "8" on an XCP-on-CAN card and "Yes" in its CAN-FD rows
+
+`A2lDetailPresenter` shows XCP_ON_CAN's `MAX_DLC_REQUIRED` as a number, the `8` that
+a2l-parser stores for it (`XcpOnCan.max_dlc_required`), and the CAN_FD block's as a flag.
+The AML defines both as bare tags with no value (`XCP_v1_5_on_CAN.aml`, XCP on CAN
+§4.3.2: the master then sends DLC = MAX_DLC, 8 on CAN, the CAN_FD block's on CAN FD), so
+the flag is right. Fix: show the XCP_ON_CAN row through `addOptionalBool` from its
+presence, as the CAN-FD row is.
+
+**Size:** XS.
+
 ## Packaging / release
 
 ### BL-K1: the deployed `qml/` tree is redundant
