@@ -72,14 +72,19 @@ recording, or a close or selection change that waits for a scan to finish.
 
 ## An ISO 17987 big-endian LDF beside a reference tool
 
-The big-endian numbering the signal map draws is taken from an excerpt of ISO 17987-3
-([LDF byte order](ref/signal_map.md#ldf-byte-order)). Open an ISO 17987 LDF that
-declares `LIN_sig_byte_order_big_endian` and has a scalar of 9–16 bits crossing a
-byte boundary at an offset that is not a byte edge, a scalar of 8 bits or fewer, and a
-byte array, in the Explorer and in a tool that encodes LIN frames from an LDF (Vector
-CANoe or LDF Explorer), or read the file against ISO 17987-3 Figure 13 and
-ISO 17987-2 §12.3.4.2 (`signal_offset`). For each signal, compare the bytes and bits it
-occupies in the reference with the Explorer's cells. Pass: every signal owns the same
-bits, the offset naming each scalar's MSB and each byte array's first byte. Fail: a
-scalar shifted or mirrored within its bytes, an 8-bit-or-shorter scalar whose offset
-names its LSB, or a byte array whose offset names anything but its first byte's bit 0.
+The big-endian numbering the signal map draws, a scalar's offset as its MSB walked as a
+DBC Motorola signal, rests on excerpts of ISO 17987-3:2025 §5.2.2.6.2 and its Figure 13
+key ([LDF byte order](ref/signal_map.md#ldf-byte-order)). The workspace's own sample
+contradicts it: in `ldf-parser/ldf_files/iso17987.ldf` (`LIN_sig_byte_order_big_endian`)
+every signal sits on a byte edge, and under the drawn numbering `signal1` (16 bits at
+offset 0 of the 2-byte `MotorControl`) starts at byte 0's bit 0 and runs past the frame's
+end, while `MotorTemp` (8 bits at offset 8 of `MotorState_Cycl`) splits across bytes 1 and
+2; a numbering from the signal's first byte puts them in bytes 0–1 and in byte 1. The
+file's header (Vector DaVinci, created 2009, protocol ISO17987:2015) suggests a hand-edited
+copy, so it settles nothing alone. Open it, and a copy holding a scalar of 9–16 bits at an
+offset that is not a byte edge and a byte array, in the Explorer and in a tool that encodes
+LIN frames from an LDF (Vector CANoe or LDF Explorer), or read them against ISO 17987-3:2025
+§5.2.2.6.2 and Figure 13. Pass: for every signal the reference's bytes and bits equal the
+Explorer's cells. Fail: any signal whose bits differ — the reference's numbering then
+replaces the drawn one here (`LdfDocumentSession`) and in meas-signal's LDF adapter
+(`to_descriptors`), with its source cited in § LDF byte order.
