@@ -102,7 +102,9 @@ a2l-parser stores for it (`XcpOnCan.max_dlc_required`), and the CAN_FD block's a
 The AML defines both as bare tags with no value (`XCP_v1_5_on_CAN.aml`, XCP on CAN
 §4.3.2: the master then sends DLC = MAX_DLC, 8 on CAN, the CAN_FD block's on CAN FD), so
 the flag is right. Fix: show the XCP_ON_CAN row through `addOptionalBool` from its
-presence, as the CAN-FD row is.
+presence, as the CAN-FD row is; at its source, a2l-parser's `XcpOnCan.max_dlc_required`
+(`a2l/xcp.proto`) is a `uint32` that always holds 8 where the CAN_FD block's is a `bool`, and
+a `bool` there leaves the presenter one case.
 
 **Size:** XS.
 
